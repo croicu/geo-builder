@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build a simple, deterministic Python application that creates static geographic datasets for the geo ecosystem.
 
+## Documentation rule
+
+After any change that affects the public interface, CLI, file formats, or core architecture, update the relevant docs:
+
+- `CLAUDE.md` — commands, pipeline, architecture notes
+- `docs/ARCHITECTURE.md` — modules, data flow, contracts
+- `docs/PROTOCOL.md` — CLI signature, build file schema
+
 ## Off-limits directories
 
 Never read, glob, or search inside `./in/` or `./out/`. They contain large volumes of generated data and are not part of the source tree.
@@ -17,9 +25,8 @@ Never read, glob, or search inside `./in/` or `./out/`. They contain large volum
 pip install -e ".[dev]"
 
 # Run
-geo-builder tasks.json --out ./output
-geo-builder tasks.json --in ./existing --out ./output   # incremental
-geo-builder tasks.json --out ./output --debug           # full tracebacks, no error swallowing
+geo-builder build.json --out ./output
+geo-builder build.json --in ./existing --out ./output   # incremental
 
 # Lint
 ruff check src/ tests/
