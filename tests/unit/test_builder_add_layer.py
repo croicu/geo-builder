@@ -1,5 +1,4 @@
 from geo_builder.builder import Builder
-from geo_builder.contracts import AcquisitionTask, BoundingBox
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
 
 
