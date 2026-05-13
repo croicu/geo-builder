@@ -14,6 +14,7 @@ from .tasks import Tasks
 class Settings:
     debug: bool
     tasks: list[Task]
+    providers: dict[str, dict[str, object]]
 
     _instance: ClassVar[Settings | None] = None
 
@@ -29,6 +30,10 @@ class Settings:
         if not isinstance(settings_payload, dict):
             raise TaskError("'settings' must be a JSON object.")
 
+        providers_payload = payload.get("providers", {})
+        if not isinstance(providers_payload, dict):
+            raise TaskError("'providers' must be a JSON object.")
+
         tasks_payload = payload.get("tasks", {})
         if not isinstance(tasks_payload, dict):
             raise TaskError("'tasks' must be a JSON object.")
@@ -36,6 +41,7 @@ class Settings:
         cls._instance = cls(
             debug=bool(settings_payload.get("debug", False)),
             tasks=Tasks.from_payload(tasks_payload),
+            providers=providers_payload,
         )
 
         return cls._instance
