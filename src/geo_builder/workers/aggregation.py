@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from ..contracts import ExecutorContract, Task, Worker, WorkerResult
+from ..contracts import Executor, Task, Worker, WorkerResult
 
 
 class AggregationWorker(Worker):
@@ -10,7 +10,7 @@ class AggregationWorker(Worker):
         super().__init__()
         self._task = task
 
-    def execute(self, executor: ExecutorContract) -> WorkerResult:
+    def execute(self, executor: Executor) -> WorkerResult:
         print("AggregationWorker: execute")
 
         catalog = executor.catalog

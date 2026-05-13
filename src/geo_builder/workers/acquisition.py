@@ -1,4 +1,5 @@
-from ..contracts import ExecutorContract, Worker, WorkerResult
+from ..contracts import Executor, Worker, WorkerResult
+from ..errors import ProviderError
 from ..providers.factory import ProviderFactory
 from ..tasks import AcquisitionTask
 
@@ -13,7 +14,7 @@ class AcquisitionWorker(Worker):
         self._task = task
         self._provider_factory = ProviderFactory()
 
-    def execute(self, executor: ExecutorContract) -> WorkerResult:
+    def execute(self, executor: Executor) -> WorkerResult:
         print("AcquisitionWorker: execute")
 
         area = executor.add_area(self._task)
@@ -21,7 +22,7 @@ class AcquisitionWorker(Worker):
 
         try:
             layer = provider.fetch(self._task)
-        except ValueError as error:
+        except ProviderError as error:
             child_tasks = self._split_task(self._task)
 
             if len(child_tasks) == 0:

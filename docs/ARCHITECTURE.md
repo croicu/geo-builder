@@ -5,7 +5,7 @@
 ```text
 tasks.json
     → Tasks.load()
-    → Executor.execute()
+    → Builder.run()
     → Workers
     → Catalog (mutable)
     → Result.save()
@@ -29,16 +29,16 @@ catalog.json
             └── .geojson
 ```
 
-## Executor
+## Builder
 
-The Executor owns:
+`builder.py` — the `Builder` class owns:
 
 - Current Catalog
 - Task stack
 - WorkerFactory
 - Errors
 
-Workers receive the executor and mutate shared state directly.
+Workers receive the builder as their `executor: Executor` parameter and mutate shared state directly.
 
 ## Error Handling
 
@@ -50,7 +50,7 @@ Workers receive the executor and mutate shared state directly.
 - `ProviderError` — provider network errors and unknown provider names
 - `WorkerError` — unknown task type at worker dispatch
 
-In normal mode the executor catches `GeoError`, records the message in `Executor.errors`, and stops. The CLI then prints each error and exits without writing output. In `--debug` mode no exceptions are caught.
+In normal mode `Builder` catches `GeoError`, records the message in `Builder.errors`, and stops. The CLI then prints each error and exits without writing output. In `--debug` mode no exceptions are caught.
 
 ## Data Contracts
 
@@ -71,10 +71,11 @@ Field names match JSON exactly.
 
 `contracts.py` contains:
 
-- Worker
-- WorkerResult
-- ExecutorContract
-- Provider
+- `Map` — protocol for catalog mutation: `add_area`, `add_layer`
+- `Executor` — protocol extending `Map`, adds `push_task`, `push_tasks`; passed to all workers
+- `Worker` — protocol: `execute(executor: Executor) → WorkerResult`
+- `WorkerResult`
+- `Provider`
 
 ## Design Mode Integration
 

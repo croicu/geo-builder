@@ -1,24 +1,8 @@
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
-from .contracts import AcquisitionTask, AggregationTask, DedupingTask, Task
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
 from .errors import TaskError
-
-
-@dataclass
-class BoundingBox:
-    west: float
-    south: float
-    east: float
-    north: float
-
-
-@dataclass
-class BuildTask:
-    provider: str
-    bbox: BoundingBox
-    filter: dict[str, object]
 
 
 class Tasks:

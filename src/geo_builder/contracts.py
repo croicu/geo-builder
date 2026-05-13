@@ -58,11 +58,14 @@ class DedupingTask(Task):
     ) -> None:
         super().__init__("deduping")
 
-class ExecutorContract(Protocol):
-    def push_task(self, task: Task) -> None: ...
-    def push_tasks(self, tasks: list[Task]) -> None: ...
+class Map(Protocol):
     def add_area(self, task: AcquisitionTask) -> Area: ...
     def add_layer(self, area: Area, layer: Layer) -> None: ...
+
+
+class Executor(Map, Protocol):
+    def push_task(self, task: Task) -> None: ...
+    def push_tasks(self, tasks: list[Task]) -> None: ...
 
 
 @dataclass
@@ -72,7 +75,7 @@ class WorkerResult:
 
 
 class Worker(Protocol):
-    def execute(self, executor: ExecutorContract) -> WorkerResult: ...
+    def execute(self, executor: Executor) -> WorkerResult: ...
 
 class Provider(Protocol):
     name: str

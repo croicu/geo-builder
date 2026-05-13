@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import GeoError
-from .executor import Executor
+from .builder import Builder
 from .protocols import Catalog
 from .tasks import Tasks
 
@@ -68,11 +68,11 @@ def main() -> int:
 
         if arguments.in_directory is not None:
             catalog = Catalog.load(arguments.in_directory)
-            executor = Executor(catalog)
+            executor = Builder(catalog)
         else:
-            executor = Executor()
+            executor = Builder()
 
-        result = executor.execute(tasks, debug=arguments.debug)
+        result = executor.run(tasks, debug=arguments.debug)
 
         if executor.errors:
             for error in executor.errors:

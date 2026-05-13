@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from copy import deepcopy
 
-from ..contracts import ExecutorContract, Task, Worker, WorkerResult
+from ..contracts import Executor, Task, Worker, WorkerResult
 
 
 class DedupingWorker(Worker):
@@ -14,7 +14,7 @@ class DedupingWorker(Worker):
 
         self._task = task
 
-    def execute(self, executor: ExecutorContract) -> WorkerResult:
+    def execute(self, executor: Executor) -> WorkerResult:
         print("DedupingWorker: execute")
 
         if executor.catalog is None:

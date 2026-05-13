@@ -10,14 +10,14 @@ from .workers.factory import WorkerFactory
 
 
 @dataclass
-class Executor:
+class Builder:
     catalog: Catalog = field(default_factory=Catalog)
     errors: list[str] = field(default_factory=list)
 
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def execute(
+    def run(
         self,
         tasks: list[JsonObject],
         debug: bool = False,
@@ -92,7 +92,7 @@ class Executor:
 
     def _create_result(self) -> Result:
         return Result(catalog=self.catalog)
-    
+
     def _bbox_radius_meters(self, bbox: BoundingBox) -> float:
         center_lat = (bbox.south + bbox.north) / 2.0
         center_lon = (bbox.west + bbox.east) / 2.0

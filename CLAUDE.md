@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build a simple, deterministic Python application that creates static geographic datasets for the geo ecosystem.
 
+## Off-limits directories
+
+Never read, glob, or search inside `./in/` or `./out/`. They contain large volumes of generated data and are not part of the source tree.
+
 ## Commands
 
 ```bash
@@ -43,7 +47,7 @@ pytest tests/test_foo.py::test_bar   # single test
 
 ```text
 Task[]
-    → Executor (stack-based DFS)
+    → Builder (stack-based DFS)
     → WorkerFactory
     → Worker.execute(executor)
     → Catalog mutation
