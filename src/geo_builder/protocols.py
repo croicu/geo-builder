@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -49,6 +50,10 @@ class Layer:
     style: dict[str, JsonValue]
     mergeKey: str
     geojson: GeoJson
+
+    @staticmethod
+    def id_from_merge_key(merge_key: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", merge_key.lower()).strip("_")
 
 
 @dataclass

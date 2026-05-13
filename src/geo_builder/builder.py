@@ -89,6 +89,10 @@ class Builder:
         return area
 
     def add_layer(self, area: Area, layer: Layer) -> None:
+        for existing in area.manifest.layers:
+            if existing.mergeKey == layer.mergeKey:
+                existing.geojson.features.extend(layer.geojson.features)
+                return
         area.manifest.layers.append(layer)
 
     def _create_result(self) -> Result:

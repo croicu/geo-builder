@@ -41,7 +41,7 @@ pytest tests/test_foo.py::test_bar   # single test
 
 1. `geo-builder` builds; `geo-browser` displays.
 2. Internal processing uses strongly typed dataclasses.
-3. `protocols.py` contains persisted/shared data contracts.
+3. `protocols.py` contains persisted/shared data contracts. Static methods that semantically belong to a class live inside the class, even if they don't use `self`.
 4. `contracts.py` contains runtime behavioral interfaces.
 5. Execution mutates an in-memory catalog.
 6. Persistence occurs only after successful completion.
