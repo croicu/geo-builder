@@ -1,6 +1,7 @@
 # providers/factory.py
 
 from ..contracts import Provider
+from ..errors import ProviderError
 from .overpass import OverpassProvider
 
 
@@ -9,4 +10,4 @@ class ProviderFactory:
         if name == "overpass":
             return OverpassProvider()
 
-        raise ValueError(f"Unknown provider: {name}")
+        raise ProviderError(f"Unknown provider: {name}")

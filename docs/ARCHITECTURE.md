@@ -40,6 +40,18 @@ The Executor owns:
 
 Workers receive the executor and mutate shared state directly.
 
+## Error Handling
+
+`errors.py` defines the exception hierarchy:
+
+- `GeoError` — base class for all application errors
+- `TaskError` — task file parsing
+- `CatalogError` — catalog / manifest / GeoJSON loading
+- `ProviderError` — provider network errors and unknown provider names
+- `WorkerError` — unknown task type at worker dispatch
+
+In normal mode the executor catches `GeoError`, records the message in `Executor.errors`, and stops. The CLI then prints each error and exits without writing output. In `--debug` mode no exceptions are caught.
+
 ## Data Contracts
 
 `protocols.py` contains:

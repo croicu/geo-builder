@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .contracts import AcquisitionTask, AggregationTask, DedupingTask, Task
+from .errors import TaskError
 
 
 @dataclass
@@ -27,13 +28,13 @@ class Tasks:
             payload = json.load(file)
 
         if not isinstance(payload, list):
-            raise ValueError("Task file must contain a JSON array.")
+            raise TaskError("Task file must contain a JSON array.")
 
         tasks: list[Task] = []
 
         for item in payload:
             if not isinstance(item, dict):
-                raise ValueError("Each task must be a JSON object.")
+                raise TaskError("Each task must be a JSON object.")
 
             task_type = str(item.get("type", "acquisition"))
 
@@ -70,6 +71,6 @@ class Tasks:
 
                 continue
 
-            raise ValueError(f"Unknown task type: {task_type}")
+            raise TaskError(f"Unknown task type: {task_type}")
 
         return tasks

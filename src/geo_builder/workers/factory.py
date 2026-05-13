@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts import AcquisitionTask, AggregationTask, DedupingTask, Task, Worker
+from ..errors import WorkerError
 from .acquisition import AcquisitionWorker
 from .aggregation import AggregationWorker
 from .deduping import DedupingWorker
@@ -18,4 +19,4 @@ class WorkerFactory:
         if isinstance(task, DedupingTask):
             return DedupingWorker(task)
 
-        raise ValueError(f"Unknown task type: {task.type}")
+        raise WorkerError(f"Unknown task type: {task.type}")

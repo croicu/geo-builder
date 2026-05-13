@@ -3,8 +3,10 @@
 ## Command Line
 
 ```text
-geo-builder <task_path> [--in <in_directory>] [--out <out_directory>]
+geo-builder <task_path> [--in <in_directory>] [--out <out_directory>] [--debug]
 ```
+
+`--debug` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. Output is never written when errors are present.
 
 ## Task Schema
 

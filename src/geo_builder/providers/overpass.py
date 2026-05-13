@@ -3,6 +3,7 @@ import urllib.parse
 import urllib.request
 
 from ..contracts import Provider
+from ..errors import ProviderError
 from ..protocols import Feature, GeoJson, Geometry, Layer
 from ..tasks import AcquisitionTask
 
@@ -73,7 +74,7 @@ out center;
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             if error.code in (400, 429, 504):
-                raise ValueError("Overpass request too large or rate limited.") from error
+                raise ProviderError("Overpass request too large or rate limited.") from error
 
             raise
 

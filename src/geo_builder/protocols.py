@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .errors import CatalogError
+
 JsonObject = dict[str, object]
 
 JsonValue = (
@@ -57,12 +59,12 @@ class Catalog:
         payload = read_json(output_dir / "catalog.json")
 
         if not isinstance(payload, dict):
-            raise ValueError("catalog.json must contain an object.")
+            raise CatalogError("catalog.json must contain an object.")
 
         areas_payload = payload.get("areas", [])
 
         if not isinstance(areas_payload, list):
-            raise ValueError("catalog.json areas must be an array.")
+            raise CatalogError("catalog.json areas must be an array.")
 
         areas = [
             Area.load(output_dir, area_payload)
@@ -112,13 +114,13 @@ class Area:
         manifest_payload = read_json(manifest_path)
 
         if not isinstance(manifest_payload, dict):
-            raise ValueError(f"{manifest_path} must contain an object.")
+            raise CatalogError(f"{manifest_path} must contain an object.")
 
         manifest = Manifest.load(manifest_path.parent, manifest_payload)
 
         center = payload["center"]
         if not isinstance(center, list):
-            raise ValueError("area center must be an array.")
+            raise CatalogError("area center must be an array.")
 
         return Area(
             id=str(payload["id"]),
@@ -156,7 +158,7 @@ class Manifest:
         layers_payload = payload.get("layers", [])
 
         if not isinstance(layers_payload, list):
-            raise ValueError("manifest layers must be an array.")
+            raise CatalogError("manifest layers must be an array.")
 
         layers = [
             Layer.load(manifest_dir, layer_payload)
@@ -197,11 +199,11 @@ class Layer:
         geojson_payload = read_json(geojson_path)
 
         if not isinstance(geojson_payload, dict):
-            raise ValueError(f"{geojson_path} must contain an object.")
+            raise CatalogError(f"{geojson_path} must contain an object.")
 
         style = payload.get("style", {})
         if not isinstance(style, dict):
-            raise ValueError("layer style must be an object.")
+            raise CatalogError("layer style must be an object.")
 
         return Layer(
             id=str(payload["id"]),
@@ -228,7 +230,7 @@ class GeoJson:
         features_payload = payload.get("features", [])
 
         if not isinstance(features_payload, list):
-            raise ValueError("GeoJSON features must be an array.")
+            raise CatalogError("GeoJSON features must be an array.")
 
         features = [
             Feature.load(feature_payload)
@@ -254,10 +256,10 @@ class Feature:
         geometry_payload = payload["geometry"]
 
         if not isinstance(properties, dict):
-            raise ValueError("feature properties must be an object.")
+            raise CatalogError("feature properties must be an object.")
 
         if not isinstance(geometry_payload, dict):
-            raise ValueError("feature geometry must be an object.")
+            raise CatalogError("feature geometry must be an object.")
 
         return Feature(
             type=str(payload["type"]),
@@ -276,7 +278,7 @@ class Geometry:
         coordinates = payload["coordinates"]
 
         if not isinstance(coordinates, list):
-            raise ValueError("geometry coordinates must be an array.")
+            raise CatalogError("geometry coordinates must be an array.")
 
         return Geometry(
             type=str(payload["type"]),

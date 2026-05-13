@@ -1,8 +1,30 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Mission
 
 Build a simple, deterministic Python application that creates static geographic datasets for the geo ecosystem.
+
+## Commands
+
+```bash
+# Install (editable, with dev deps)
+pip install -e ".[dev]"
+
+# Run
+geo-builder tasks.json --out ./output
+geo-builder tasks.json --in ./existing --out ./output   # incremental
+geo-builder tasks.json --out ./output --debug           # full tracebacks, no error swallowing
+
+# Lint
+ruff check src/ tests/
+ruff format src/ tests/
+
+# Test
+pytest
+pytest tests/test_foo.py::test_bar   # single test
+```
 
 ## Core Invariants
 
@@ -37,8 +59,8 @@ Task[]
 ## Worker Responsibilities
 
 - AcquisitionWorker: provider fetch + area creation + layer insertion
-- DedupingWorker: remove near-duplicates within each layer
-- AggregationWorker: merge compatible layers within an area
+- DedupingWorker: remove near-duplicates within each layer (10 m Haversine threshold)
+- AggregationWorker: merge compatible layers within an area (grouped by `mergeKey`)
 
 ## Provider Strategy
 
@@ -50,3 +72,23 @@ Current:
 Future:
 - FlickrProvider
 - NominatimProvider
+
+## Key Architecture Notes
+
+**Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`) and in `protocols.py`.
+
+**Bbox decomposition** — When OverpassProvider receives a 400/429/504, AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. This is the mechanism for handling "request too large" errors without caller involvement.
+
+**MergeKey format** — `"provider:key1=val1,val2"` (e.g., `"overpass:amenity=restaurant,cafe"`). AggregationWorker groups layers within an area by this key and concatenates their features into a single layer.
+
+**Output layout**
+
+```
+{out_dir}/
+├── catalog.json
+└── areas/{areaId}/
+    ├── manifest.json
+    └── layers/{layerId}.geojson
+```
+
+`manifest` is not embedded in `catalog.json`; `geojson` is not embedded in `manifest.json`. Each is a separate file loaded on demand.
