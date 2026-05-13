@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Run (New)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "geo_builder.cli",
+      "args": ["${workspaceFolder}/tasks.json", "--out", "${workspaceFolder}/out"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Run (Update)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "geo_builder.cli",
+      "args": ["${workspaceFolder}/tasks.json", "--in", "${workspaceFolder}/in", "--out", "${workspaceFolder}/out"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Run PyTest",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-v", "-s", "-x"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: Debug pytest (scratch)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-s", 
+        "--log-cli-level=INFO", 
+        "tests/scratch/test_scratch.py::test_scratch",
+        "tests/unit/test_error.py::TestError"
+      ],
+      "console": "internalConsole",
+      "justMyCode": true
+    },
+  ],
+  "inputs": [
+  ]
+}
