@@ -1,24 +1,15 @@
-import json
-from pathlib import Path
-
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
 from .errors import TaskError
 
 
 class Tasks:
     @staticmethod
-    def load(path: str | Path) -> list[Task]:
-        with Path(path).open("r", encoding="utf-8") as file:
-            payload = json.load(file)
-
-        if not isinstance(payload, list):
-            raise TaskError("Task file must contain a JSON array.")
-
+    def from_payload(payload: dict[str, object]) -> list[Task]:
         tasks: list[Task] = []
 
-        for item in payload:
+        for name, item in payload.items():
             if not isinstance(item, dict):
-                raise TaskError("Each task must be a JSON object.")
+                raise TaskError(f"Task '{name}' must be a JSON object.")
 
             task_type = str(item.get("type", "acquisition"))
 
@@ -32,29 +23,25 @@ class Tasks:
                     north=float(bbox_data["north"]),
                 )
 
-                task = AcquisitionTask(
-                    areaId=str(item["areaId"]),
-                    areaName=str(item["areaName"]),
-                    provider=str(item["provider"]),
-                    bbox=bbox,
-                    filter=dict(item.get("filter", {})),
+                tasks.append(
+                    AcquisitionTask(
+                        areaId=str(item["areaId"]),
+                        areaName=str(item["areaName"]),
+                        provider=str(item["provider"]),
+                        bbox=bbox,
+                        filter=dict(item.get("filter", {})),
+                    )
                 )
-                tasks.append(task)
-
                 continue
 
             if task_type == "aggregation":
-                task = AggregationTask()
-                tasks.append(task)
-
+                tasks.append(AggregationTask())
                 continue
 
             if task_type == "deduping":
-                task = DedupingTask()
-                tasks.append(task)
-
+                tasks.append(DedupingTask())
                 continue
 
-            raise TaskError(f"Unknown task type: {task_type}")
+            raise TaskError(f"Unknown task type: '{task_type}' in task '{name}'.")
 
         return tasks

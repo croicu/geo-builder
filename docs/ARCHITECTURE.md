@@ -3,8 +3,8 @@
 ## High-Level Architecture
 
 ```text
-tasks.json
-    → Tasks.load()
+build.json
+    → Settings.load()
     → Builder.run()
     → Workers
     → Catalog (mutable)
@@ -50,7 +50,7 @@ Workers receive the builder as their `executor: Executor` parameter and mutate s
 - `ProviderError` — provider network errors and unknown provider names
 - `WorkerError` — unknown task type at worker dispatch
 
-In normal mode `Builder` catches `GeoError`, records the message in `Builder.errors`, and stops. The CLI then prints each error and exits without writing output. In `--debug` mode no exceptions are caught.
+In normal mode `Builder` catches `GeoError`, records the message in `Builder.errors`, and stops. The CLI then prints each error and exits without writing output. When `settings.debug` is `true` no exceptions are caught.
 
 ## Data Contracts
 
@@ -66,6 +66,15 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 - Geometry
 
 Field names match JSON exactly.
+
+## Settings
+
+`settings.py` — `Settings` singleton, DI root for tests:
+
+- `Settings.load(path)` — parses `build.json`, instantiates tasks, stores the singleton
+- `Settings.current()` — returns the active instance (raises if not loaded)
+- Fields: `debug: bool`, `tasks: list[Task]`
+- Tests set up the singleton directly via `Settings._instance = Settings(...)`
 
 ## Persistence
 
