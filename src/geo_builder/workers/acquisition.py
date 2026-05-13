@@ -35,7 +35,6 @@ class AcquisitionWorker(Worker):
 
         return WorkerResult()
 
-
     def _split_task(self, task: AcquisitionTask) -> list[AcquisitionTask]:
         bbox = task.bbox
 
@@ -90,4 +89,3 @@ class AcquisitionWorker(Worker):
                 filter=task.filter,
             ),
         ]
-    

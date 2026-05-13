@@ -104,10 +104,7 @@ class Builder:
             (bbox.north, bbox.east),
         ]
 
-        return max(
-            self._haversine_meters(center_lat, center_lon, lat, lon)
-            for lat, lon in corners
-        )
+        return max(self._haversine_meters(center_lat, center_lon, lat, lon) for lat, lon in corners)
 
     def _haversine_meters(
         self,
@@ -124,10 +121,7 @@ class Builder:
         r_lat1 = radians(lat1)
         r_lat2 = radians(lat2)
 
-        a = (
-            sin(d_lat / 2.0) ** 2
-            + cos(r_lat1) * cos(r_lat2) * sin(d_lon / 2.0) ** 2
-        )
+        a = sin(d_lat / 2.0) ** 2 + cos(r_lat1) * cos(r_lat2) * sin(d_lon / 2.0) ** 2
 
         c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
 

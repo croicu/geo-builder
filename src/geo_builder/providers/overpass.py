@@ -96,11 +96,7 @@ out center;
                 "weight": 1.0,
             }
 
-            properties = {
-                key: value
-                for key, value in properties.items()
-                if value is not None
-            }
+            properties = {key: value for key, value in properties.items() if value is not None}
 
             features.append(
                 Feature(
@@ -142,4 +138,3 @@ out center;
             parts.append(f"{key}={','.join(values)}")
 
         return ":".join(parts)
-    
