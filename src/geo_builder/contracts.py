@@ -26,6 +26,7 @@ class AcquisitionTask(Task):
     provider: str
     bbox: BoundingBox
     filter: dict[str, list[str]]
+
     def __init__(
         self,
         areaId: str,
