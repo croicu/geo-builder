@@ -17,13 +17,14 @@ class Builder:
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def run(
-        self,
-        tasks: list[JsonObject],
-        debug: bool = False,
-    ) -> Result:
+    def run(self) -> Result:
+        from .settings import Settings
+
+        settings = Settings.current()
+        debug = settings.debug
+
         self.errors.clear()
-        self._stack = list(reversed(tasks))
+        self._stack = list(reversed(settings.tasks))
 
         while self._stack:
             task = self._stack.pop()
