@@ -5,15 +5,7 @@ from datetime import datetime, timezone
 
 JsonObject = dict[str, object]
 
-JsonValue = (
-    str
-    | int
-    | float
-    | bool
-    | None
-    | list["JsonValue"]
-    | dict[str, "JsonValue"]
-)
+JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 @dataclass

@@ -25,9 +25,7 @@ class DedupingWorker(Worker):
                 if layer.geojson is None:
                     continue
 
-                layer.geojson.features = self._dedupe_features(
-                    layer.geojson.features
-                )
+                layer.geojson.features = self._dedupe_features(layer.geojson.features)
 
         return WorkerResult()
 
@@ -139,9 +137,7 @@ class DedupingWorker(Worker):
 
         a = (
             math.sin(delta_phi / 2.0) ** 2
-            + math.cos(phi1)
-            * math.cos(phi2)
-            * math.sin(delta_lambda / 2.0) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
         )
 
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))

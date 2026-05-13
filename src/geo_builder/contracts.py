@@ -9,9 +9,9 @@ from .protocols import Area, Layer
 @dataclass
 class Task:
     type: str
+
+
 @dataclass
-
-
 @dataclass
 class BoundingBox:
     west: float
@@ -21,7 +21,7 @@ class BoundingBox:
 
 
 class AcquisitionTask(Task):
-    areaId:str
+    areaId: str
     areaName: str
     provider: str
     bbox: BoundingBox
@@ -44,7 +44,6 @@ class AcquisitionTask(Task):
 
 
 class AggregationTask(Task):
-
     def __init__(
         self,
     ) -> None:
@@ -52,11 +51,11 @@ class AggregationTask(Task):
 
 
 class DedupingTask(Task):
-
     def __init__(
         self,
     ) -> None:
         super().__init__("deduping")
+
 
 class Map(Protocol):
     def add_area(self, task: AcquisitionTask) -> Area: ...
@@ -77,6 +76,8 @@ class WorkerResult:
 class Worker(Protocol):
     def execute(self, executor: Executor) -> WorkerResult: ...
 
+
 class Provider(Protocol):
     name: str
+
     def fetch(self, task: AcquisitionTask) -> Layer: ...
