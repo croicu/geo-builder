@@ -7,9 +7,14 @@ from ..errors import ProviderError
 from ..protocols import Feature, GeoJson, Geometry, Layer
 from ..tasks import AcquisitionTask
 
+_DEFAULT_URL = "https://overpass-api.de/api/interpreter"
+
 
 class OverpassProvider(Provider):
     name = "overpass"
+
+    def __init__(self, config: dict[str, object] | None = None) -> None:
+        self._url = str((config or {}).get("url", _DEFAULT_URL))
 
     def fetch(self, task: AcquisitionTask) -> Layer:
         query = self._build_query(task)
@@ -60,7 +65,7 @@ out center;
         data = urllib.parse.urlencode({"data": query}).encode("utf-8")
 
         request = urllib.request.Request(
-            "https://overpass-api.de/api/interpreter",
+            self._url,
             data=data,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",

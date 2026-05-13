@@ -1,0 +1,46 @@
+{
+  "elements": [
+    {
+      "type": "node",
+      "id": 123456001,
+      "lat": 40.8518,
+      "lon": 14.2681,
+      "tags": {
+        "name": "Trattoria da Mario",
+        "amenity": "restaurant"
+      }
+    },
+    {
+      "type": "node",
+      "id": 123456002,
+      "lat": 40.8502,
+      "lon": 14.2654,
+      "tags": {
+        "name": "Gran Caffè Napoli",
+        "amenity": "cafe"
+      }
+    },
+    {
+      "type": "node",
+      "id": 123456003,
+      "lat": 40.8534,
+      "lon": 14.2712,
+      "tags": {
+        "name": "Bar dello Sport",
+        "amenity": "bar"
+      }
+    },
+    {
+      "type": "way",
+      "id": 123456004,
+      "center": {
+        "lat": 40.8491,
+        "lon": 14.2698
+      },
+      "tags": {
+        "name": "Ristorante Partenope",
+        "amenity": "restaurant"
+      }
+    }
+  ]
+}
