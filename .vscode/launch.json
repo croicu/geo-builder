@@ -36,8 +36,7 @@
       "args": [
         "-s", 
         "--log-cli-level=INFO", 
-        "tests/scratch/test_scratch.py::test_scratch",
-        "tests/unit/test_error.py::TestError"
+        "tests/scratch/test_scratch.py::test_scratch"
       ],
       "console": "internalConsole",
       "justMyCode": true

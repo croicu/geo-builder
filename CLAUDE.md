@@ -51,7 +51,7 @@ Task[]
     → WorkerFactory
     → Worker.execute(executor)
     → Catalog mutation
-    → Result.save()
+    → persistence.save_catalog()
 ```
 
 ## Task Types
@@ -79,7 +79,7 @@ Future:
 
 ## Key Architecture Notes
 
-**Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`) and in `protocols.py`.
+**Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`).
 
 **Bbox decomposition** — When OverpassProvider receives a 400/429/504, AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. This is the mechanism for handling "request too large" errors without caller involvement.
 

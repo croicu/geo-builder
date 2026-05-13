@@ -8,7 +8,7 @@ tasks.json
     → Builder.run()
     → Workers
     → Catalog (mutable)
-    → Result.save()
+    → persistence.save_catalog()
     → Static files
 ```
 
@@ -54,7 +54,7 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 ## Data Contracts
 
-`protocols.py` contains:
+`protocols.py` — pure field-only dataclasses, no methods:
 
 - Result
 - Catalog
@@ -66,6 +66,15 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 - Geometry
 
 Field names match JSON exactly.
+
+## Persistence
+
+`persistence.py` — all load/save logic as module-level functions:
+
+- `load_catalog(path)` / `save_catalog(catalog, path)`
+- `load_area`, `save_area`, `load_manifest`, `load_layer`, `save_layer`
+- `load_geojson`, `load_feature`, `load_geometry`
+- `read_json`, `save_json`, `child_path` utilities
 
 ## Runtime Contracts
 

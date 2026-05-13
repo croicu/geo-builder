@@ -5,9 +5,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .errors import GeoError
 from .builder import Builder
-from .protocols import Catalog
+from .errors import GeoError
+from .persistence import load_catalog, save_catalog
 from .tasks import Tasks
 
 
@@ -67,7 +67,7 @@ def main() -> int:
         tasks = Tasks.load(arguments.task_path)
 
         if arguments.in_directory is not None:
-            catalog = Catalog.load(arguments.in_directory)
+            catalog = load_catalog(arguments.in_directory)
             executor = Builder(catalog)
         else:
             executor = Builder()
@@ -79,7 +79,7 @@ def main() -> int:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        result.save(arguments.out_directory)
+        save_catalog(result.catalog, arguments.out_directory)
         return 0
     except GeoError as error:
         if arguments.debug:
