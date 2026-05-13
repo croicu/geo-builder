@@ -54,18 +54,16 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 ## Data Contracts
 
-`protocols.py` — pure field-only dataclasses, no methods:
+`protocols.py` — dataclasses whose fields match JSON exactly. Static methods that semantically belong to a class live here too.
 
 - Result
 - Catalog
 - Area
 - Manifest
-- Layer
+- Layer — includes `Layer.id_from_merge_key(merge_key)` to derive a filesystem-safe layer id
 - GeoJson
 - Feature
 - Geometry
-
-Field names match JSON exactly.
 
 ## Settings
 

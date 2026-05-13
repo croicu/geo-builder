@@ -20,19 +20,21 @@ class OverpassProvider(Provider):
         query = self._build_query(task)
         payload = self._execute_query(query)
         geojson = self._to_geojson(payload)
+        merge_key = self._create_merge_key(task)
+        layer_id = Layer.id_from_merge_key(merge_key)
 
         return Layer(
-            id="overpass",
-            name="Overpass #1 (heatmap)",
+            id=layer_id,
+            name="Overpass (heatmap)",
             type="heatmap",
-            url="./layers/overpass.geojson",
+            url=f"./layers/{layer_id}.geojson",
             visible=True,
             style={
                 "color": "#00ff00",
                 "opacity": 0.7,
                 "radiusScale": 1.0,
             },
-            mergeKey=self._create_merge_key(task),
+            mergeKey=merge_key,
             geojson=geojson,
         )
 

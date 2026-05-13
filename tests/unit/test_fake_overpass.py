@@ -51,6 +51,12 @@ class TestFakeOverpassProvider:
 
         assert layer.mergeKey == "fake_overpass:amenity=bar,cafe,restaurant"
 
+    def test_id_and_url_derived_from_merge_key(self):
+        layer = make_provider().fetch(TASK)
+
+        assert layer.id == "fake_overpass_amenity_bar_cafe_restaurant"
+        assert layer.url == "./layers/fake_overpass_amenity_bar_cafe_restaurant.geojson"
+
     def test_missing_data_path_raises(self):
         with pytest.raises(ProviderError, match="dataPath"):
             FakeOverpassProvider({})
