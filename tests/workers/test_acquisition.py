@@ -1,5 +1,3 @@
-import pytest
-
 from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
 from geo_builder.errors import ProviderError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
@@ -42,10 +40,15 @@ def make_layer() -> Layer:
         mergeKey="stub:amenity=restaurant",
         geojson=GeoJson(
             type="FeatureCollection",
-            features=[Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85]))],
+            features=[
+                Feature(
+                    type="Feature",
+                    properties={},
+                    geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
+                ),
+            ],
         ),
     )
-
 
 
 def make_worker(provider: StubProvider, task: AcquisitionTask | None = None) -> AcquisitionWorker:
@@ -124,12 +127,14 @@ class TestSplitTask:
         children = worker._split_task(task)
         bboxes = sorted((c.bbox.west, c.bbox.south, c.bbox.east, c.bbox.north) for c in children)
 
-        assert bboxes == sorted([
-            (0.0, 0.0, 1.0, 1.0),
-            (1.0, 0.0, 2.0, 1.0),
-            (0.0, 1.0, 1.0, 2.0),
-            (1.0, 1.0, 2.0, 2.0),
-        ])
+        assert bboxes == sorted(
+            [
+                (0.0, 0.0, 1.0, 1.0),
+                (1.0, 0.0, 2.0, 1.0),
+                (0.0, 1.0, 1.0, 2.0),
+                (1.0, 1.0, 2.0, 2.0),
+            ]
+        )
 
     def test_child_tasks_inherit_area(self):
         task = make_task()

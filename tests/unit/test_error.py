@@ -16,12 +16,15 @@ class TestError:
         assert isinstance(exc.record.timestamp, datetime)
         assert exc.record.timestamp.tzinfo == timezone.utc
 
-    @pytest.mark.parametrize("cls", [
-        errors.TaskError,
-        errors.CatalogError,
-        errors.ProviderError,
-        errors.WorkerError,
-    ])
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            errors.TaskError,
+            errors.CatalogError,
+            errors.ProviderError,
+            errors.WorkerError,
+        ],
+    )
     def test_subclasses_are_geo_errors(self, cls):
         exc = cls("sub")
         assert isinstance(exc, errors.GeoError)

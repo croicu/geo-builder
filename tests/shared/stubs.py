@@ -1,5 +1,4 @@
 from geo_builder.contracts import AcquisitionTask
-from geo_builder.errors import ProviderError
 from geo_builder.protocols import Area, Layer
 
 

@@ -42,13 +42,16 @@ class TestDiagnosticsLogSink:
 
         assert sink.drain() == []
 
-    @pytest.mark.parametrize("method,expected_level", [
-        ("diagnostic", TelemetryLevel.VERBOSE),
-        ("info",       TelemetryLevel.INFORMATIONAL),
-        ("warning",    TelemetryLevel.WARNING),
-        ("error",      TelemetryLevel.ERROR),
-        ("fatal",      TelemetryLevel.CRITICAL),
-    ])
+    @pytest.mark.parametrize(
+        "method,expected_level",
+        [
+            ("diagnostic", TelemetryLevel.VERBOSE),
+            ("info", TelemetryLevel.INFORMATIONAL),
+            ("warning", TelemetryLevel.WARNING),
+            ("error", TelemetryLevel.ERROR),
+            ("fatal", TelemetryLevel.CRITICAL),
+        ],
+    )
     def test_convenience_methods_log_correct_level(self, method, expected_level):
         sink = DiagnosticsLogSink()
         getattr(sink, method)("msg")
