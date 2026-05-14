@@ -194,6 +194,22 @@ class TestExpandFilter:
         assert "atm" in result["amenity"]
         assert result["leisure"] == ["park"]
 
+    def test_unknown_key_values_pass_through_unchanged(self):
+        result = self.provider._expand_filter({"leisure": ["park", "garden"]})
+
+        assert result["leisure"] == ["park", "garden"]
+
+    def test_query_uses_correct_key_for_non_amenity_filter(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"leisure": ["park"]},
+        )
+        query = self.provider._build_query(task)
+
+        assert '"leisure"="park"' in query
+        assert '"amenity"' not in query
+
     def test_meta_name_preserved_in_merge_key(self):
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",

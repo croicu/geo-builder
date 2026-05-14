@@ -9,13 +9,15 @@ from ..tasks import AcquisitionTask
 
 _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
 
-AMENITY_META: dict[str, list[str]] = {
-    "sustenance": ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"],
-    "education":  ["college", "kindergarten", "library", "school", "university"],
-    "healthcare": ["clinic", "dentist", "doctors", "hospital", "pharmacy", "veterinary"],
-    "financial":  ["atm", "bank", "bureau_de_change"],
-    "entertainment": ["arts_centre", "casino", "cinema", "nightclub", "theatre"],
-    "transportation": ["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
+FEATURE_META: dict[str, dict[str, list[str]]] = {
+    "amenity": {
+        "sustenance":    ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"],
+        "education":     ["college", "kindergarten", "library", "school", "university"],
+        "healthcare":    ["clinic", "dentist", "doctors", "hospital", "pharmacy", "veterinary"],
+        "financial":     ["atm", "bank", "bureau_de_change"],
+        "entertainment": ["arts_centre", "casino", "cinema", "nightclub", "theatre"],
+        "transportation":["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
+    },
 }
 
 
@@ -80,9 +82,10 @@ out center;
     def _expand_filter(self, filter: dict[str, list[str]]) -> dict[str, list[str]]:
         result: dict[str, list[str]] = {}
         for key, values in filter.items():
+            meta = FEATURE_META.get(key, {})
             expanded: list[str] = []
             for value in values:
-                for v in AMENITY_META.get(value, [value]):
+                for v in meta.get(value, [value]):
                     if v not in expanded:
                         expanded.append(v)
             result[key] = expanded

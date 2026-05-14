@@ -45,9 +45,11 @@ The build file (e.g. `build.json`) contains a `settings` object and a named `tas
 
 Layers are mergeable if they share the same `mergeKey`.
 
-## Overpass Filter and Meta Amenities
+## Overpass Filter and Meta Features
 
-The `filter` object maps OSM tag keys to lists of values. Values may be literal OSM amenity strings or meta category names defined in `AMENITY_META`:
+The `filter` object maps arbitrary OSM tag keys to lists of values. Values may be literal OSM tag values or meta category names defined in `FEATURE_META` for that key.
+
+Currently defined meta groups (under the `amenity` key):
 
 | Meta name       | Expands to                                                               |
 |-----------------|--------------------------------------------------------------------------|
@@ -58,4 +60,4 @@ The `filter` object maps OSM tag keys to lists of values. Values may be literal 
 | `entertainment` | arts_centre, casino, cinema, nightclub, theatre                          |
 | `transportation`| bicycle_parking, bicycle_rental, bus_station, car_rental, fuel, parking, taxi |
 
-Meta names are expanded in the Overpass query but preserved verbatim in the `mergeKey` (and therefore the layer `id`). Mixed lists (meta + literal) are deduplicated.
+Keys with no meta groups defined (e.g. `leisure`, `tourism`) pass values through unchanged. Meta names are expanded in the Overpass query but preserved verbatim in the `mergeKey` (and therefore the layer `id`). Mixed lists (meta + literal) are deduplicated.
