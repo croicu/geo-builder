@@ -23,12 +23,9 @@
         "north": 40.90
       },
       "filter": {
-        "amenity": ["sustenance", "entertainment"],
         "leisure": ["park", "garden"],
+        "amenity": ["sustenance", "entertainment"],
         "historic": ["monuments", "memorials"]
-      },
-      "filterColors": {
-        "leisure": "#00ff00"
       }
     },
     "aggregate": {

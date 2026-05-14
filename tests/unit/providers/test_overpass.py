@@ -136,6 +136,57 @@ class TestBuildQuery:
         assert "relation" in query
 
 
+class TestWildcard:
+    def setup_method(self):
+        self.provider = OverpassProvider()
+
+    def test_wildcard_emits_key_only_filter(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"historic": ["*"]},
+        )
+        query = self.provider._build_query(task)
+
+        assert '"historic"' in query
+        assert '"historic"="*"' not in query
+
+    def test_wildcard_emits_node_way_relation(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"historic": ["*"]},
+        )
+        query = self.provider._build_query(task)
+
+        assert 'node["historic"]' in query
+        assert 'way["historic"]' in query
+        assert 'relation["historic"]' in query
+
+    def test_wildcard_merge_key_uses_asterisk(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"historic": ["*"]},
+        )
+        assert self.provider._create_merge_key(task) == "overpass:historic=*"
+
+    def test_wildcard_layer_id_is_clean(self):
+        from geo_builder.protocols import Layer
+        assert Layer.id_from_merge_key("overpass:historic=*") == "overpass_historic"
+
+    def test_wildcard_mixed_with_specific_value(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"historic": ["*"], "amenity": ["restaurant"]},
+        )
+        query = self.provider._build_query(task)
+
+        assert 'node["historic"]' in query
+        assert '"amenity"="restaurant"' in query
+
+
 class TestCreateMergeKey:
     def setup_method(self):
         self.provider = OverpassProvider()
