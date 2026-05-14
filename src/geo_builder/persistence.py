@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import shutil
@@ -59,6 +60,7 @@ def save_catalog(catalog: Catalog, output_dir: str | Path) -> None:
 
     for area in catalog.areas:
         save_area(area, output_dir)
+        save_area_csv(area, output_dir)
 
 
 def load_area(output_dir: Path, payload: dict[str, JsonValue]) -> Area:
@@ -182,6 +184,36 @@ def load_geometry(payload: dict[str, JsonValue]) -> Geometry:
         type=str(payload["type"]),
         coordinates=[float(coordinates[0]), float(coordinates[1])],
     )
+
+
+def save_area_csv(area: Area, output_dir: Path) -> None:
+    area_dir = child_path(output_dir, area.manifestUrl).parent
+    csv_path = area_dir / f"{area.id}.csv"
+
+    rows: list[tuple[str, object]] = [
+        (layer.id, feature)
+        for layer in area.manifest.layers
+        for feature in layer.geojson.features
+    ]
+
+    if not rows:
+        return
+
+    property_keys = sorted({key for _, feature in rows for key in feature.properties})
+    fieldnames = ["lon", "lat", "layer_id"] + property_keys
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for layer_id, feature in rows:
+            row: dict[str, object] = {
+                "lon": feature.geometry.coordinates[0],
+                "lat": feature.geometry.coordinates[1],
+                "layer_id": layer_id,
+            }
+            for key in property_keys:
+                row[key] = feature.properties.get(key, "")
+            writer.writerow(row)
 
 
 def _clean_dir(path: str | Path) -> None:

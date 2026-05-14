@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from geo_builder.persistence import (
     load_geojson,
     load_geometry,
     read_json,
+    save_area_csv,
     save_catalog,
     save_json,
 )
@@ -231,6 +233,123 @@ class TestRoundTrip:
 
         assert feature.properties["name"] == "Trattoria da Mario"
         assert feature.properties["amenity"] == "restaurant"
+
+
+class TestSaveAreaCsv:
+    def _area_dir(self, tmp_path: Path) -> Path:
+        return tmp_path / "areas" / "napoli"
+
+    def _save(self, area: Area, tmp_path: Path) -> Path:
+        area_dir = self._area_dir(tmp_path)
+        area_dir.mkdir(parents=True)
+        save_area_csv(area, tmp_path)
+        return area_dir / "napoli.csv"
+
+    def _read_csv(self, path: Path) -> list[dict]:
+        with open(path, newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+
+    def test_csv_written(self, tmp_path):
+        csv_path = self._save(make_area(), tmp_path)
+
+        assert csv_path.exists()
+
+    def test_header_contains_lon_lat_layer_id(self, tmp_path):
+        csv_path = self._save(make_area(), tmp_path)
+        rows = self._read_csv(csv_path)
+
+        assert "lon" in rows[0]
+        assert "lat" in rows[0]
+        assert "layer_id" in rows[0]
+
+    def test_feature_coordinates(self, tmp_path):
+        csv_path = self._save(make_area(), tmp_path)
+        row = self._read_csv(csv_path)[0]
+
+        assert float(row["lon"]) == pytest.approx(14.27)
+        assert float(row["lat"]) == pytest.approx(40.85)
+
+    def test_layer_id_column(self, tmp_path):
+        csv_path = self._save(make_area(), tmp_path)
+        row = self._read_csv(csv_path)[0]
+
+        assert row["layer_id"] == "overpass_amenity_restaurant"
+
+    def test_property_columns(self, tmp_path):
+        csv_path = self._save(make_area(), tmp_path)
+        row = self._read_csv(csv_path)[0]
+
+        assert row["name"] == "Trattoria da Mario"
+        assert row["amenity"] == "restaurant"
+
+    def test_missing_property_is_empty_string(self, tmp_path):
+        layer_a = Layer(
+            id="a", name="A", type="heatmap", url="./layers/a.geojson",
+            visible=True, style={}, mergeKey="k:a",
+            geojson=GeoJson(type="FeatureCollection", features=[
+                Feature(type="Feature", properties={"name": "X"}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
+            ]),
+        )
+        layer_b = Layer(
+            id="b", name="B", type="heatmap", url="./layers/b.geojson",
+            visible=True, style={}, mergeKey="k:b",
+            geojson=GeoJson(type="FeatureCollection", features=[
+                Feature(type="Feature", properties={"amenity": "cafe"}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
+            ]),
+        )
+        area = Area(
+            id="napoli", name="Napoli", center=[40.85, 14.27],
+            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            manifestUrl="./areas/napoli/manifest.json",
+            manifest=Manifest(version=1, layers=[layer_a, layer_b]),
+        )
+        csv_path = self._save(area, tmp_path)
+        rows = self._read_csv(csv_path)
+
+        assert rows[0]["amenity"] == ""
+        assert rows[1]["name"] == ""
+
+    def test_all_features_from_all_layers(self, tmp_path):
+        layer_a = Layer(
+            id="a", name="A", type="heatmap", url="./layers/a.geojson",
+            visible=True, style={}, mergeKey="k:a",
+            geojson=GeoJson(type="FeatureCollection", features=[
+                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
+                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
+            ]),
+        )
+        layer_b = Layer(
+            id="b", name="B", type="heatmap", url="./layers/b.geojson",
+            visible=True, style={}, mergeKey="k:b",
+            geojson=GeoJson(type="FeatureCollection", features=[
+                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.29, 40.87])),
+            ]),
+        )
+        area = Area(
+            id="napoli", name="Napoli", center=[40.85, 14.27],
+            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            manifestUrl="./areas/napoli/manifest.json",
+            manifest=Manifest(version=1, layers=[layer_a, layer_b]),
+        )
+        csv_path = self._save(area, tmp_path)
+
+        assert len(self._read_csv(csv_path)) == 3
+
+    def test_no_features_writes_no_csv(self, tmp_path):
+        area = Area(
+            id="napoli", name="Napoli", center=[40.85, 14.27],
+            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            manifestUrl="./areas/napoli/manifest.json",
+            manifest=Manifest(version=1, layers=[]),
+        )
+        csv_path = self._save(area, tmp_path)
+
+        assert not csv_path.exists()
+
+    def test_csv_written_by_save_catalog(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        assert (tmp_path / "areas" / "napoli" / "napoli.csv").exists()
 
 
 class TestLoadCatalogErrors:

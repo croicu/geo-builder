@@ -101,6 +101,7 @@ Future:
 ├── catalog.json
 └── areas/{areaId}/
     ├── manifest.json
+    ├── {areaId}.csv
     └── layers/{layerId}.geojson
 ```
 

@@ -79,9 +79,11 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 `persistence.py` — all load/save logic as module-level functions:
 
 - `load_catalog(path)` / `save_catalog(catalog, path)`
-- `load_area`, `save_area`, `load_manifest`, `load_layer`, `save_layer`
+- `load_area`, `save_area`, `save_area_csv`, `load_manifest`, `load_layer`, `save_layer`
 - `load_geojson`, `load_feature`, `load_geometry`
 - `read_json`, `save_json`, `child_path` utilities
+
+`save_area_csv` writes `{areaId}.csv` into each area directory combining all features across all layers. Columns: `lon`, `lat`, `layer_id`, then all unique property keys (sorted). Missing properties are written as empty strings.
 
 ## Runtime Contracts
 

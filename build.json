@@ -15,6 +15,29 @@
       "type": "acquisition",
       "areaId": "napoli",
       "areaName": "Napoli",
+      "provider": "overpass",
+      "bbox": {
+        "west": 14.25,
+        "south": 40.84,
+        "east": 14.28,
+        "north": 40.86
+      },
+      "filter": {
+        "amenity": ["*"]
+      }
+    },
+    "aggregate": {
+      "type": "aggregation"
+    },
+    "dedupe": {
+      "type": "deduping"
+    }
+  },
+  "tasks_fake": {
+    "fetch_napoli": {
+      "type": "acquisition",
+      "areaId": "napoli",
+      "areaName": "Napoli",
       "provider": "fake",
       "bbox": {
         "west": 14.20,
