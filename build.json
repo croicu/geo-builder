@@ -6,8 +6,8 @@
     "overpass": {
       "url": "https://overpass-api.de/api/interpreter"
     },
-    "fake_overpass": {
-      "dataPath": "tests/data/providers/overpass.json"
+    "fake": {
+      "dataPath": "tests/data/providers/fake.json"
     }
   },
   "tasks": {
@@ -15,7 +15,7 @@
       "type": "acquisition",
       "areaId": "napoli",
       "areaName": "Napoli",
-      "provider": "fake_overpass",
+      "provider": "fake",
       "bbox": {
         "west": 14.20,
         "south": 40.80,

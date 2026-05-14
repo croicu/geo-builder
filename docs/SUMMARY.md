@@ -10,16 +10,16 @@ Running log of decisions, bugs fixed, and patterns established. Trim or ask Clau
 
 ```json
 "providers": {
-  "overpass":      { "url": "https://overpass-api.de/api/interpreter" },
-  "fake_overpass": { "dataPath": "tests/data/providers/overpass.json" }
+  "overpass": { "url": "https://overpass-api.de/api/interpreter" },
+  "fake":     { "dataPath": "tests/data/providers/fake.json" }
 }
 ```
 
 `ProviderFactory` reads `Settings.current().providers.get(name, {})` and passes the slice to the provider constructor.
 
-## FakeOverpassProvider (2026-05-13)
+## FakeProvider (2026-05-13)
 
-Registered as `"fake_overpass"`. Set `"provider": "fake_overpass"` in a task to skip network calls during local development. Subclasses `OverpassProvider`, overrides only `_execute_query` to load from the configured `dataPath`. All conversion logic (`_to_geojson`, `_create_merge_key`) is inherited and exercised identically to the real provider. Test data: `tests/data/providers/overpass.json`.
+Registered as `"fake"`. Set `"provider": "fake"` in a task to skip network calls during local development. Subclasses `OverpassProvider`, overrides only `_execute_query` to load from the configured `dataPath`. All conversion logic (`_to_geojson`, `_create_merge_key`) is inherited and exercised identically to the real provider. Test data: `tests/data/providers/fake.json`.
 
 ## Layer id/url collision fix (2026-05-13)
 

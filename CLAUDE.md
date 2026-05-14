@@ -92,7 +92,7 @@ Future:
 
 **MergeKey format** — `"provider:key1=val1,val2"` (e.g., `"overpass:amenity=restaurant,cafe"`). AggregationWorker groups layers within an area by this key and concatenates their features into a single layer.
 
-**Layer id/url derived from mergeKey** — `Layer.id_from_merge_key(merge_key)` sanitizes the mergeKey into a filesystem-safe string used as both the layer `id` and the `.geojson` filename. This ensures two providers covering the same amenity set (e.g. `overpass` vs `fake_overpass`) produce distinct files and never overwrite each other on disk.
+**Layer id/url derived from mergeKey** — `Layer.id_from_merge_key(merge_key)` sanitizes the mergeKey into a filesystem-safe string used as both the layer `id` and the `.geojson` filename. This ensures two providers covering the same amenity set (e.g. `overpass` vs `fake`) produce distinct files and never overwrite each other on disk.
 
 **Output layout**
 
