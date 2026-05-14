@@ -43,9 +43,7 @@ class AggregationWorker(Worker):
 
             source_ids = {layer.id for layer in layers}
 
-            area.manifest.layers = [
-                layer for layer in area.manifest.layers if layer.id not in source_ids
-            ]
+            area.manifest.layers = [layer for layer in area.manifest.layers if layer.id not in source_ids]
 
             area.manifest.layers.append(merged_layer)
 

@@ -38,11 +38,7 @@ def load_catalog(output_dir: str | Path) -> Catalog:
     if not isinstance(areas_payload, list):
         raise CatalogError("catalog.json areas must be an array.")
 
-    areas = [
-        load_area(output_dir, area_payload)
-        for area_payload in areas_payload
-        if isinstance(area_payload, dict)
-    ]
+    areas = [load_area(output_dir, area_payload) for area_payload in areas_payload if isinstance(area_payload, dict)]
 
     return Catalog(
         version=str(payload["version"]),
@@ -110,11 +106,7 @@ def load_manifest(manifest_dir: Path, payload: dict[str, JsonValue]) -> Manifest
     if not isinstance(layers_payload, list):
         raise CatalogError("manifest layers must be an array.")
 
-    layers = [
-        load_layer(manifest_dir, layer_payload)
-        for layer_payload in layers_payload
-        if isinstance(layer_payload, dict)
-    ]
+    layers = [load_layer(manifest_dir, layer_payload) for layer_payload in layers_payload if isinstance(layer_payload, dict)]
 
     return Manifest(
         version=int(payload["version"]),
@@ -155,11 +147,7 @@ def load_geojson(payload: dict[str, JsonValue]) -> GeoJson:
     if not isinstance(features_payload, list):
         raise CatalogError("GeoJSON features must be an array.")
 
-    features = [
-        load_feature(feature_payload)
-        for feature_payload in features_payload
-        if isinstance(feature_payload, dict)
-    ]
+    features = [load_feature(feature_payload) for feature_payload in features_payload if isinstance(feature_payload, dict)]
 
     return GeoJson(
         type=str(payload["type"]),

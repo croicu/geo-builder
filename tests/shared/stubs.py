@@ -1,5 +1,5 @@
 from geo_builder.contracts import AcquisitionTask
-from geo_builder.protocols import Area, Layer
+from geo_builder.protocols import Area, Catalog, Layer
 
 
 class StubProvider:
@@ -24,8 +24,9 @@ class StubFactory:
 
 
 class StubExecutor:
-    def __init__(self, area: Area) -> None:
+    def __init__(self, area: Area, catalog: Catalog | None = None) -> None:
         self._area = area
+        self.catalog = catalog
         self.added_layers: list[Layer] = []
         self.pushed_tasks: list[AcquisitionTask] = []
 
