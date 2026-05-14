@@ -18,6 +18,10 @@ FEATURE_META: dict[str, dict[str, list[str]]] = {
         "entertainment": ["arts_centre", "casino", "cinema", "nightclub", "theatre"],
         "transportation":["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
     },
+    "historic": {
+        "monuments":  ["castle", "fort", "manor", "tower", "gate", "ruins", "archaeological_site", "city_gate"],
+        "memorials":  ["monument", "memorial", "milestone", "boundary_stone", "wayside_cross", "wayside_shrine"],
+    },
 }
 
 
@@ -72,9 +76,14 @@ out center;
         else:
             for key, values in self._expand_filter(task.filter).items():
                 for value in values:
-                    lines.append(f'  node["{key}"="{value}"]({bbox_text});')
-                    lines.append(f'  way["{key}"="{value}"]({bbox_text});')
-                    lines.append(f'  relation["{key}"="{value}"]({bbox_text});')
+                    if value == "*":
+                        lines.append(f'  node["{key}"]({bbox_text});')
+                        lines.append(f'  way["{key}"]({bbox_text});')
+                        lines.append(f'  relation["{key}"]({bbox_text});')
+                    else:
+                        lines.append(f'  node["{key}"="{value}"]({bbox_text});')
+                        lines.append(f'  way["{key}"="{value}"]({bbox_text});')
+                        lines.append(f'  relation["{key}"="{value}"]({bbox_text});')
 
         return "\n".join(lines)
 

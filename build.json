@@ -24,7 +24,8 @@
       },
       "filter": {
         "amenity": ["sustenance", "entertainment"],
-        "leisure": ["park", "garden"]
+        "leisure": ["park", "garden"],
+        "historic": ["monuments", "memorials"]
       },
       "filterColors": {
         "leisure": "#00ff00"

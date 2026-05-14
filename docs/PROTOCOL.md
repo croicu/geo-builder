@@ -60,4 +60,11 @@ Currently defined meta groups (under the `amenity` key):
 | `entertainment` | arts_centre, casino, cinema, nightclub, theatre                          |
 | `transportation`| bicycle_parking, bicycle_rental, bus_station, car_rental, fuel, parking, taxi |
 
-Keys with no meta groups defined (e.g. `leisure`, `tourism`) pass values through unchanged. Meta names are expanded in the Overpass query but preserved verbatim in the `mergeKey` (and therefore the layer `id`). Mixed lists (meta + literal) are deduplicated.
+Currently defined meta groups (under the `historic` key):
+
+| Meta name   | Expands to                                                                      |
+|-------------|---------------------------------------------------------------------------------|
+| `monuments` | castle, fort, manor, tower, gate, ruins, archaeological_site, city_gate        |
+| `memorials` | monument, memorial, milestone, boundary_stone, wayside_cross, wayside_shrine   |
+
+Keys with no meta groups defined (e.g. `leisure`, `tourism`) pass values through unchanged. Use `["*"]` for a key-only wildcard match (e.g. `"historic": ["*"]` → `node["historic"](bbox)`). Meta names are expanded in the Overpass query but preserved verbatim in the `mergeKey` (and therefore the layer `id`). Mixed lists (meta + literal) are deduplicated.
