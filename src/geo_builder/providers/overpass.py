@@ -9,6 +9,15 @@ from ..tasks import AcquisitionTask
 
 _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
 
+AMENITY_META: dict[str, list[str]] = {
+    "sustenance": ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"],
+    "education":  ["college", "kindergarten", "library", "school", "university"],
+    "healthcare": ["clinic", "dentist", "doctors", "hospital", "pharmacy", "veterinary"],
+    "financial":  ["atm", "bank", "bureau_de_change"],
+    "entertainment": ["arts_centre", "casino", "cinema", "nightclub", "theatre"],
+    "transportation": ["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
+}
+
 
 class OverpassProvider(Provider):
     name = "overpass"
@@ -55,13 +64,29 @@ out center;
 
         lines: list[str] = []
 
-        for key, values in task.filter.items():
-            for value in values:
-                lines.append(f'  node["{key}"="{value}"]({bbox_text});')
-                lines.append(f'  way["{key}"="{value}"]({bbox_text});')
-                lines.append(f'  relation["{key}"="{value}"]({bbox_text});')
+        if task.filter is None or len(task.filter.items()) == 0:
+            lines.append(f'  node["amenity"]({bbox_text});')
+            lines.append(f'  way["amenity"]({bbox_text});')
+            lines.append(f'  relation["amenity"]({bbox_text});')
+        else:
+            for key, values in self._expand_filter(task.filter).items():
+                for value in values:
+                    lines.append(f'  node["{key}"="{value}"]({bbox_text});')
+                    lines.append(f'  way["{key}"="{value}"]({bbox_text});')
+                    lines.append(f'  relation["{key}"="{value}"]({bbox_text});')
 
         return "\n".join(lines)
+
+    def _expand_filter(self, filter: dict[str, list[str]]) -> dict[str, list[str]]:
+        result: dict[str, list[str]] = {}
+        for key, values in filter.items():
+            expanded: list[str] = []
+            for value in values:
+                for v in AMENITY_META.get(value, [value]):
+                    if v not in expanded:
+                        expanded.append(v)
+            result[key] = expanded
+        return result
 
     def _execute_query(self, query: str) -> dict:
         data = urllib.parse.urlencode({"data": query}).encode("utf-8")

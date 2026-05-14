@@ -78,7 +78,8 @@ Task[]
 Providers are isolated under `providers/`.
 
 Current:
-- OverpassProvider
+- OverpassProvider — fetches OSM amenity data via Overpass API; supports meta amenity expansion (e.g. `sustenance` → bar, cafe, …)
+- FakeProvider — offline stub that reads a local JSON file; used in tests and local dev
 
 Future:
 - FlickrProvider

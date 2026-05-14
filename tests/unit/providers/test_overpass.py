@@ -162,6 +162,61 @@ class TestCreateMergeKey:
         assert self.provider._create_merge_key(task) == "overpass:amenity=cafe:leisure=park"
 
 
+class TestExpandFilter:
+    def setup_method(self):
+        self.provider = OverpassProvider()
+
+    def test_meta_value_expands_to_individual_values(self):
+        result = self.provider._expand_filter({"amenity": ["sustenance"]})
+
+        assert result["amenity"] == ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"]
+
+    def test_non_meta_value_passes_through(self):
+        result = self.provider._expand_filter({"amenity": ["restaurant"]})
+
+        assert result["amenity"] == ["restaurant"]
+
+    def test_mix_of_meta_and_individual_values(self):
+        result = self.provider._expand_filter({"amenity": ["financial", "restaurant"]})
+
+        assert "atm" in result["amenity"]
+        assert "bank" in result["amenity"]
+        assert "restaurant" in result["amenity"]
+
+    def test_deduplication_within_expansion(self):
+        result = self.provider._expand_filter({"amenity": ["sustenance", "cafe"]})
+
+        assert result["amenity"].count("cafe") == 1
+
+    def test_multiple_keys_expanded_independently(self):
+        result = self.provider._expand_filter({"amenity": ["financial"], "leisure": ["park"]})
+
+        assert "atm" in result["amenity"]
+        assert result["leisure"] == ["park"]
+
+    def test_meta_name_preserved_in_merge_key(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["sustenance"]},
+        )
+        key = self.provider._create_merge_key(task)
+
+        assert key == "overpass:amenity=sustenance"
+
+    def test_query_contains_expanded_values_not_meta_name(self):
+        task = AcquisitionTask(
+            areaId="x", areaName="X", provider="overpass",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["sustenance"]},
+        )
+        query = self.provider._build_query(task)
+
+        assert '"amenity"="sustenance"' not in query
+        assert '"amenity"="restaurant"' in query
+        assert '"amenity"="cafe"' in query
+
+
 class TestExecuteQuery:
     def test_success_returns_parsed_json(self):
         provider = OverpassProvider({"url": "http://fake"})
