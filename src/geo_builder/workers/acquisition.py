@@ -49,6 +49,8 @@ class AcquisitionWorker(Worker):
 
         return [
             AcquisitionTask(
+                areaId=task.areaId,
+                areaName=task.areaName,
                 provider=task.provider,
                 bbox=type(bbox)(
                     west=bbox.west,
@@ -59,6 +61,8 @@ class AcquisitionWorker(Worker):
                 filter=task.filter,
             ),
             AcquisitionTask(
+                areaId=task.areaId,
+                areaName=task.areaName,
                 provider=task.provider,
                 bbox=type(bbox)(
                     west=mid_lon,
@@ -69,6 +73,8 @@ class AcquisitionWorker(Worker):
                 filter=task.filter,
             ),
             AcquisitionTask(
+                areaId=task.areaId,
+                areaName=task.areaName,
                 provider=task.provider,
                 bbox=type(bbox)(
                     west=bbox.west,
@@ -79,6 +85,8 @@ class AcquisitionWorker(Worker):
                 filter=task.filter,
             ),
             AcquisitionTask(
+                areaId=task.areaId,
+                areaName=task.areaName,
                 provider=task.provider,
                 bbox=type(bbox)(
                     west=mid_lon,
