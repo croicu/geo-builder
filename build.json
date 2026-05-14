@@ -17,13 +17,40 @@
       "areaName": "Napoli",
       "provider": "overpass",
       "bbox": {
-        "west": 14.25,
-        "south": 40.84,
-        "east": 14.28,
-        "north": 40.86
+        "west": 14.20,
+        "south": 40.80,
+        "east": 14.33,
+        "north": 40.90
       },
       "filter": {
-        "amenity": ["*"]
+        "amenity": ["sustenance", "entertainment"],
+        "leisure": ["park", "garden"]
+      },
+      "filterColors": {
+        "leisure": "#00ff00"
+      }
+    },
+    "aggregate": {
+      "type": "aggregation"
+    },
+    "dedupe": {
+      "type": "deduping"
+    }
+  },
+  "tasks_overpass": {
+    "fetch_napoli": {
+      "type": "acquisition",
+      "areaId": "napoli",
+      "areaName": "Napoli",
+      "provider": "overpass",
+      "bbox": {
+        "west": 14.20,
+        "south": 40.80,
+        "east": 14.33,
+        "north": 40.90
+      },
+      "filter": {
+        "amenity": ["restaurant", "cafe", "bar"]
       }
     },
     "aggregate": {

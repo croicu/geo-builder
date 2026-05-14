@@ -222,3 +222,30 @@ class TestBuilderAddLayer:
         builder.add_layer(area, make_layer("overpass:amenity=cafe", 2))
 
         assert len(area.manifest.layers) == 2
+
+    def test_first_layer_gets_blue(self):
+        builder = Builder()
+        area = make_area()
+
+        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+
+        assert area.manifest.layers[0].style["color"] == "#0000ff"
+
+    def test_second_layer_gets_different_color(self):
+        builder = Builder()
+        area = make_area()
+
+        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+        builder.add_layer(area, make_layer("overpass:amenity=cafe", 1))
+
+        assert area.manifest.layers[0].style["color"] != area.manifest.layers[1].style["color"]
+
+    def test_merged_layer_keeps_original_color(self):
+        builder = Builder()
+        area = make_area()
+
+        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+        color_before = area.manifest.layers[0].style["color"]
+        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+
+        assert area.manifest.layers[0].style["color"] == color_before

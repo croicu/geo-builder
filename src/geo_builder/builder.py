@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import atan2, cos, radians, sin, sqrt
 
+from .colors import layer_color
 from .contracts import AcquisitionTask, BoundingBox
 from .errors import GeoError
 from .protocols import Area, Catalog, JsonObject, Layer, Manifest, Result
@@ -93,6 +94,7 @@ class Builder:
             if existing.mergeKey == layer.mergeKey:
                 existing.geojson.features.extend(layer.geojson.features)
                 return
+        layer.style["color"] = layer_color(len(area.manifest.layers))
         area.manifest.layers.append(layer)
 
     def _create_result(self) -> Result:

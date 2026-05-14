@@ -111,6 +111,116 @@ class TestExecute:
         assert result.error is not None
 
 
+class TestSplitByKey:
+    def test_returns_one_task_per_key(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+        )
+        worker = AcquisitionWorker(task)
+
+        children = worker._split_by_key(task)
+
+        assert len(children) == 2
+
+    def test_each_child_has_single_key_filter(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+        )
+        worker = AcquisitionWorker(task)
+
+        children = worker._split_by_key(task)
+
+        assert all(len(c.filter) == 1 for c in children)
+        assert {"amenity": ["restaurant"]} in [c.filter for c in children]
+        assert {"leisure": ["park"]} in [c.filter for c in children]
+
+    def test_child_tasks_inherit_bbox_and_area(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=1, south=2, east=3, north=4),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+        )
+        worker = AcquisitionWorker(task)
+
+        children = worker._split_by_key(task)
+
+        assert all(c.bbox == task.bbox for c in children)
+        assert all(c.areaId == "napoli" for c in children)
+        assert all(c.areaName == "Napoli" for c in children)
+
+
+class TestColorOverride:
+    def test_filter_color_applied_to_layer(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"leisure": ["park"]},
+            filterColors={"leisure": "#00ff00"},
+        )
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(layer=make_layer()), task=task)
+
+        worker.execute(executor)
+
+        assert executor.added_layers[0].style["color"] == "#00ff00"
+
+    def test_no_override_does_not_set_color_on_layer(self):
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(layer=make_layer()))
+
+        worker.execute(executor)
+
+        assert executor.added_layers[0].style.get("color") is None
+
+    def test_color_inherited_by_key_split_children(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filterColors={"leisure": "#00ff00"},
+        )
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(layer=make_layer()), task=task)
+
+        worker.execute(executor)
+
+        children = executor.pushed_tasks
+        leisure_task = next(t for t in children if "leisure" in t.filter)
+        assert leisure_task.filterColors == {"leisure": "#00ff00"}
+
+
+class TestExecuteMultiKey:
+    def test_multi_key_filter_pushes_one_task_per_key(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+        )
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(layer=make_layer()), task=task)
+
+        worker.execute(executor)
+
+        assert len(executor.pushed_tasks) == 2
+
+    def test_multi_key_filter_does_not_add_layer(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+        )
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(layer=make_layer()), task=task)
+
+        worker.execute(executor)
+
+        assert executor.added_layers == []
+
+
 class TestSplitTask:
     def test_returns_four_quadrants(self):
         task = make_task(west=0.0, south=0.0, east=2.0, north=2.0)

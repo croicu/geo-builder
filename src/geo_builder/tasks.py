@@ -30,6 +30,7 @@ class Tasks:
                         provider=str(item["provider"]),
                         bbox=bbox,
                         filter=dict(item.get("filter", {})),
+                        filterColors={str(k): str(v) for k, v in dict(item.get("filterColors", {})).items()},
                     )
                 )
                 continue

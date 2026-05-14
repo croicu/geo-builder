@@ -41,7 +41,6 @@ class OverpassProvider(Provider):
             url=f"./layers/{layer_id}.geojson",
             visible=True,
             style={
-                "color": "#00ff00",
                 "opacity": 0.7,
                 "radiusScale": 1.0,
             },
