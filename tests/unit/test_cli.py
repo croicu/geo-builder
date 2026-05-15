@@ -10,9 +10,11 @@ from geo_builder.protocols import Catalog, Result
 
 
 class StubSettings:
-    def __init__(self, debug: bool = False, design_url: str | None = None) -> None:
+    def __init__(self, debug: bool = False, design_url: str | None = None, break_on_load: bool = False, dev_tools: bool = False) -> None:
         self.debug = debug
         self.design_url = design_url
+        self.break_on_load = break_on_load
+        self.dev_tools = dev_tools
 
 
 class StubBuilder:
@@ -177,7 +179,7 @@ class TestDesignMode:
 
             result = main()
 
-            mock_launch.assert_called_once_with("http://localhost:5173/")
+            mock_launch.assert_called_once_with("http://localhost:5173/", debug=False, break_on_load=False, dev_tools=False)
             assert result == 0
 
     def test_no_design_url_returns_1(self, capsys):

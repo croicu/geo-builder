@@ -17,6 +17,8 @@ class Settings:
     debug: bool
     tasks: list[Task]
     providers: dict[str, dict[str, object]]
+    break_on_load: bool = False
+    dev_tools: bool = False
     design_url: str | None = None
 
     _instance: ClassVar[Settings | None] = None
@@ -24,6 +26,8 @@ class Settings:
     @classmethod
     def load(cls, tasks_path: str | Path | None = None) -> Settings:
         debug = False
+        break_on_load = False
+        dev_tools = False
         design_url: str | None = None
         providers: dict[str, dict[str, object]] = {}
 
@@ -39,6 +43,8 @@ class Settings:
             if not isinstance(providers_payload, dict):
                 raise TaskError("'providers' in build.json must be a JSON object.")
             debug = bool(settings_payload.get("debug", False))
+            break_on_load = bool(settings_payload.get("break", False))
+            dev_tools = bool(settings_payload.get("devTools", False))
             design_url = str(settings_payload["designUrl"]) if "designUrl" in settings_payload else None
             providers = providers_payload
 
@@ -52,6 +58,8 @@ class Settings:
 
         cls._instance = cls(
             debug=debug,
+            break_on_load=break_on_load,
+            dev_tools=dev_tools,
             design_url=design_url,
             tasks=tasks,
             providers=providers,

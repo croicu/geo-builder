@@ -22,7 +22,7 @@ class TestDiagnosticsLogSink:
 
     def test_log_timestamp_is_utc(self):
         sink = DiagnosticsLogSink()
-        record = sink.log(TelemetryLevel.INFORMATIONAL, "ts")
+        record = sink.log(TelemetryLevel.INFO, "ts")
 
         sink.drain()
         assert isinstance(record.timestamp, datetime)
@@ -46,7 +46,7 @@ class TestDiagnosticsLogSink:
         "method,expected_level",
         [
             ("diagnostic", TelemetryLevel.VERBOSE),
-            ("info", TelemetryLevel.INFORMATIONAL),
+            ("info", TelemetryLevel.INFO),
             ("warning", TelemetryLevel.WARNING),
             ("error", TelemetryLevel.ERROR),
             ("fatal", TelemetryLevel.CRITICAL),
