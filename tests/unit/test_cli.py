@@ -27,40 +27,40 @@ class StubBuilder:
 
 
 class TestParseArgs:
-    def test_settings_path_parsed(self):
-        args = parse_args(["build.json"])
+    def test_tasks_path_parsed(self):
+        args = parse_args(["tasks.json"])
 
-        assert args.settings_path == Path("build.json")
+        assert args.tasks_path == Path("tasks.json")
 
     def test_in_directory_defaults_to_none(self):
-        args = parse_args(["build.json"])
+        args = parse_args(["tasks.json"])
 
         assert args.in_directory is None
 
     def test_out_directory_defaults_to_current(self):
-        args = parse_args(["build.json"])
+        args = parse_args(["tasks.json"])
 
         assert args.out_directory == Path("./")
 
     def test_in_directory_parsed(self):
-        args = parse_args(["build.json", "--in", "/tmp/in"])
+        args = parse_args(["tasks.json", "--in", "/tmp/in"])
 
         assert args.in_directory == Path("/tmp/in")
 
     def test_out_directory_parsed(self):
-        args = parse_args(["build.json", "--out", "/tmp/out"])
+        args = parse_args(["tasks.json", "--out", "/tmp/out"])
 
         assert args.out_directory == Path("/tmp/out")
 
     def test_returns_cli_arguments(self):
-        assert isinstance(parse_args(["build.json"]), CliArguments)
+        assert isinstance(parse_args(["tasks.json"]), CliArguments)
 
 
 class TestMain:
     @pytest.fixture(autouse=True)
     def argv(self):
         original = sys.argv
-        sys.argv = ["geo-builder", "build.json", "--out", "/tmp/out"]
+        sys.argv = ["geo-builder", "tasks.json", "--out", "/tmp/out"]
         yield
         sys.argv = original
 
@@ -107,7 +107,7 @@ class TestMain:
         assert "something failed" in capsys.readouterr().err
 
     def test_in_directory_loads_catalog(self):
-        sys.argv = ["geo-builder", "build.json", "--in", "/tmp/in", "--out", "/tmp/out"]
+        sys.argv = ["geo-builder", "tasks.json", "--in", "/tmp/in", "--out", "/tmp/out"]
         loaded_catalog = Catalog()
 
         with patch("geo_builder.cli.Settings") as MockSettings, \

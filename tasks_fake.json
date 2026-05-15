@@ -1,0 +1,23 @@
+{
+  "fetch_napoli": {
+    "type": "acquisition",
+    "areaId": "napoli",
+    "areaName": "Napoli",
+    "provider": "fake",
+    "bbox": {
+      "west": 14.20,
+      "south": 40.80,
+      "east": 14.33,
+      "north": 40.90
+    },
+    "filters": {
+      "amenity": { "values": ["restaurant", "cafe", "bar"] }
+    }
+  },
+  "aggregate": {
+    "type": "aggregation"
+  },
+  "dedupe": {
+    "type": "deduping"
+  }
+}

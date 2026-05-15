@@ -6,7 +6,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "geo_builder.cli",
-      "args": ["${workspaceFolder}/build.json", "--out", "${workspaceFolder}/out"],
+      "args": ["${workspaceFolder}/tasks_production.json", "--out", "${workspaceFolder}/out"],
       "console": "integratedTerminal",
       "justMyCode": true
     },
@@ -15,7 +15,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "geo_builder.cli",
-      "args": ["${workspaceFolder}/build.json", "--in", "${workspaceFolder}/in", "--out", "${workspaceFolder}/out"],
+      "args": ["${workspaceFolder}/tasks_production.json", "--in", "${workspaceFolder}/in", "--out", "${workspaceFolder}/out"],
       "console": "integratedTerminal",
       "justMyCode": true
     },

@@ -3,40 +3,52 @@
 ## Command Line
 
 ```text
-geo-builder <settings_path> [--in <in_directory>] [--out <out_directory>]
+geo-builder <tasks_path> [--in <in_directory>] [--out <out_directory>]
 ```
 
 Output is never written when errors are present.
 
-## Build File Schema
+## File Schema
 
-The build file (e.g. `build.json`) contains a `settings` object and a named `tasks` dictionary. Tasks are processed in declaration order.
+Configuration is split across two files:
+
+**`build.json`** — stable settings, auto-loaded from `./build.json` if it exists. Contains `settings` and `providers`.
 
 ```json
 {
   "settings": {
     "debug": false
   },
-  "tasks": {
-    "fetch_napoli": {
-      "type": "acquisition",
-      "areaId": "napoli",
-      "areaName": "Napoli",
-      "provider": "overpass",
-      "bbox": {
-        "west": 14.20,
-        "south": 40.80,
-        "east": 14.33,
-        "north": 40.90
-      },
-      "filters": {
-        "amenity":  { "values": ["restaurant", "cafe", "bar"] },
-        "historic": { "values": ["monuments", "memorials"], "scale": 3.0, "color": "#ffff00" }
-      }
-    },
-    "aggregate": { "type": "aggregation" },
-    "dedupe":    { "type": "deduping" }
+  "providers": {
+    "overpass": {
+      "url": "https://overpass-api.de/api/interpreter"
+    }
   }
+}
+```
+
+**Tasks file** (e.g. `tasks.json`) — passed as the CLI positional argument. Contains a named dictionary of tasks processed in declaration order.
+
+```json
+{
+  "fetch_napoli": {
+    "type": "acquisition",
+    "areaId": "napoli",
+    "areaName": "Napoli",
+    "provider": "overpass",
+    "bbox": {
+      "west": 14.20,
+      "south": 40.80,
+      "east": 14.33,
+      "north": 40.90
+    },
+    "filters": {
+      "amenity":  { "values": ["restaurant", "cafe", "bar"] },
+      "historic": { "values": ["monuments", "memorials"], "scale": 3.0, "color": "#ffff00" }
+    }
+  },
+  "aggregate": { "type": "aggregation" },
+  "dedupe":    { "type": "deduping" }
 }
 ```
 

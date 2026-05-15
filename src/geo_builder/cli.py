@@ -13,7 +13,7 @@ from .settings import Settings
 
 @dataclass
 class CliArguments:
-    settings_path: Path
+    tasks_path: Path
     in_directory: Path | None
     out_directory: Path
 
@@ -21,11 +21,11 @@ class CliArguments:
 def parse_args(argv: list[str]) -> CliArguments:
     parser = argparse.ArgumentParser(
         prog="geo-builder",
-        usage="geo-builder <settings_path> [--in <in_directory>] [--out <out_directory>]",
+        usage="geo-builder <tasks_path> [--in <in_directory>] [--out <out_directory>]",
     )
 
     parser.add_argument(
-        "settings_path",
+        "tasks_path",
         type=Path,
     )
 
@@ -46,7 +46,7 @@ def parse_args(argv: list[str]) -> CliArguments:
     args = parser.parse_args(argv)
 
     return CliArguments(
-        settings_path=args.settings_path,
+        tasks_path=args.tasks_path,
         in_directory=args.in_directory,
         out_directory=args.out_directory,
     )
@@ -56,7 +56,7 @@ def main() -> int:
     arguments = parse_args(sys.argv[1:])
 
     try:
-        settings = Settings.load(arguments.settings_path)
+        settings = Settings.load(arguments.tasks_path)
     except GeoError as error:
         print(f"geo-builder: error: {error}", file=sys.stderr)
         return 1

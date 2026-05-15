@@ -23,14 +23,22 @@ class Tasks:
                     north=float(bbox_data["north"]),
                 )
 
+                _LAYER_TYPES = ("heatmap", "circle")
+
                 filters: dict[str, AreaStyle] = {}
                 for key, style_data in dict(item.get("filters", {})).items():
                     if not isinstance(style_data, dict):
                         raise TaskError(f"Filter '{key}' in task '{name}' must be a JSON object.")
+                    layer_type = str(style_data.get("type", "heatmap"))
+                    if layer_type not in _LAYER_TYPES:
+                        raise TaskError(f"Filter '{key}' in task '{name}' has unknown type '{layer_type}'.")
                     filters[str(key)] = AreaStyle(
                         values=[str(v) for v in style_data.get("values", [])],
+                        name=str(style_data["name"]) if "name" in style_data else None,
                         color=str(style_data["color"]) if "color" in style_data else None,
                         scale=float(style_data["scale"]) if "scale" in style_data else None,
+                        surface=bool(style_data.get("surface", False)),
+                        type=layer_type,
                     )
 
                 tasks.append(

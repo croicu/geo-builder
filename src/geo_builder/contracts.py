@@ -22,8 +22,11 @@ class BoundingBox:
 @dataclass
 class AreaStyle:
     values: list[str]
+    name: str | None = None
     color: str | None = None
     scale: float | None = None
+    surface: bool = False
+    type: str = "heatmap"
 
 
 class AcquisitionTask(Task):

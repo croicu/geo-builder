@@ -25,8 +25,8 @@ Never read, glob, or search inside `./in/` or `./out/`. They contain large volum
 pip install -e ".[dev]"
 
 # Run
-geo-builder build.json --out ./output
-geo-builder build.json --in ./existing --out ./output   # incremental
+geo-builder tasks_production.json --out ./output
+geo-builder tasks_production.json --in ./existing --out ./output   # incremental
 
 # Lint
 ruff check src/ tests/
