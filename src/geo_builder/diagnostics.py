@@ -7,7 +7,7 @@ from enum import Enum
 
 class TelemetryLevel(Enum):
     VERBOSE = "verbose"
-    INFORMATIONAL = "informational"
+    INFO = "info"
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
@@ -52,7 +52,7 @@ class DiagnosticsLogSink:
         self.log(TelemetryLevel.VERBOSE, message)
 
     def info(self, message: str) -> None:
-        self.log(TelemetryLevel.INFORMATIONAL, message)
+        self.log(TelemetryLevel.INFO, message)
 
     def warning(self, message: str) -> None:
         self.log(TelemetryLevel.WARNING, message)
