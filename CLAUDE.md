@@ -91,9 +91,13 @@ Future:
 
 **Bbox decomposition** — When OverpassProvider receives a 400/429/504, AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. This is the mechanism for handling "request too large" errors without caller involvement.
 
+**AreaStyle** — Each filter key in an acquisition task carries an `AreaStyle(values, color, scale)` record. `color` overrides the auto-assigned layer color; `scale` overrides `radiusScale` in the heatmap style (useful for sparse layers like historic places). Both are optional.
+
 **MergeKey format** — `"provider:key1=val1,val2"` (e.g., `"overpass:amenity=restaurant,cafe"`). AggregationWorker groups layers within an area by this key and concatenates their features into a single layer.
 
 **Layer id/url derived from mergeKey** — `Layer.id_from_merge_key(merge_key)` sanitizes the mergeKey into a filesystem-safe string used as both the layer `id` and the `.geojson` filename. This ensures two providers covering the same amenity set (e.g. `overpass` vs `fake`) produce distinct files and never overwrite each other on disk.
+
+**Debug output** — When `settings.debug: true`, each worker step writes a snapshot to `./build/{task_type}/{counter:03d}/`: a `catalog.json` (no embedded geojson), plus `.geojson` and `.csv` for any layer that was added or modified.
 
 **Output layout**
 

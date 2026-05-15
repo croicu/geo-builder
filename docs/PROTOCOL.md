@@ -29,8 +29,9 @@ The build file (e.g. `build.json`) contains a `settings` object and a named `tas
         "east": 14.33,
         "north": 40.90
       },
-      "filter": {
-        "amenity": ["restaurant", "cafe", "bar"]
+      "filters": {
+        "amenity":  { "values": ["restaurant", "cafe", "bar"] },
+        "historic": { "values": ["monuments", "memorials"], "scale": 3.0, "color": "#ffff00" }
       }
     },
     "aggregate": { "type": "aggregation" },
@@ -39,15 +40,36 @@ The build file (e.g. `build.json`) contains a `settings` object and a named `tas
 }
 ```
 
-`settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks.
+Each entry in `filters` is an `AreaStyle` record:
+
+| Field    | Type            | Required | Description |
+|----------|-----------------|----------|-------------|
+| `values` | `list[str]`     | yes      | OSM tag values (literals, meta names, or `["*"]` wildcard) |
+| `color`  | `str`           | no       | Hex color override for this layer (e.g. `"#ffff00"`) |
+| `scale`  | `float`         | no       | `radiusScale` override for the heatmap layer (default `1.0`) |
+
+`settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. It also writes per-task snapshots to `./build/{task_type}/{counter:03d}/` (see **Debug Output** below).
+
+## Debug Output
+
+When `debug: true`, after each worker executes `Builder` writes:
+
+```text
+./build/{task_type}/{counter:03d}/
+    catalog.json          — full catalog + areas + layers (no embedded geojson)
+    {layer_id}.geojson    — only layers added or modified by this task
+    {layer_id}.csv        — lon/lat + all feature properties for each geojson
+```
+
+The counter is global across all task types so folder numbers reflect execution order. A layer only appears as a geojson/csv file if it was new or had its feature count change.
 
 ## Layer Merge Rule
 
 Layers are mergeable if they share the same `mergeKey`.
 
-## Overpass Filter and Meta Features
+## Overpass Filters and Meta Features
 
-The `filter` object maps arbitrary OSM tag keys to lists of values. Values may be literal OSM tag values or meta category names defined in `FEATURE_META` for that key.
+The `filters` object maps arbitrary OSM tag keys to `AreaStyle` records. The `values` list may contain literal OSM tag values or meta category names defined in `FEATURE_META` for that key.
 
 Currently defined meta groups (under the `amenity` key):
 

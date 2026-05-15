@@ -71,8 +71,21 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 - `Settings.load(path)` — parses `build.json`, instantiates tasks, stores the singleton
 - `Settings.current()` — returns the active instance (raises if not loaded)
-- Fields: `debug: bool`, `tasks: list[Task]`
+- Fields: `debug: bool`, `tasks: list[Task]`, `providers: dict[str, dict]`
 - Tests set up the singleton directly via `Settings._instance = Settings(...)`
+
+## Debug Output
+
+When `settings.debug` is `true`, `Builder.run()` clears `./build/` at the start of the run then, after each worker executes, writes:
+
+```text
+./build/{task_type}/{counter:03d}/
+    catalog.json       — catalog + areas + layers metadata (geojson stripped)
+    {layer_id}.geojson — layers whose feature count changed in this step
+    {layer_id}.csv     — matching CSV (lon, lat, + all feature properties)
+```
+
+The counter is global across task types so files sort in execution order.
 
 ## Persistence
 
@@ -89,6 +102,11 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 `contracts.py` contains:
 
+- `Task` — base dataclass with `type: str`
+- `BoundingBox` — west/south/east/north floats
+- `AreaStyle` — per-filter-key style record: `values: list[str]`, `color: str | None`, `scale: float | None`
+- `AcquisitionTask` — carries `filters: dict[str, AreaStyle]` (one entry per OSM tag key)
+- `AggregationTask`, `DedupingTask`
 - `Map` — protocol for catalog mutation: `add_area`, `add_layer`
 - `Executor` — protocol extending `Map`, adds `push_task`, `push_tasks`; passed to all workers
 - `Worker` — protocol: `execute(executor: Executor) → WorkerResult`
