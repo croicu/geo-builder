@@ -38,6 +38,12 @@ class OverpassProvider(Provider):
         merge_key = self._create_merge_key(task)
         layer_id = Layer.id_from_merge_key(merge_key)
 
+        scale = 1.0
+        if len(task.filters) == 1:
+            area_style = next(iter(task.filters.values()))
+            if area_style.scale is not None:
+                scale = area_style.scale
+
         return Layer(
             id=layer_id,
             name="Overpass (heatmap)",
@@ -46,7 +52,7 @@ class OverpassProvider(Provider):
             visible=True,
             style={
                 "opacity": 0.7,
-                "radiusScale": 1.0,
+                "radiusScale": scale,
             },
             mergeKey=merge_key,
             geojson=geojson,
@@ -69,12 +75,13 @@ out center;
 
         lines: list[str] = []
 
-        if task.filter is None or len(task.filter.items()) == 0:
+        if not task.filters:
             lines.append(f'  node["amenity"]({bbox_text});')
             lines.append(f'  way["amenity"]({bbox_text});')
             lines.append(f'  relation["amenity"]({bbox_text});')
         else:
-            for key, values in self._expand_filter(task.filter).items():
+            raw = {key: style.values for key, style in task.filters.items()}
+            for key, values in self._expand_filter(raw).items():
                 for value in values:
                     if value == "*":
                         lines.append(f'  node["{key}"]({bbox_text});')
@@ -176,8 +183,8 @@ out center;
     def _create_merge_key(self, task: AcquisitionTask) -> str:
         parts: list[str] = [task.provider]
 
-        for key in sorted(task.filter.keys()):
-            values = sorted(task.filter[key])
+        for key in sorted(task.filters.keys()):
+            values = sorted(task.filters[key].values)
             parts.append(f"{key}={','.join(values)}")
 
         return ":".join(parts)

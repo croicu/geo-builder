@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from geo_builder.contracts import AcquisitionTask, BoundingBox
+from geo_builder.contracts import AcquisitionTask, AreaStyle, BoundingBox
 from geo_builder.errors import ProviderError
 from geo_builder.providers.overpass import OverpassProvider
 
@@ -14,7 +14,7 @@ TASK = AcquisitionTask(
     areaName="Napoli",
     provider="overpass",
     bbox=BoundingBox(west=14.20, south=40.80, east=14.33, north=40.90),
-    filter={"amenity": ["restaurant", "cafe", "bar"]},
+    filters={"amenity": AreaStyle(values=["restaurant", "cafe", "bar"])},
 )
 
 PAYLOAD = {
@@ -127,7 +127,7 @@ class TestBuildQuery:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"]},
+            filters={"amenity": AreaStyle(values=["restaurant"])},
         )
         query = self.provider._build_query(task)
 
@@ -144,7 +144,7 @@ class TestWildcard:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"historic": ["*"]},
+            filters={"historic": AreaStyle(values=["*"])},
         )
         query = self.provider._build_query(task)
 
@@ -155,7 +155,7 @@ class TestWildcard:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"historic": ["*"]},
+            filters={"historic": AreaStyle(values=["*"])},
         )
         query = self.provider._build_query(task)
 
@@ -167,7 +167,7 @@ class TestWildcard:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"historic": ["*"]},
+            filters={"historic": AreaStyle(values=["*"])},
         )
         assert self.provider._create_merge_key(task) == "overpass:historic=*"
 
@@ -179,7 +179,7 @@ class TestWildcard:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"historic": ["*"], "amenity": ["restaurant"]},
+            filters={"historic": AreaStyle(values=["*"]), "amenity": AreaStyle(values=["restaurant"])},
         )
         query = self.provider._build_query(task)
 
@@ -195,7 +195,7 @@ class TestCreateMergeKey:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"]},
+            filters={"amenity": AreaStyle(values=["restaurant"])},
         )
 
         assert self.provider._create_merge_key(task) == "overpass:amenity=restaurant"
@@ -207,7 +207,7 @@ class TestCreateMergeKey:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"leisure": ["park"], "amenity": ["cafe"]},
+            filters={"leisure": AreaStyle(values=["park"]), "amenity": AreaStyle(values=["cafe"])},
         )
 
         assert self.provider._create_merge_key(task) == "overpass:amenity=cafe:leisure=park"
@@ -254,7 +254,7 @@ class TestExpandFilter:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"leisure": ["park"]},
+            filters={"leisure": AreaStyle(values=["park"])},
         )
         query = self.provider._build_query(task)
 
@@ -265,7 +265,7 @@ class TestExpandFilter:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["sustenance"]},
+            filters={"amenity": AreaStyle(values=["sustenance"])},
         )
         key = self.provider._create_merge_key(task)
 
@@ -275,7 +275,7 @@ class TestExpandFilter:
         task = AcquisitionTask(
             areaId="x", areaName="X", provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["sustenance"]},
+            filters={"amenity": AreaStyle(values=["sustenance"])},
         )
         query = self.provider._build_query(task)
 

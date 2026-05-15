@@ -1,4 +1,4 @@
-from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
+from .contracts import AcquisitionTask, AggregationTask, AreaStyle, BoundingBox, DedupingTask, Task
 from .errors import TaskError
 
 
@@ -23,14 +23,23 @@ class Tasks:
                     north=float(bbox_data["north"]),
                 )
 
+                filters: dict[str, AreaStyle] = {}
+                for key, style_data in dict(item.get("filters", {})).items():
+                    if not isinstance(style_data, dict):
+                        raise TaskError(f"Filter '{key}' in task '{name}' must be a JSON object.")
+                    filters[str(key)] = AreaStyle(
+                        values=[str(v) for v in style_data.get("values", [])],
+                        color=str(style_data["color"]) if "color" in style_data else None,
+                        scale=float(style_data["scale"]) if "scale" in style_data else None,
+                    )
+
                 tasks.append(
                     AcquisitionTask(
                         areaId=str(item["areaId"]),
                         areaName=str(item["areaName"]),
                         provider=str(item["provider"]),
                         bbox=bbox,
-                        filter=dict(item.get("filter", {})),
-                        filterColors={str(k): str(v) for k, v in dict(item.get("filterColors", {})).items()},
+                        filters=filters,
                     )
                 )
                 continue

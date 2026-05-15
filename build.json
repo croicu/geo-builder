@@ -22,10 +22,10 @@
         "east": 14.33,
         "north": 40.90
       },
-      "filter": {
-        "leisure": ["park", "garden"],
-        "amenity": ["sustenance", "entertainment"],
-        "historic": ["monuments", "memorials"]
+      "filters": {
+        "leisure":  { "values": ["park", "garden"] },
+        "amenity":  { "values": ["sustenance", "entertainment"] },
+        "historic": { "values": ["monuments", "memorials"], "scale": 3.0, "color": "#ffff00" }
       }
     },
     "aggregate": {
@@ -47,8 +47,8 @@
         "east": 14.33,
         "north": 40.90
       },
-      "filter": {
-        "amenity": ["restaurant", "cafe", "bar"]
+      "filters": {
+        "amenity": { "values": ["restaurant", "cafe", "bar"] }
       }
     },
     "aggregate": {
@@ -70,8 +70,8 @@
         "east": 14.33,
         "north": 40.90
       },
-      "filter": {
-        "amenity": ["restaurant", "cafe", "bar"]
+      "filters": {
+        "amenity": { "values": ["restaurant", "cafe", "bar"] }
       }
     },
     "aggregate": {

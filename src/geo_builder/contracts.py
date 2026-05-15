@@ -12,7 +12,6 @@ class Task:
 
 
 @dataclass
-@dataclass
 class BoundingBox:
     west: float
     south: float
@@ -20,13 +19,19 @@ class BoundingBox:
     north: float
 
 
+@dataclass
+class AreaStyle:
+    values: list[str]
+    color: str | None = None
+    scale: float | None = None
+
+
 class AcquisitionTask(Task):
     areaId: str
     areaName: str
     provider: str
     bbox: BoundingBox
-    filter: dict[str, list[str]]
-    filterColors: dict[str, str]
+    filters: dict[str, AreaStyle]
 
     def __init__(
         self,
@@ -34,16 +39,14 @@ class AcquisitionTask(Task):
         areaName: str,
         provider: str,
         bbox: BoundingBox,
-        filter: dict[str, list[str]],
-        filterColors: dict[str, str] | None = None,
+        filters: dict[str, AreaStyle],
     ) -> None:
         super().__init__("acquisition")
         self.areaId = areaId
         self.areaName = areaName
         self.provider = provider
         self.bbox = bbox
-        self.filter = filter
-        self.filterColors = filterColors or {}
+        self.filters = filters
 
 
 class AggregationTask(Task):

@@ -47,7 +47,7 @@ TASK = AcquisitionTask(
     areaName="Napoli",
     provider="fake",
     bbox=BoundingBox(west=14.20, south=40.80, east=14.33, north=40.90),
-    filter={},
+    filters={},
 )
 
 

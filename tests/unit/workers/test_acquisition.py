@@ -1,4 +1,4 @@
-from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
+from geo_builder.contracts import AcquisitionTask, AreaStyle, BoundingBox, WorkerResult
 from geo_builder.errors import ProviderError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
 from geo_builder.workers.acquisition import AcquisitionWorker
@@ -11,7 +11,7 @@ def make_task(west=0.0, south=0.0, east=2.0, north=2.0) -> AcquisitionTask:
         areaName="Napoli",
         provider="stub",
         bbox=BoundingBox(west=west, south=south, east=east, north=north),
-        filter={"amenity": ["restaurant"]},
+        filters={"amenity": AreaStyle(values=["restaurant"])},
     )
 
 
@@ -116,7 +116,7 @@ class TestSplitByKey:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
         worker = AcquisitionWorker(task)
 
@@ -128,21 +128,21 @@ class TestSplitByKey:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
         worker = AcquisitionWorker(task)
 
         children = worker._split_by_key(task)
 
-        assert all(len(c.filter) == 1 for c in children)
-        assert {"amenity": ["restaurant"]} in [c.filter for c in children]
-        assert {"leisure": ["park"]} in [c.filter for c in children]
+        assert all(len(c.filters) == 1 for c in children)
+        assert "amenity" in [next(iter(c.filters)) for c in children]
+        assert "leisure" in [next(iter(c.filters)) for c in children]
 
     def test_child_tasks_inherit_bbox_and_area(self):
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=1, south=2, east=3, north=4),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
         worker = AcquisitionWorker(task)
 
@@ -158,8 +158,7 @@ class TestColorOverride:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"leisure": ["park"]},
-            filterColors={"leisure": "#00ff00"},
+            filters={"leisure": AreaStyle(values=["park"], color="#00ff00")},
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
@@ -180,8 +179,10 @@ class TestColorOverride:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
-            filterColors={"leisure": "#00ff00"},
+            filters={
+                "amenity": AreaStyle(values=["restaurant"]),
+                "leisure": AreaStyle(values=["park"], color="#00ff00"),
+            },
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
@@ -189,8 +190,8 @@ class TestColorOverride:
         worker.execute(executor)
 
         children = executor.pushed_tasks
-        leisure_task = next(t for t in children if "leisure" in t.filter)
-        assert leisure_task.filterColors == {"leisure": "#00ff00"}
+        leisure_task = next(t for t in children if "leisure" in t.filters)
+        assert leisure_task.filters["leisure"].color == "#00ff00"
 
 
 class TestExecuteMultiKey:
@@ -198,7 +199,7 @@ class TestExecuteMultiKey:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
@@ -211,7 +212,7 @@ class TestExecuteMultiKey:
         task = AcquisitionTask(
             areaId="napoli", areaName="Napoli", provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filter={"amenity": ["restaurant"], "leisure": ["park"]},
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
@@ -262,7 +263,7 @@ class TestSplitTask:
         children = worker._split_task(task)
 
         assert all(c.provider == "stub" for c in children)
-        assert all(c.filter == {"amenity": ["restaurant"]} for c in children)
+        assert all(c.filters == {"amenity": AreaStyle(values=["restaurant"])} for c in children)
 
     def test_degenerate_bbox_returns_empty(self):
         task = make_task(west=1.0, south=1.0, east=1.0, north=1.0)

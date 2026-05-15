@@ -1,6 +1,6 @@
 import pytest
 
-from geo_builder.contracts import BoundingBox
+from geo_builder.contracts import AreaStyle, BoundingBox
 from geo_builder.errors import ProviderError
 from geo_builder.providers.fake import FakeProvider
 from geo_builder.tasks import AcquisitionTask
@@ -12,7 +12,7 @@ TASK = AcquisitionTask(
     areaName="Napoli",
     provider="fake",
     bbox=BoundingBox(west=14.20, south=40.80, east=14.33, north=40.90),
-    filter={"amenity": ["restaurant", "cafe", "bar"]},
+    filters={"amenity": AreaStyle(values=["restaurant", "cafe", "bar"])},
 )
 
 
