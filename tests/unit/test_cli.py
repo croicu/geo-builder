@@ -10,8 +10,9 @@ from geo_builder.protocols import Catalog, Result
 
 
 class StubSettings:
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(self, debug: bool = False, design_url: str | None = None) -> None:
         self.debug = debug
+        self.design_url = design_url
 
 
 class StubBuilder:
@@ -31,6 +32,11 @@ class TestParseArgs:
         args = parse_args(["tasks.json"])
 
         assert args.tasks_path == Path("tasks.json")
+
+    def test_tasks_path_defaults_to_none(self):
+        args = parse_args([])
+
+        assert args.tasks_path is None
 
     def test_in_directory_defaults_to_none(self):
         args = parse_args(["tasks.json"])
@@ -154,3 +160,30 @@ class TestMain:
 
             with pytest.raises(GeoError):
                 main()
+
+
+class TestDesignMode:
+    @pytest.fixture(autouse=True)
+    def argv(self):
+        original = sys.argv
+        sys.argv = ["geo-builder"]
+        yield
+        sys.argv = original
+
+    def test_launches_webview_with_design_url(self):
+        with patch("geo_builder.cli.Settings") as MockSettings, \
+             patch("geo_builder.cli._launch_designer") as mock_launch:
+            MockSettings.load.return_value = StubSettings(design_url="http://localhost:5173/")
+
+            result = main()
+
+            mock_launch.assert_called_once_with("http://localhost:5173/")
+            assert result == 0
+
+    def test_no_design_url_returns_1(self, capsys):
+        with patch("geo_builder.cli.Settings") as MockSettings:
+            MockSettings.load.return_value = StubSettings(design_url=None)
+
+            assert main() == 1
+
+        assert "designUrl" in capsys.readouterr().err

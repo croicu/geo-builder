@@ -17,12 +17,14 @@ class Settings:
     debug: bool
     tasks: list[Task]
     providers: dict[str, dict[str, object]]
+    design_url: str | None = None
 
     _instance: ClassVar[Settings | None] = None
 
     @classmethod
-    def load(cls, tasks_path: str | Path) -> Settings:
+    def load(cls, tasks_path: str | Path | None = None) -> Settings:
         debug = False
+        design_url: str | None = None
         providers: dict[str, dict[str, object]] = {}
 
         if _BUILD_PATH.exists():
@@ -37,17 +39,21 @@ class Settings:
             if not isinstance(providers_payload, dict):
                 raise TaskError("'providers' in build.json must be a JSON object.")
             debug = bool(settings_payload.get("debug", False))
+            design_url = str(settings_payload["designUrl"]) if "designUrl" in settings_payload else None
             providers = providers_payload
 
-        with Path(tasks_path).open("r", encoding="utf-8") as f:
-            tasks_payload = json.load(f)
-
-        if not isinstance(tasks_payload, dict):
-            raise TaskError("Tasks file must contain a JSON object.")
+        tasks: list[Task] = []
+        if tasks_path is not None:
+            with Path(tasks_path).open("r", encoding="utf-8") as f:
+                tasks_payload = json.load(f)
+            if not isinstance(tasks_payload, dict):
+                raise TaskError("Tasks file must contain a JSON object.")
+            tasks = Tasks.from_payload(tasks_payload)
 
         cls._instance = cls(
             debug=debug,
-            tasks=Tasks.from_payload(tasks_payload),
+            design_url=design_url,
+            tasks=tasks,
             providers=providers,
         )
 

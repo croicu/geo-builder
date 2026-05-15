@@ -13,7 +13,7 @@ from .settings import Settings
 
 @dataclass
 class CliArguments:
-    tasks_path: Path
+    tasks_path: Path | None
     in_directory: Path | None
     out_directory: Path
 
@@ -21,12 +21,14 @@ class CliArguments:
 def parse_args(argv: list[str]) -> CliArguments:
     parser = argparse.ArgumentParser(
         prog="geo-builder",
-        usage="geo-builder <tasks_path> [--in <in_directory>] [--out <out_directory>]",
+        usage="geo-builder [<tasks_path>] [--in <in_directory>] [--out <out_directory>]",
     )
 
     parser.add_argument(
         "tasks_path",
         type=Path,
+        nargs="?",
+        default=None,
     )
 
     parser.add_argument(
@@ -52,6 +54,11 @@ def parse_args(argv: list[str]) -> CliArguments:
     )
 
 
+def _launch_designer(url: str, debug: bool = False) -> None:
+    from geo_builder.designer.host import launch
+    launch(url, debug=debug)
+
+
 def main() -> int:
     arguments = parse_args(sys.argv[1:])
 
@@ -60,6 +67,13 @@ def main() -> int:
     except GeoError as error:
         print(f"geo-builder: error: {error}", file=sys.stderr)
         return 1
+
+    if arguments.tasks_path is None:
+        if not settings.design_url:
+            print("geo-builder: error: no tasks file given and no designUrl configured in build.json", file=sys.stderr)
+            return 1
+        _launch_designer(settings.design_url, debug=settings.debug)
+        return 0
 
     try:
         if arguments.in_directory is not None:

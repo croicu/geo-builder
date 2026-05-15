@@ -1,6 +1,7 @@
 {
   "settings": {
-    "debug": true
+    "debug": true,
+    "designUrl": "http://localhost:5173/?design=1&debug=1"
   },
   "providers": {
     "overpass": {

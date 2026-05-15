@@ -20,6 +20,15 @@
       "justMyCode": true
     },
     {
+      "name": "Python: Run (Designer)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "geo_builder.cli",
+      "args": [],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
       "name": "Python: Run PyTest",
       "type": "debugpy",
       "request": "launch",
