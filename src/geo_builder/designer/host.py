@@ -127,13 +127,13 @@ def launch(
             def do_setup() -> None:
                 _setup(window, catalog)
                 if not break_on_load and api is not None:
-                    api.ping()
+                    api.ready()
 
             threading.Thread(target=do_setup, daemon=True).start()
         else:
             Logger.info("Page loaded")
             if api is not None:
-                api.ping()
+                api.ready()
 
     window.events.loaded += on_loaded
 

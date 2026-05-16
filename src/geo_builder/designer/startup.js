@@ -26,7 +26,7 @@ if (new URLSearchParams(location.search).get('break')) { debugger; }
   };
 
   window.geo = {
-    // Fire an event to Python. Pass callback to receive a response.
+    // Call a method on Python (JS → Python). Pass callback to receive a response.
     invoke(id, payload, callback) {
       const requestId = callback !== undefined ? String(_nextId++) : undefined;
       if (requestId !== undefined) _pending[requestId] = callback;

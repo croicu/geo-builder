@@ -23,7 +23,7 @@ class Catalog:
 
     def register_handlers(self, gateway) -> None:
         from .api import GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput
-        gateway.define_event(GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput)
+        gateway.define_method(GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput)
         gateway.register(GET_AREA_BBOX_ID, self._get_area_bbox)
 
     def _get_area_bbox(self, data) -> object:

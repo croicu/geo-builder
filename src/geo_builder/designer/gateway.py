@@ -7,14 +7,14 @@ import secrets
 import threading
 from typing import Any, Callable
 
-from ..api import PING_ID as _PING_ID
-from ..api import PONG_ID as _PONG_ID
-from ..api import PingData, PongData
+from ..api import READY_ID as _READY_ID
+from ..api import ReadyData
 from ..diagnostics import Logger
 
 
 @dataclasses.dataclass
 class MethodDef:
+    """JS → Python: a method the browser can call."""
     id: str
     input_type: type
     output_type: type | None
@@ -22,6 +22,7 @@ class MethodDef:
 
 @dataclasses.dataclass
 class EventDef:
+    """Python → JS: an event the builder can fire."""
     id: str
     input_type: type
     output_type: type | None
@@ -33,27 +34,26 @@ class Gateway:
         self._queue: _queue.Queue[tuple | None] = _queue.Queue()
         self._thread: threading.Thread | None = None
 
-        self._methods: dict[str, MethodDef] = {}
-        self._events: dict[str, EventDef] = {}
+        self._methods: dict[str, MethodDef] = {}   # JS → Python
+        self._events: dict[str, EventDef] = {}     # Python → JS
         self._pending: dict[str, tuple[Callable, type | None]] = {}
         self._handlers: dict[str, dict[int, Callable]] = {}
         self._next_cookie: int = 0
 
-        self._token: str | None = None
         self.is_open = False
 
-        self.define_method(_PING_ID, PingData, PingData)
-        self.define_event(_PONG_ID, PongData)
-        self.register(_PONG_ID, self._on_pong)
+        self.define_event(_READY_ID, ReadyData)
 
     # --- Registration ---
 
     def define_method(self, id: str, input_type: type, output_type: type | None = None) -> None:
+        """JS → Python: register a method the browser can call."""
         self._methods[id] = MethodDef(id=id, input_type=input_type, output_type=output_type)
+        self._handlers.setdefault(id, {})
 
     def define_event(self, id: str, input_type: type, output_type: type | None = None) -> None:
+        """Python → JS: declare an event the builder can fire."""
         self._events[id] = EventDef(id=id, input_type=input_type, output_type=output_type)
-        self._handlers.setdefault(id, {})
 
     def register(self, id: str, fn: Callable) -> int:
         self._handlers.setdefault(id, {})
@@ -73,10 +73,10 @@ class Gateway:
     def call(self, id: str, data: Any, callback: Callable | None = None) -> None:
         self._queue.put(("call", id, callback, data))
 
-    def ping(self) -> None:
-        self.is_open = False
-        self._token = secrets.token_hex(16)
-        self.call(_PING_ID, PingData(token=self._token), callback=self._on_ping)
+    def ready(self) -> None:
+        self.is_open = True
+        self.call(_READY_ID, ReadyData())
+        Logger.info("API gateway ready.")
 
     # --- Dispatcher loop ---
 
@@ -102,28 +102,14 @@ class Gateway:
 
     # --- Internals ---
 
-    def _on_ping(self, data: PingData) -> None:
-        if data.token == self._token:
-            self.is_open = True
-            Logger.info("API gateway opened (ping).")
-        else:
-            Logger.warning(f"Ping token mismatch: expected {self._token!r}, got {data.token!r}")
-
-    def _on_pong(self, data: PongData) -> None:
-        if data.token == self._token:
-            self.is_open = True
-            Logger.info("API gateway opened (pong).")
-        else:
-            Logger.warning(f"Pong token mismatch: expected {self._token!r}, got {data.token!r}")
-
     def _process_call(self, id: str, callback: Callable | None, data: Any) -> None:
-        method = self._methods.get(id)
-        if method is None:
-            Logger.warning(f"call: unknown method '{id}'")
+        event = self._events.get(id)
+        if event is None:
+            Logger.warning(f"call: unknown event '{id}'")
             return
         request_id = secrets.token_hex(8) if callback is not None else None
         if request_id is not None:
-            self._pending[request_id] = (callback, method.output_type)
+            self._pending[request_id] = (callback, event.output_type)
         payload = dataclasses.asdict(data) if dataclasses.is_dataclass(data) else data
         msg: dict[str, Any] = {"id": id, "data": payload}
         if request_id is not None:
@@ -131,34 +117,34 @@ class Gateway:
         self._send(f"window.__geo_dispatch({_json.dumps(msg)})")
 
     def _dispatch(self, raw: str) -> None:
-        assert threading.current_thread() is self._thread, "Api._dispatch must run on the dispatcher thread"
+        assert threading.current_thread() is self._thread, "Gateway._dispatch must run on the dispatcher thread"
         try:
             msg = _json.loads(raw)
             request_id = msg.get("requestId")
-            event_id = msg.get("id")
+            method_id = msg.get("id")
             data = msg.get("data", {})
 
-            if event_id is None and request_id is not None:
-                # Response to a Python method call
+            if method_id is None and request_id is not None:
+                # Response to a Python event call
                 entry = self._pending.pop(request_id, None)
                 if entry is not None:
                     callback, output_type = entry
                     result = output_type(**data) if output_type and isinstance(data, dict) else data
                     callback(result)
 
-            elif event_id is not None:
-                # Event fired from JS
-                event = self._events.get(event_id)
-                if event is None:
-                    Logger.warning(f"dispatch: unknown event '{event_id}'")
+            elif method_id is not None:
+                # Method call from JS
+                method = self._methods.get(method_id)
+                if method is None:
+                    Logger.warning(f"dispatch: unknown method '{method_id}'")
                     return
-                input_data = event.input_type(**data) if isinstance(data, dict) else data
+                input_data = method.input_type(**data) if isinstance(data, dict) else data
                 output = None
-                for fn in self._handlers.get(event_id, {}).values():
+                for fn in self._handlers.get(method_id, {}).values():
                     result = fn(input_data)
                     if result is not None:
                         output = result
-                if request_id and event.output_type and output is not None:
+                if request_id and method.output_type and output is not None:
                     response: dict[str, Any] = {
                         "requestId": request_id,
                         "data": dataclasses.asdict(output),

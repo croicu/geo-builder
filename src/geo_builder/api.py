@@ -11,20 +11,14 @@ OK = 0
 ERR_AREA_NOT_FOUND = 1
 
 
-# --- Ping / Pong ---
+# --- Ready (connection handshake) ---
 
 @dataclass
-class PingData:
-    token: str
+class ReadyData:
+    pass
 
 
-@dataclass
-class PongData:
-    token: str
-
-
-PING_ID = "__geo_ping__"
-PONG_ID = "__geo_pong__"
+READY_ID = "__geo_ready__"
 
 
 # --- GetAreaBbox ---

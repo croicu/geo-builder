@@ -55,3 +55,11 @@ The executor uses a stack (`append` / `pop`) to process tasks depth-first.
 - Group by `mergeKey`
 - Concatenate features
 - Replace source layers with one merged layer
+
+## Interactive Session — Threading Model
+
+All reads and writes to the model (catalog, areas, layers) must happen on the `run_dispatcher` thread — the thread that runs `Gateway.run()`.
+
+`Gateway` enforces this by routing every inbound message and every outbound call through its internal `Queue`. Both JS→Python events and Python→JS method callbacks are dispatched by that same loop, so handler code is always on the dispatcher thread.
+
+Any model access that bypasses this queue (e.g. reading catalog state from the WinForms UI thread or from a one-off `threading.Thread`) is subject to race conditions and must be avoided.

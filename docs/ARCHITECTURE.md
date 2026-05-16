@@ -87,6 +87,23 @@ When `settings.debug` is `true`, `Builder.run()` clears `./build/` at the start 
 
 The counter is global across task types so files sort in execution order.
 
+## Data Layer Hierarchy
+
+Data is resolved through four layers, in priority order:
+
+| Priority | Layer | Description |
+|----------|-------|-------------|
+| 1 | **In-memory** | Live `Catalog` / `Area` / `Layer` objects held by `Builder` |
+| 2 | **Out folder** | Previously built artifacts in the `--out` directory |
+| 3 | **In folder** | Seeded or cached data in the `--in` directory |
+| 4 | **Service** | Remote provider (e.g. Overpass API) |
+
+**Reading** — always starts at layer 1. On a miss, layers 2 → 3 → 4 are queried in order until the data is found.
+
+**Writing** — always targets layer 1 (in-memory). Persistence (`save_catalog` etc.) is responsible for flushing layer 1 to layer 2 after a successful run.
+
+No code should write directly to layers 2–4 outside of persistence, and no code should read from layer 4 without first exhausting layers 1–3.
+
 ## Persistence
 
 `persistence.py` — all load/save logic as module-level functions:
@@ -112,6 +129,22 @@ The counter is global across task types so files sort in execution order.
 - `Worker` — protocol: `execute(executor: Executor) → WorkerResult`
 - `WorkerResult`
 - `Provider`
+
+## API Message Contract
+
+Every API call (JS → Python or Python → JS) carries three fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Message identifier (e.g. `__geo_get_area_bbox__`) |
+| `error` | `int` | `0` = success; non-zero = caller-defined error code |
+| payload | additional fields | Domain data (e.g. `bbox`, `areaId`); may be absent on error |
+
+**Error codes are part of the API contract.** Each API declares its own set of error codes (defined in `api.py` as module-level constants, e.g. `ERR_AREA_NOT_FOUND = 1`). The callee must always check `error` on completion — a non-zero value means the payload should not be trusted.
+
+Optional `errorDescription: str | None` may accompany a non-zero `error` for human-readable context, but code must branch on the numeric code, not the string.
+
+`OK = 0` is the only universal constant; all other codes are API-specific.
 
 ## Design Mode Integration
 
