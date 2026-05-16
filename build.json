@@ -1,9 +1,10 @@
 {
   "settings": {
     "debug": true,
+    "logging": "verbose",
     "devTools": true,
     "designUrl": "http://localhost:5173/?design=1&debug=1",
-    "break": true
+    "break": false
   },
   "providers": {
     "overpass": {

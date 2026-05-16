@@ -64,6 +64,26 @@ class DiagnosticsLogSink:
         self.log(TelemetryLevel.CRITICAL, message)
 
 
+_LEVEL_RANK: dict[TelemetryLevel, int] = {
+    TelemetryLevel.VERBOSE: 0,
+    TelemetryLevel.INFO: 1,
+    TelemetryLevel.WARNING: 2,
+    TelemetryLevel.ERROR: 3,
+    TelemetryLevel.CRITICAL: 4,
+}
+
+
+class ConsoleLogSink(DiagnosticsLogSink):
+    def __init__(self, min_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
+        self._min_level = min_level
+
+    def log(self, level: TelemetryLevel, message: str) -> TelemetryRecord:
+        record = super().log(level, message)
+        if _LEVEL_RANK[level] >= _LEVEL_RANK[self._min_level]:
+            print(f"[{level.value.upper()}] {record.message}", flush=True)
+        return record
+
+
 class Logger:
     # Public
 

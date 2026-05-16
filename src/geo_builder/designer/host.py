@@ -2,48 +2,135 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 import webview
 
-from ..diagnostics import Logger
+from ..diagnostics import ConsoleLogSink, Logger, TelemetryLevel
+from .api import Api
 
 _DEBUG_PORT = 9222
 _STARTUP_HTML = Path(__file__).parent / "startup.html"
 _STARTUP_JS = Path(__file__).parent / "startup.js"
 
+_core = None
+_form = None
+api: Api | None = None
 
-def _register_break(window: webview.Window) -> None:
+
+def invoke_script(script: str) -> None:
+    if _core is None or _form is None:
+        Logger.warning("invoke_script: WebView2 not ready.")
+        return
+    from System import Action  # type: ignore[import]
+    _form.BeginInvoke(Action(lambda: _core.ExecuteScriptAsync(script)))
+
+
+# --- CoreWebView2 event handlers ---
+# NavigationCompleted / WebResourceRequested / WindowCloseRequested fire on the UI thread.
+# WebMessageReceived fires on the browser thread — marshal back to UI before dispatching.
+
+def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
+    Logger.info(f"NavigationCompleted: success={args.IsSuccess} url={sender.Source}")
+
+
+def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
+    Logger.info(f"WebResourceRequested: {args.Request.Uri}")
+
+
+def _on_window_close_requested(*_) -> None:
+    Logger.info("WindowCloseRequested")
+
+
+def _on_web_message_received(_, args) -> None:  # noqa: ANN001
+    raw = args.TryGetWebMessageAsString()
+    Logger.info(f"WebMessageReceived: {raw}")
+    if api is not None and _form is not None:
+        from System import Action  # type: ignore[import]
+        _form.BeginInvoke(Action(lambda: api._on_message(raw)))
+
+
+def _setup(window: webview.Window) -> None:
     try:
         import webview.platforms.winforms as wf
+        from System import Action  # type: ignore[import]
+
         form = wf.BrowserView.instances.get(window.uid)
-        wv2 = getattr(form, "webview", None) or getattr(form, "browser", None)
-        if wv2 is not None:
-            task = wv2.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                _STARTUP_JS.read_text(encoding="utf-8")
-            )
-            task.Wait()
-            Logger.info("Init break registered via AddScriptToExecuteOnDocumentCreated.")
-        else:
-            Logger.warning("Init break: could not locate CoreWebView2 instance.")
+        if form is None:
+            Logger.warning("Setup: could not locate BrowserView instance.")
+            return
+
+        def on_ui_thread() -> None:
+            global _core, _form, api  # noqa: PLW0603
+            wv2 = getattr(form, "webview", None) or getattr(form, "browser", None)
+            if wv2 is None:
+                Logger.warning("Setup: could not locate WebView2 control.")
+                return
+            _form = form
+            _core = wv2.CoreWebView2
+
+            edge = getattr(form, "browser", None)
+            if edge is not None and hasattr(edge, "on_script_notify"):
+                wv2.WebMessageReceived -= edge.on_script_notify
+
+            script = _STARTUP_JS.read_text(encoding="utf-8")
+            _core.AddScriptToExecuteOnDocumentCreatedAsync(script)
+
+            api = Api(invoke_script)
+            _core.NavigationCompleted += _on_navigation_completed
+            _core.WebResourceRequested += _on_web_resource_requested
+            _core.WindowCloseRequested += _on_window_close_requested
+            _core.WebMessageReceived += _on_web_message_received
+
+            Logger.info("Setup complete.")
+
+        form.Invoke(Action(on_ui_thread))
+
     except Exception as exc:
-        Logger.warning(f"Init break registration failed: {exc}")
+        Logger.warning(f"Setup failed: {exc}")
 
 
-def launch(url: str, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False) -> None:
+def launch(url: str, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
     if debug:
         args = f"--remote-debugging-port={_DEBUG_PORT}"
         if dev_tools:
             args += " --auto-open-devtools-for-tabs"
         os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args
+
     if break_on_load:
         sep = "&" if "?" in url else "?"
         app_url = f"{url}{sep}break=1"
         template = _STARTUP_HTML.read_text(encoding="utf-8")
         html = template.replace("GEO_TARGET_URL", json.dumps(app_url))
         window = webview.create_window("Geo Designer", html=html)
-        webview.start(_register_break, window)
     else:
-        webview.create_window("Geo Designer", url)
+        window = webview.create_window("Geo Designer", url)
+
+    setup_done = False
+
+    def on_loaded() -> None:
+        nonlocal setup_done
+        if not setup_done:
+            setup_done = True
+
+            def do_setup() -> None:
+                _setup(window)
+                if not break_on_load and api is not None:
+                    api.ping()
+
+            threading.Thread(target=do_setup, daemon=True).start()
+        else:
+            Logger.info("Page loaded")
+            if api is not None:
+                api.ping()
+
+    window.events.loaded += on_loaded
+
+    Logger.set_logger(ConsoleLogSink(min_level=log_level))
+    try:
+        Logger.info("WebView control starting.")
         webview.start()
-    Logger.info("WebView control started.")
+        Logger.info("WebView control closing.")
+    finally:
+        Logger.set_logger(None)

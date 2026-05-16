@@ -17,7 +17,8 @@ Configuration is split across two files:
 ```json
 {
   "settings": {
-    "debug": false
+    "debug": false,
+    "logging": "error"
   },
   "providers": {
     "overpass": {
@@ -61,6 +62,8 @@ Each entry in `filters` is an `AreaStyle` record:
 | `scale`  | `float`         | no       | `radiusScale` override for the heatmap layer (default `1.0`) |
 
 `settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. It also writes per-task snapshots to `./build/{task_type}/{counter:03d}/` (see **Debug Output** below).
+
+`settings.logging` controls the minimum log level printed to stdout during a designer session. Accepted values: `verbose`, `info`, `warning`, `error`, `critical`. Default: `error`.
 
 ## Debug Output
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from .contracts import Task
+from .diagnostics import TelemetryLevel
 from .errors import TaskError
 from .tasks import Tasks
 
@@ -20,6 +21,7 @@ class Settings:
     break_on_load: bool = False
     dev_tools: bool = False
     design_url: str | None = None
+    logging: TelemetryLevel = TelemetryLevel.ERROR
 
     _instance: ClassVar[Settings | None] = None
 
@@ -30,6 +32,7 @@ class Settings:
         dev_tools = False
         design_url: str | None = None
         providers: dict[str, dict[str, object]] = {}
+        log_level = TelemetryLevel.ERROR
 
         if _BUILD_PATH.exists():
             with _BUILD_PATH.open("r", encoding="utf-8") as f:
@@ -47,6 +50,10 @@ class Settings:
             dev_tools = bool(settings_payload.get("devTools", False))
             design_url = str(settings_payload["designUrl"]) if "designUrl" in settings_payload else None
             providers = providers_payload
+            try:
+                log_level = TelemetryLevel(settings_payload.get("logging", "error"))
+            except ValueError:
+                raise TaskError(f"'settings.logging' in build.json must be one of: {', '.join(l.value for l in TelemetryLevel)}")
 
         tasks: list[Task] = []
         if tasks_path is not None:
@@ -63,6 +70,7 @@ class Settings:
             design_url=design_url,
             tasks=tasks,
             providers=providers,
+            logging=log_level,
         )
 
         return cls._instance
