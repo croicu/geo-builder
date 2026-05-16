@@ -40,8 +40,6 @@ if (new URLSearchParams(location.search).get('break')) { debugger; }
     unsubscribe(id)   { delete _handlers[id]; },
   };
 
-  // Ping: Python sends a token, we echo it back as the method response.
-  _handlers["__geo_ping__"] = (data) => data;
 })();
 
 //# sourceURL=startup.js
