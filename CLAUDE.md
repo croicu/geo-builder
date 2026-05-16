@@ -18,6 +18,7 @@ After any change that affects the public interface, CLI, file formats, or core a
 - `CLAUDE.md` — commands, pipeline, architecture notes
 - `docs/ARCHITECTURE.md` — modules, data flow, contracts
 - `docs/PROTOCOL.md` — CLI signature, build file schema
+- `docs/MESSAGING.md` — any change to `src/geo_builder/api.py` (shared Python↔TypeScript types and message IDs) must be reflected here; this file is shared with geo-browser to keep API contracts in sync
 
 ## Off-limits directories
 
