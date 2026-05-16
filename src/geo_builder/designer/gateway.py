@@ -42,7 +42,7 @@ class Gateway:
         self._token: str | None = None
         self.is_open = False
 
-        self.define_method(_PING_ID, PingData)
+        self.define_method(_PING_ID, PingData, PingData)
         self.define_event(_PONG_ID, PongData)
         self.register(_PONG_ID, self._on_pong)
 
@@ -76,7 +76,7 @@ class Gateway:
     def ping(self) -> None:
         self.is_open = False
         self._token = secrets.token_hex(16)
-        self.call(_PING_ID, PingData(token=self._token))
+        self.call(_PING_ID, PingData(token=self._token), callback=self._on_ping)
 
     # --- Dispatcher loop ---
 
@@ -102,10 +102,17 @@ class Gateway:
 
     # --- Internals ---
 
+    def _on_ping(self, data: PingData) -> None:
+        if data.token == self._token:
+            self.is_open = True
+            Logger.info("API gateway opened (ping).")
+        else:
+            Logger.warning(f"Ping token mismatch: expected {self._token!r}, got {data.token!r}")
+
     def _on_pong(self, data: PongData) -> None:
         if data.token == self._token:
             self.is_open = True
-            Logger.info("API gateway opened.")
+            Logger.info("API gateway opened (pong).")
         else:
             Logger.warning(f"Pong token mismatch: expected {self._token!r}, got {data.token!r}")
 

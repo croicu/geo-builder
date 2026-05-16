@@ -151,21 +151,25 @@ interface PongData { token: string; }
 
 **Flow:**
 
-1. Python calls `gateway.ping()` — fire-and-forget (no `requestId`).
-   Wire message to JS: `{ "id": "__geo_ping__", "data": { "token": "<token>" } }`
+1. Python calls `gateway.ping()` — method call *with* a response callback.
+   Wire message to JS: `{ "id": "__geo_ping__", "requestId": "<rid>", "data": { "token": "<token>" } }`
 
-2. `startup.js` receives the Ping via `__geo_dispatch` and forwards it to the registered handler.
-   `api.ts` must register a Ping handler that echoes the token back as a Pong event:
+2. `api.ts` must subscribe to Ping. The handler should:
+   - return the token (exercises the method-response path → `startup.js` sends `{ requestId, data }` back to Python)
+   - also fire a Pong event (exercises the JS-initiated event path)
    ```typescript
    gateway.subscribe(Ping, ({ token }) => {
      gateway.invoke(Pong, { token });
+     return { token };           // echoed back as the method response
    });
    ```
-   Wire message to Python: `{ "id": "__geo_pong__", "data": { "token": "<token>" } }`
 
-3. Python's `_on_pong` handler checks the echoed token. If it matches, sets `gateway.is_open = True`.
+3. Python receives both confirmations independently:
+   - The method response (`{ requestId, data }`) triggers `_on_ping`, which sets `gateway.is_open = True`.
+   - The Pong event (`{ id: "__geo_pong__", data }`) triggers `_on_pong`, which also sets `gateway.is_open = True`.
+   The second arrival is a harmless no-op.
 
-**`api.ts` must implement the Ping handler and fire the Pong event** — see step 2 above. The connection is open once `gateway.is_open` is `true` on the Python side.
+**`api.ts` must implement the Ping handler** — see step 2 above. The connection is open once `gateway.is_open` is `true` on the Python side.
 
 ---
 
