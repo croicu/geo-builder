@@ -54,9 +54,9 @@ def parse_args(argv: list[str]) -> CliArguments:
     )
 
 
-def _launch_designer(url: str, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level=None) -> None:
+def _launch_designer(url: str, catalog=None, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level=None) -> None:
     from geo_builder.designer.host import launch
-    launch(url, debug=debug, break_on_load=break_on_load, dev_tools=dev_tools, log_level=log_level)
+    launch(url, catalog=catalog, debug=debug, break_on_load=break_on_load, dev_tools=dev_tools, log_level=log_level)
 
 
 def main() -> int:
@@ -72,7 +72,8 @@ def main() -> int:
         if not settings.design_url:
             print("geo-builder: error: no tasks file given and no designUrl configured in build.json", file=sys.stderr)
             return 1
-        _launch_designer(settings.design_url, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
+        catalog = load_catalog(arguments.in_directory) if arguments.in_directory else None
+        _launch_designer(settings.design_url, catalog=catalog, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
         return 0
 
     try:

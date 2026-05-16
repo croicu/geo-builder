@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -20,6 +21,18 @@ class Catalog:
     createdAt: str = field(default_factory=lambda: str(datetime.now(timezone.utc)))
     areas: list[Area] = field(default_factory=list)
 
+    def register_handlers(self, gateway) -> None:
+        from .api import GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput
+        gateway.define_event(GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput)
+        gateway.register(GET_AREA_BBOX_ID, self._get_area_bbox)
+
+    def _get_area_bbox(self, data) -> object:
+        from .api import ERR_AREA_NOT_FOUND, OK, GetAreaBboxOutput
+        area = next((a for a in self.areas if a.id == data.areaId), None)
+        if area is None:
+            return GetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+        return GetAreaBboxOutput(error=OK, bbox=area.bbox())
+
 
 @dataclass
 class Area:
@@ -32,6 +45,12 @@ class Area:
     liveMapRadiusPx: int
     manifestUrl: str
     manifest: Manifest
+
+    def bbox(self) -> list[float]:
+        lat, lon = self.center
+        lat_delta = self.radiusMeters / 111_320.0
+        lon_delta = self.radiusMeters / (111_320.0 * math.cos(math.radians(lat)))
+        return [lon - lon_delta, lat - lat_delta, lon + lon_delta, lat + lat_delta]
 
 
 @dataclass

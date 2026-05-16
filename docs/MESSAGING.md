@@ -123,6 +123,13 @@ Every `@dataclass` in `src/geo_builder/api.py` becomes a TypeScript interface in
 | `dict[str,T]` | `Record<string,T>` |
 | `T \| None`   | `T \| null`     |
 
+Error codes:
+
+```typescript
+const OK               = 0;
+const ERR_AREA_NOT_FOUND = 1;
+```
+
 Current shared types:
 
 ```typescript
@@ -131,6 +138,14 @@ interface PingData { token: string; }
 
 // __geo_pong__
 interface PongData { token: string; }
+
+// __geo_get_area_bbox__
+interface GetAreaBboxInput  { areaId: string; }
+interface GetAreaBboxOutput {
+  error: number;
+  errorDescription: string | null;
+  bbox: [number, number, number, number] | null;  // [west, south, east, north]
+}
 ```
 
 ---
@@ -225,3 +240,21 @@ def on_area_selected(data: AreaSelectedInput) -> AreaSelectedOutput:
 
 gateway.register("__geo_area_selected__", on_area_selected)
 ```
+
+---
+
+## GetAreaBbox (`__geo_get_area_bbox__`)
+
+Returns the bounding box (GPS) of an area given its ID. The bbox is derived from `area.center` and `area.radiusMeters`.
+
+**TypeScript:**
+```typescript
+const GetAreaBbox: EventDef<GetAreaBboxInput, GetAreaBboxOutput> = { id: "__geo_get_area_bbox__" };
+
+gateway.invoke(GetAreaBbox, { areaId: "paris" }, ({ error, bbox }) => {
+  if (error !== OK) return;
+  // bbox = [west, south, east, north]
+});
+```
+
+**Python:** handled by `Catalog.register_handlers(gateway)` — no manual wiring needed.

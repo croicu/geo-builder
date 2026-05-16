@@ -49,7 +49,7 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
-def _setup(window: webview.Window) -> None:
+def _setup(window: webview.Window, catalog=None) -> None:
     try:
         import webview.platforms.winforms as wf
         from System import Action  # type: ignore[import]
@@ -77,6 +77,8 @@ def _setup(window: webview.Window) -> None:
             _core.ExecuteScriptAsync(script)
 
             api = Gateway(invoke_script)
+            if catalog is not None:
+                catalog.register_handlers(api)
             _api_ready.set()
 
             _core.NavigationCompleted += _on_navigation_completed
@@ -92,7 +94,14 @@ def _setup(window: webview.Window) -> None:
         Logger.warning(f"Setup failed: {exc}")
 
 
-def launch(url: str, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
+def launch(
+    url: str,
+    catalog=None,
+    debug: bool = False,
+    break_on_load: bool = False,
+    dev_tools: bool = False,
+    log_level: TelemetryLevel = TelemetryLevel.ERROR,
+) -> None:
     if debug:
         args = f"--remote-debugging-port={_DEBUG_PORT}"
         if dev_tools:
@@ -116,7 +125,7 @@ def launch(url: str, debug: bool = False, break_on_load: bool = False, dev_tools
             setup_done = True
 
             def do_setup() -> None:
-                _setup(window)
+                _setup(window, catalog)
                 if not break_on_load and api is not None:
                     api.ping()
 
