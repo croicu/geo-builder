@@ -8,7 +8,7 @@ from pathlib import Path
 import webview
 
 from ..diagnostics import ConsoleLogSink, Logger, TelemetryLevel
-from .api import Api
+from .gateway import Gateway
 
 _DEBUG_PORT = 9222
 _STARTUP_HTML = Path(__file__).parent / "startup.html"
@@ -16,7 +16,7 @@ _STARTUP_JS = Path(__file__).parent / "startup.js"
 
 _core = None
 _form = None
-api: Api | None = None
+api: Gateway | None = None
 _api_ready = threading.Event()
 
 
@@ -76,7 +76,7 @@ def _setup(window: webview.Window) -> None:
             _core.AddScriptToExecuteOnDocumentCreatedAsync(script)
             _core.ExecuteScriptAsync(script)
 
-            api = Api(invoke_script)
+            api = Gateway(invoke_script)
             _api_ready.set()
 
             _core.NavigationCompleted += _on_navigation_completed
