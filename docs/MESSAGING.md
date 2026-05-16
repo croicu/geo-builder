@@ -1,6 +1,6 @@
-# API Gateway
+# Python↔JavaScript Messaging
 
-This document specifies the Python↔JavaScript messaging layer so the TypeScript side can implement a matching gateway.
+This document specifies the messaging layer so the TypeScript side can implement a matching gateway.
 
 ## Overview
 
@@ -138,16 +138,6 @@ interface PongData { token: string; }
 ## Ping / Pong (connection handshake)
 
 Ping/Pong verifies the bridge is alive after each page load. Python initiates with a Ping method call; JavaScript responds with a Pong event.
-
-**Shared types (`api.py` / `api.ts`):**
-
-```typescript
-// __geo_ping__
-interface PingData { token: string; }
-
-// __geo_pong__
-interface PongData { token: string; }
-```
 
 **Flow:**
 
