@@ -43,7 +43,7 @@ def parse_args(argv: list[str]) -> CliArguments:
         "--out",
         dest="out_directory",
         type=Path,
-        default=Path("./"),
+        default=Path("./out"),
     )
 
     args = parser.parse_args(argv)
