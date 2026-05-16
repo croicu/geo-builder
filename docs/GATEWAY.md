@@ -127,32 +127,45 @@ Current shared types:
 
 ```typescript
 // __geo_ping__
-interface PingData {
-  token: string;
-}
+interface PingData { token: string; }
+
+// __geo_pong__
+interface PongData { token: string; }
 ```
 
 ---
 
-## Ping (connection handshake)
+## Ping / Pong (connection handshake)
 
-Ping verifies the bridge is alive after each page load. Python is the initiator.
+Ping/Pong verifies the bridge is alive after each page load. Python initiates with a Ping method call; JavaScript responds with a Pong event.
 
-**Python side (`gateway.py`):**
-1. Generates a random `token` and stores it.
-2. Calls `gateway.call("__geo_ping__", PingData(token), callback=_on_ping)`.
-3. Wire message sent to JS: `{ "id": "__geo_ping__", "requestId": "<rid>", "data": { "token": "<token>" } }`.
-4. On receiving the response, `_on_ping` checks the echoed token matches. If yes, sets `gateway.is_open = True`.
+**Shared types (`api.py` / `api.ts`):**
 
-**JavaScript side (`startup.js`, already wired):**
-```javascript
-_handlers["__geo_ping__"] = (data) => data;
-// Receives { token }, returns { token } — echoed back as the method response.
+```typescript
+// __geo_ping__
+interface PingData { token: string; }
+
+// __geo_pong__
+interface PongData { token: string; }
 ```
 
-Wire response sent to Python: `{ "requestId": "<rid>", "data": { "token": "<token>" } }`.
+**Flow:**
 
-**`api.ts` does not need to do anything for Ping** — it is handled entirely by `startup.js` and `gateway.py`. The connection is open once `gateway.is_open` is `true` on the Python side.
+1. Python calls `gateway.ping()` — fire-and-forget (no `requestId`).
+   Wire message to JS: `{ "id": "__geo_ping__", "data": { "token": "<token>" } }`
+
+2. `startup.js` receives the Ping via `__geo_dispatch` and forwards it to the registered handler.
+   `api.ts` must register a Ping handler that echoes the token back as a Pong event:
+   ```typescript
+   gateway.subscribe(Ping, ({ token }) => {
+     gateway.invoke(Pong, { token });
+   });
+   ```
+   Wire message to Python: `{ "id": "__geo_pong__", "data": { "token": "<token>" } }`
+
+3. Python's `_on_pong` handler checks the echoed token. If it matches, sets `gateway.is_open = True`.
+
+**`api.ts` must implement the Ping handler and fire the Pong event** — see step 2 above. The connection is open once `gateway.is_open` is `true` on the Python side.
 
 ---
 

@@ -11,4 +11,10 @@ class PingData:
     token: str
 
 
+@dataclass
+class PongData:
+    token: str
+
+
 PING_ID = "__geo_ping__"
+PONG_ID = "__geo_pong__"
