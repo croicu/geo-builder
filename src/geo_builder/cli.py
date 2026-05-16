@@ -8,6 +8,7 @@ from pathlib import Path
 from .builder import Builder
 from .errors import GeoError
 from .persistence import load_catalog, save_catalog
+from .protocols import Catalog
 from .settings import Settings
 
 
@@ -72,7 +73,7 @@ def main() -> int:
         if not settings.design_url:
             print("geo-builder: error: no tasks file given and no designUrl configured in build.json", file=sys.stderr)
             return 1
-        catalog = load_catalog(arguments.in_directory) if arguments.in_directory else None
+        catalog = load_catalog(arguments.in_directory) if arguments.in_directory else Catalog()
         _launch_designer(settings.design_url, catalog=catalog, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
         return 0
 
