@@ -122,3 +122,22 @@ geo-browser (?design=1)
 ```
 
 Large GeoJSON is written to disk and fetched by URL rather than passed over the bridge.
+
+### Designer Threading Model
+
+pywebview on Windows uses Python.NET → WinForms → WebView2 (three marshaling layers). This shapes the threading model:
+
+```text
+MainThread      — blocked in webview.start() → .NET STA loop; never returns to Python
+STA thread      — WinForms/WebView2 UI loop (spawned by pywebview)
+Dummy-N         — WebView2 browser thread; fires CoreWebView2 events including WebMessageReceived
+Thread-6        — dispatcher; owned by Api.run(), the only thread that processes API work
+```
+
+**Rule: all Api work runs on Thread-6.**
+
+- `Api._on_message(raw)` — called from Dummy-N, enqueues `("msg", raw)`; returns immediately
+- `Api.invoke(id, payload)` — callable from any thread, enqueues `("invoke", ...)`; returns immediately
+- `Api.run()` — dequeues and processes both; the only place handlers execute and `_send` is called
+
+This cannot be enforced at the model layer. Callers must not call `_dispatch` or `_send` directly.

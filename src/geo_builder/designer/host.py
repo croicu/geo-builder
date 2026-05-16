@@ -17,6 +17,7 @@ _STARTUP_JS = Path(__file__).parent / "startup.js"
 _core = None
 _form = None
 api: Api | None = None
+_api_ready = threading.Event()
 
 
 def invoke_script(script: str) -> None:
@@ -27,9 +28,7 @@ def invoke_script(script: str) -> None:
     _form.BeginInvoke(Action(lambda: _core.ExecuteScriptAsync(script)))
 
 
-# --- CoreWebView2 event handlers ---
-# NavigationCompleted / WebResourceRequested / WindowCloseRequested fire on the UI thread.
-# WebMessageReceived fires on the browser thread — marshal back to UI before dispatching.
+# --- CoreWebView2 event handlers (fire on WebView2 browser/UI thread) ---
 
 def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
     Logger.info(f"NavigationCompleted: success={args.IsSuccess} url={sender.Source}")
@@ -46,9 +45,8 @@ def _on_window_close_requested(*_) -> None:
 def _on_web_message_received(_, args) -> None:  # noqa: ANN001
     raw = args.TryGetWebMessageAsString()
     Logger.info(f"WebMessageReceived: {raw}")
-    if api is not None and _form is not None:
-        from System import Action  # type: ignore[import]
-        _form.BeginInvoke(Action(lambda: api._on_message(raw)))
+    if api is not None:
+        api._on_message(raw)
 
 
 def _setup(window: webview.Window) -> None:
@@ -76,8 +74,11 @@ def _setup(window: webview.Window) -> None:
 
             script = _STARTUP_JS.read_text(encoding="utf-8")
             _core.AddScriptToExecuteOnDocumentCreatedAsync(script)
+            _core.ExecuteScriptAsync(script)
 
             api = Api(invoke_script)
+            _api_ready.set()
+
             _core.NavigationCompleted += _on_navigation_completed
             _core.WebResourceRequested += _on_web_resource_requested
             _core.WindowCloseRequested += _on_window_close_requested
@@ -127,10 +128,17 @@ def launch(url: str, debug: bool = False, break_on_load: bool = False, dev_tools
 
     window.events.loaded += on_loaded
 
+    def run_dispatcher() -> None:
+        _api_ready.wait()
+        api.run()  # type: ignore[union-attr]
+
     Logger.set_logger(ConsoleLogSink(min_level=log_level))
     try:
+        threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")
         webview.start()
         Logger.info("WebView control closing.")
+        if api is not None:
+            api.stop()
     finally:
         Logger.set_logger(None)

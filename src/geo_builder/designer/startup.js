@@ -17,7 +17,7 @@ if (new URLSearchParams(location.search).get('break')) { debugger; }
     },
   };
 
-  _handlers["__geo_handshake__"] = (token) => window.geo.invoke("__geo_handshake__", token);
+  _handlers["__geo_ping__"] = (token) => window.geo.invoke("__geo_ping__", token);
 })();
 
 //# sourceURL=startup.js
