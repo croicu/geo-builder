@@ -172,6 +172,117 @@ interface SetAreaBboxOutput {
 
 ---
 
+## Static Artifacts
+
+The browser fetches artifacts using standard HTTP requests to the service origin — no special headers or credentials required.
+
+### Loading chain
+
+```
+catalog.head.json
+└── catalogUrl → catalog.json
+    └── manifestUrl (per area) → areas/{id}/manifest.json
+        └── url (per layer) → areas/{id}/layers/{id}.geojson
+```
+
+All relative URLs in the payload are resolved relative to the file that contains them (same rule as HTML `<base>`).
+
+### `catalog.head.json`
+
+Entry point. Tells the browser where the catalog file lives.
+
+```jsonc
+{
+  "version": 1,
+  "catalogUrl": "./release/catalog.json"
+}
+```
+
+`catalog.head.debug.json` is an alternate entry point written when `settings.debug: true` — same shape, points to a different `catalogUrl`.
+
+### `catalog.json`
+
+```jsonc
+{
+  "version": "1.0",
+  "createdAt": "<ISO-8601 UTC string>",
+  "areas": [
+    {
+      "id": "napoli",
+      "name": "Napoli",
+      "bbox": [14.20, 40.80, 14.33, 40.90],
+      "minRadiusPx": 32,
+      "maxRadiusPx": 512,
+      "liveMapRadiusPx": 640,
+      "manifestUrl": "./areas/napoli/manifest.json"
+    }
+  ]
+}
+```
+
+`bbox` is `[west, south, east, north]` — longitude first, matching GeoJSON convention.
+
+> **Breaking change:** `center: [lat, lon]` and `radiusMeters: number` have been replaced by `bbox`. These fields no longer appear in the catalog JSON.
+
+### `manifest.json`
+
+```jsonc
+{
+  "version": 1,
+  "layers": [
+    {
+      "id": "overpass_amenity_restaurant_cafe",
+      "name": "Overpass (heatmap)",
+      "type": "heatmap",
+      "url": "./layers/overpass_amenity_restaurant_cafe.geojson",
+      "visible": true,
+      "style": {
+        "opacity": 0.7,
+        "radiusScale": 1.0,
+        "color": "#ff0000",
+        "surface": false
+      },
+      "mergeKey": "overpass:amenity=restaurant,cafe"
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `"heatmap" \| "circle"` | Render mode |
+| `visible` | `boolean` | Default visibility |
+| `style.opacity` | `number` | Layer opacity (0–1) |
+| `style.radiusScale` | `number` | Multiplier applied to the base render radius |
+| `style.color` | `string` | Hex color override (e.g. `"#ff0000"`) |
+| `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
+
+All `style` fields are optional; absent fields fall back to layer defaults.
+
+### `.geojson`
+
+Standard GeoJSON `FeatureCollection`. Each feature is a point:
+
+```jsonc
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Trattoria da Mario", "amenity": "restaurant" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [14.27, 40.85]
+      }
+    }
+  ]
+}
+```
+
+`coordinates` are `[longitude, latitude]` — GeoJSON convention.
+
+---
+
 ## Ready event (connection handshake)
 
 `__geo_ready__` is an event fired by the builder after setup completes on every page load. The browser subscribes to it to know the connection is alive and methods are safe to call.
