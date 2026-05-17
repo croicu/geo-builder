@@ -158,6 +158,16 @@ interface GetAreaBboxOutput {
   errorDescription: string | null;
   bbox: [number, number, number, number] | null;  // [west, south, east, north]
 }
+
+// __geo_set_area_bbox__ (method: JS → Python)
+interface SetAreaBboxInput {
+  areaId: string;
+  bbox: [number, number, number, number];  // [west, south, east, north]
+}
+interface SetAreaBboxOutput {
+  error: number;
+  errorDescription: string | null;
+}
 ```
 
 ---
@@ -257,3 +267,54 @@ gateway.invoke(GetAreaBbox, { areaId: "paris" }, ({ error, bbox }) => {
 ```
 
 **Python:** handled by `Catalog.register_handlers(gateway)` — no manual wiring needed.
+
+---
+
+## SetAreaBbox (`__geo_set_area_bbox__`)
+
+Persists a new bounding box for an area. Initiated by the browser when the user finishes dragging a resize handle on the bbox overlay in design mode.
+
+**TypeScript:**
+```typescript
+const SetAreaBbox: MethodDef<SetAreaBboxInput, SetAreaBboxOutput> = { id: "__geo_set_area_bbox__" };
+
+gateway.invoke(SetAreaBbox, { areaId: "paris", bbox: [west, south, east, north] }, ({ error }) => {
+  if (error !== OK) return;
+  // bbox saved
+});
+```
+
+**Python:** must be registered by the builder. Expected handler signature:
+```python
+@dataclass
+class SetAreaBboxInput:
+    areaId: str
+    bbox: list[float]  # [west, south, east, north]
+
+@dataclass
+class SetAreaBboxOutput:
+    error: int
+    errorDescription: str | None
+
+def on_set_area_bbox(data: SetAreaBboxInput) -> SetAreaBboxOutput:
+    area = catalog.get_area(data.areaId)
+    if area is None:
+        return SetAreaBboxOutput(error=1, errorDescription="Area not found")
+    area.bbox = data.bbox
+    # persist to project file
+    return SetAreaBboxOutput(error=0, errorDescription=None)
+
+gateway.register("__geo_set_area_bbox__", on_set_area_bbox)
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Bbox saved successfully |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+
+**Notes:**
+- Fired on drag-end only, not on every drag frame.
+- The browser does not revert the visual on error — the builder is authoritative but the UI optimistically keeps the dragged position. Log the error.
+- `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
