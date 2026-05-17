@@ -10,11 +10,13 @@ from geo_builder.protocols import Catalog, Result
 
 
 class StubSettings:
-    def __init__(self, debug: bool = False, design_url: str | None = None, break_on_load: bool = False, dev_tools: bool = False) -> None:
+    def __init__(self, debug: bool = False, design_url: str | None = None, break_on_load: bool = False, dev_tools: bool = False, logging=None) -> None:
+        from geo_builder.diagnostics import TelemetryLevel
         self.debug = debug
         self.design_url = design_url
         self.break_on_load = break_on_load
         self.dev_tools = dev_tools
+        self.logging = logging or TelemetryLevel.ERROR
 
 
 class StubBuilder:
@@ -40,15 +42,15 @@ class TestParseArgs:
 
         assert args.tasks_path is None
 
-    def test_in_directory_defaults_to_none(self):
+    def test_in_directory_defaults_to_in(self):
         args = parse_args(["tasks.json"])
 
-        assert args.in_directory is None
+        assert args.in_directory == Path("./in")
 
-    def test_out_directory_defaults_to_current(self):
+    def test_out_directory_defaults_to_out(self):
         args = parse_args(["tasks.json"])
 
-        assert args.out_directory == Path("./")
+        assert args.out_directory == Path("./out")
 
     def test_in_directory_parsed(self):
         args = parse_args(["tasks.json", "--in", "/tmp/in"])
@@ -129,9 +131,10 @@ class TestMain:
 
             MockBuilder.assert_called_once_with(loaded_catalog)
 
-    def test_no_in_directory_creates_empty_builder(self):
+    def test_empty_in_directory_creates_empty_builder(self):
         with patch("geo_builder.cli.Settings") as MockSettings, \
              patch("geo_builder.cli.Builder") as MockBuilder, \
+             patch("geo_builder.cli.load_catalog", side_effect=GeoError("not found")), \
              patch("geo_builder.cli.save_catalog"):
             MockSettings.load.return_value = StubSettings()
             MockBuilder.return_value = StubBuilder()
@@ -179,7 +182,17 @@ class TestDesignMode:
 
             result = main()
 
-            mock_launch.assert_called_once_with("http://localhost:5173/", debug=False, break_on_load=False, dev_tools=False)
+            from geo_builder.diagnostics import TelemetryLevel
+            mock_launch.assert_called_once_with(
+                "http://localhost:5173/",
+                catalog=mock_launch.call_args.kwargs["catalog"],
+                out_dir=Path("./out"),
+                in_dir=Path("./in"),
+                debug=False,
+                break_on_load=False,
+                dev_tools=False,
+                log_level=TelemetryLevel.ERROR,
+            )
             assert result == 0
 
     def test_no_design_url_returns_1(self, capsys):

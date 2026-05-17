@@ -30,9 +30,13 @@ Never read, glob, or search inside `./in/` or `./out/`. They contain large volum
 # Install (editable, with dev deps)
 pip install -e ".[dev]"
 
-# Run
-geo-builder tasks_production.json --out ./output
-geo-builder tasks_production.json --in ./existing --out ./output   # incremental
+# Build
+geo-builder tasks_production.json                        # fresh build to ./out
+geo-builder tasks_production.json --in ./in --out ./out  # incremental build
+
+# Designer (no tasks file — requires designUrl in build.json)
+geo-builder                          # pull from service into ./in on first run, then open WebView
+geo-builder --in ./in --out ./out    # same with explicit paths
 
 # Lint
 ruff check src/ tests/
@@ -47,7 +51,7 @@ pytest tests/test_foo.py::test_bar   # single test
 
 1. `geo-builder` builds; `geo-browser` displays.
 2. Internal processing uses strongly typed dataclasses.
-3. `protocols.py` contains persisted/shared data contracts. Static methods that semantically belong to a class live inside the class, even if they don't use `self`.
+3. `protocols.py` contains persisted/shared data contracts — pure data only, no behavior. Behavior that operates on protocol types belongs in entity classes under `geo_builder/entities/` (e.g. `catalog_entity.py`). *(Entity layer not yet implemented — existing methods on protocol classes are technical debt.)*
 4. `contracts.py` contains runtime behavioral interfaces.
 5. Execution mutates an in-memory catalog.
 6. Persistence occurs only after successful completion.
@@ -55,6 +59,13 @@ pytest tests/test_foo.py::test_bar   # single test
 8. Prefer explicit, readable Python over clever abstractions.
 9. Tests must run offline.
 10. Static artifacts are immutable and deterministic.
+
+## Coding Style
+
+- **Protocols are pure data** — `protocols.py` holds dataclasses only. No methods, no logic. Behavior lives in entity classes (`geo_builder/entities/`).
+- **Explicit over brief** — if two implementations are equivalent, choose the one that is easier to read and debug, even if it is longer.
+- **No list/dict/set comprehensions** — use explicit `for` loops. Comprehensions obscure control flow and make multi-step logic harder to follow.
+- **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
 
 ## Processing Pipeline
 

@@ -3,10 +3,18 @@
 ## Command Line
 
 ```text
-geo-builder <tasks_path> [--in <in_directory>] [--out <out_directory>]
+geo-builder [<tasks_path>] [--in <dir>] [--out <dir>]
 ```
 
-Output is never written when errors are present.
+| Argument | Default | Description |
+|---|---|---|
+| `tasks_path` | — | Tasks JSON file. Omit to launch the designer (requires `designUrl` in `build.json`). |
+| `--in <dir>` | `./in` | Working directory for service artifacts. Auto-created if absent. |
+| `--out <dir>` | `./out` | Output directory for built artifacts. |
+
+**Build mode** (`tasks_path` given) — runs the processing pipeline and writes artifacts to `--out`. Output is never written when errors are present. `--in` seeds the catalog for incremental builds; a missing or empty `--in` starts from scratch.
+
+**Designer mode** (`tasks_path` omitted) — opens the geo-browser WebView. On first launch (empty `--in`) pulls all artifacts from the service into `--in` before the WebView starts. Subsequent launches serve directly from `--in`; use the refresh action in the UI to re-pull.
 
 ## File Schema
 

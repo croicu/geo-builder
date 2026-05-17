@@ -22,7 +22,11 @@ class CliArguments:
 def parse_args(argv: list[str]) -> CliArguments:
     parser = argparse.ArgumentParser(
         prog="geo-builder",
-        usage="geo-builder [<tasks_path>] [--in <in_directory>] [--out <out_directory>]",
+        usage="geo-builder [<tasks_path>] [--in <dir>] [--out <dir>]",
+        description=(
+            "Build static geographic datasets (tasks_path given), "
+            "or launch the designer UI (tasks_path omitted, requires designUrl in build.json)."
+        ),
     )
 
     parser.add_argument(
@@ -30,13 +34,17 @@ def parse_args(argv: list[str]) -> CliArguments:
         type=Path,
         nargs="?",
         default=None,
+        help="tasks JSON file to build; omit to launch the designer",
     )
 
     parser.add_argument(
         "--in",
         dest="in_directory",
         type=Path,
-        default=None,
+        default=Path("./in"),
+        metavar="dir",
+        help="working directory for service artifacts (default: ./in); "
+             "auto-created if absent; pulled from the service on first designer launch",
     )
 
     parser.add_argument(
@@ -44,6 +52,8 @@ def parse_args(argv: list[str]) -> CliArguments:
         dest="out_directory",
         type=Path,
         default=Path("./out"),
+        metavar="dir",
+        help="output directory for built artifacts (default: ./out)",
     )
 
     args = parser.parse_args(argv)
@@ -55,9 +65,9 @@ def parse_args(argv: list[str]) -> CliArguments:
     )
 
 
-def _launch_designer(url: str, catalog=None, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level=None) -> None:
+def _launch_designer(url: str, catalog=None, out_dir=None, in_dir=None, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level=None) -> None:
     from geo_builder.designer.host import launch
-    launch(url, catalog=catalog, debug=debug, break_on_load=break_on_load, dev_tools=dev_tools, log_level=log_level)
+    launch(url, catalog=catalog, out_dir=out_dir, in_dir=in_dir, debug=debug, break_on_load=break_on_load, dev_tools=dev_tools, log_level=log_level)
 
 
 def main() -> int:
@@ -73,15 +83,18 @@ def main() -> int:
         if not settings.design_url:
             print("geo-builder: error: no tasks file given and no designUrl configured in build.json", file=sys.stderr)
             return 1
-        catalog = load_catalog(arguments.in_directory) if arguments.in_directory else Catalog()
-        _launch_designer(settings.design_url, catalog=catalog, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
+        try:
+            catalog = load_catalog(arguments.in_directory, debug=settings.debug)
+        except GeoError:
+            catalog = Catalog(is_default=True)
+        _launch_designer(settings.design_url, catalog=catalog, out_dir=arguments.out_directory, in_dir=arguments.in_directory, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
         return 0
 
     try:
-        if arguments.in_directory is not None:
-            catalog = load_catalog(arguments.in_directory)
+        try:
+            catalog = load_catalog(arguments.in_directory, debug=settings.debug)
             executor = Builder(catalog)
-        else:
+        except GeoError:
             executor = Builder()
 
         result = executor.run()

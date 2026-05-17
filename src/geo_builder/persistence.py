@@ -12,6 +12,8 @@ from .protocols import Area, Catalog, Feature, GeoJson, Geometry, JsonValue, Lay
 
 
 def read_json(path: Path) -> JsonValue:
+    if not path.exists():
+        raise CatalogError(f"{path} not found.")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -23,54 +25,77 @@ def save_json(path: Path, payload: JsonValue) -> None:
         json.dump(payload, f, indent=2)
 
 
+_CATALOG_HEAD = "catalog.head.json"
+_CATALOG_HEAD_DEBUG = "catalog.head.debug.json"
+_CATALOG_FILENAME = "catalog.json"
+
+
 def child_path(parent: Path, relative_path: str) -> Path:
     return parent / relative_path.removeprefix("./")
 
 
-def load_catalog(output_dir: str | Path) -> Catalog:
-    output_dir = Path(output_dir)
-    payload = read_json(output_dir / "catalog.json")
+def load_catalog(input_dir: str | Path, debug: bool = False) -> Catalog:
+    input_dir = Path(input_dir)
+
+    catalog_head_path = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
+    head_payload = read_json(input_dir / catalog_head_path)
+
+    if not isinstance(head_payload, dict):
+        raise CatalogError(f"{_CATALOG_HEAD} must contain an object.")
+
+    catalog_url = str(head_payload.get("catalogUrl", ""))
+    if not catalog_url:
+        raise CatalogError(f"{_CATALOG_HEAD} must contain a catalogUrl.")
+
+    catalog_path = child_path(input_dir, catalog_url)
+    payload = read_json(catalog_path)
 
     if not isinstance(payload, dict):
-        raise CatalogError("catalog.json must contain an object.")
+        raise CatalogError("catalog must contain an object.")
 
     areas_payload = payload.get("areas", [])
 
     if not isinstance(areas_payload, list):
-        raise CatalogError("catalog.json areas must be an array.")
+        raise CatalogError("catalog areas must be an array.")
 
-    areas = [load_area(output_dir, area_payload) for area_payload in areas_payload if isinstance(area_payload, dict)]
+    areas = []
+    for area_payload in areas_payload:
+        if isinstance(area_payload, dict):
+            manifest_path = child_path(catalog_path.parent, str(area_payload["manifestUrl"]))
+            areas.append(load_area(manifest_path, area_payload))
 
     return Catalog(
         version=str(payload["version"]),
         createdAt=str(payload["createdAt"]),
         areas=areas,
+        is_default=False,
     )
 
 
 def save_catalog(catalog: Catalog, output_dir: str | Path) -> None:
     output_dir = Path(output_dir)
     payload = asdict(catalog)
+    del payload["is_default"]
 
     for area_payload in payload["areas"]:
         del area_payload["manifest"]
 
     _clean_dir(output_dir)
-    save_json(output_dir / "catalog.json", payload)
+    save_json(output_dir / _CATALOG_HEAD, {"version": 1, "catalogUrl": f"./{_CATALOG_FILENAME}"})
+    save_json(output_dir / _CATALOG_FILENAME, payload)
 
     for area in catalog.areas:
         save_area(area, output_dir)
         save_area_csv(area, output_dir)
 
 
-def load_area(output_dir: Path, payload: dict[str, JsonValue]) -> Area:
-    manifest_path = child_path(output_dir, str(payload["manifestUrl"]))
+def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> Area:
     manifest_payload = read_json(manifest_path)
 
     if not isinstance(manifest_payload, dict):
         raise CatalogError(f"{manifest_path} must contain an object.")
 
-    manifest = load_manifest(manifest_path.parent, manifest_payload)
+    manifest = load_manifest(manifest_path, manifest_payload)
 
     center = payload["center"]
     if not isinstance(center, list):
@@ -102,13 +127,18 @@ def save_area(area: Area, output_dir: Path) -> None:
         save_layer(layer, manifest_path.parent)
 
 
-def load_manifest(manifest_dir: Path, payload: dict[str, JsonValue]) -> Manifest:
+def load_manifest(manifest_path: Path, payload: dict[str, JsonValue]) -> Manifest:
     layers_payload = payload.get("layers", [])
 
     if not isinstance(layers_payload, list):
         raise CatalogError("manifest layers must be an array.")
 
-    layers = [load_layer(manifest_dir, layer_payload) for layer_payload in layers_payload if isinstance(layer_payload, dict)]
+    manifest_dir = manifest_path.parent
+    layers = []
+    for layer_payload in layers_payload:
+        if isinstance(layer_payload, dict):
+            geojson_path = child_path(manifest_dir, str(layer_payload["url"]))
+            layers.append(load_layer(geojson_path, layer_payload))
 
     return Manifest(
         version=int(payload["version"]),
@@ -116,8 +146,7 @@ def load_manifest(manifest_dir: Path, payload: dict[str, JsonValue]) -> Manifest
     )
 
 
-def load_layer(manifest_dir: Path, payload: dict[str, JsonValue]) -> Layer:
-    geojson_path = child_path(manifest_dir, str(payload["url"]))
+def load_layer(geojson_path: Path, payload: dict[str, JsonValue]) -> Layer:
     geojson_payload = read_json(geojson_path)
 
     if not isinstance(geojson_payload, dict):
@@ -149,7 +178,10 @@ def load_geojson(payload: dict[str, JsonValue]) -> GeoJson:
     if not isinstance(features_payload, list):
         raise CatalogError("GeoJSON features must be an array.")
 
-    features = [load_feature(feature_payload) for feature_payload in features_payload if isinstance(feature_payload, dict)]
+    features = []
+    for feature_payload in features_payload:
+        if isinstance(feature_payload, dict):
+            features.append(load_feature(feature_payload))
 
     return GeoJson(
         type=str(payload["type"]),
@@ -190,11 +222,10 @@ def save_area_csv(area: Area, output_dir: Path) -> None:
     area_dir = child_path(output_dir, area.manifestUrl).parent
     csv_path = area_dir / f"{area.id}.csv"
 
-    rows: list[tuple[str, object]] = [
-        (layer.id, feature)
-        for layer in area.manifest.layers
-        for feature in layer.geojson.features
-    ]
+    rows: list[tuple[str, object]] = []
+    for layer in area.manifest.layers:
+        for feature in layer.geojson.features:
+            rows.append((layer.id, feature))
 
     if not rows:
         return

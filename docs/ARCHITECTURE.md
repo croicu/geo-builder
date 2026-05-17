@@ -89,20 +89,31 @@ The counter is global across task types so files sort in execution order.
 
 ## Data Layer Hierarchy
 
-Data is resolved through four layers, in priority order:
+### Build mode
 
 | Priority | Layer | Description |
 |----------|-------|-------------|
-| 1 | **In-memory** | Live `Catalog` / `Area` / `Layer` objects held by `Builder` |
-| 2 | **Out folder** | Previously built artifacts in the `--out` directory |
-| 3 | **In folder** | Seeded or cached data in the `--in` directory |
+| 1 | **Memory** | Live `Catalog` / `Area` / `Layer` objects mutated by workers |
+| 2 | **Out folder** | Built artifacts written by `persistence.save_catalog()` |
+| 3 | **In folder** | Seed data for incremental builds |
 | 4 | **Service** | Remote provider (e.g. Overpass API) |
 
-**Reading** — always starts at layer 1. On a miss, layers 2 → 3 → 4 are queried in order until the data is found.
+Workers read from layer 1 and write to layer 1. Persistence flushes layer 1 to layer 2 after a successful run. No worker reads from layer 4 without first exhausting layers 1–3.
 
-**Writing** — always targets layer 1 (in-memory). Persistence (`save_catalog` etc.) is responsible for flushing layer 1 to layer 2 after a successful run.
+### Designer mode
 
-No code should write directly to layers 2–4 outside of persistence, and no code should read from layer 4 without first exhausting layers 1–3.
+The `DataPipeline` (`designer/data_pipeline.py`) intercepts every WebView HTTP request and resolves it through four layers:
+
+| Priority | Layer | Description |
+|----------|-------|-------------|
+| 1 | **Memory** | `dict[str, bytes]` — in-session edits (color changes, dimension tweaks); lost on close |
+| 2 | **Out folder** | Built artifacts — the next version to push to the service |
+| 3 | **In folder** | Working area — pre-fetched from the service by `pull`; mutable by design actions |
+| 4 | **Network** | Pass-through to the live service; no write-back |
+
+**Pull** (`designer/pull.py`) — fetches all artifacts from the service into `--in` before the WebView starts (first launch or explicit refresh). Follows relative URLs from the HEAD file through catalog → manifests → layers. Safe to run against an empty or unreachable service.
+
+**In folder is the working area** — analogous to a Git working tree. Pull is `git pull`; build produces `--out` (the proposed next version); push sends `--out` to the service at the end of a session.
 
 ## Persistence
 

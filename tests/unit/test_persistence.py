@@ -84,7 +84,7 @@ class TestReadWriteJson:
         assert path.exists()
 
     def test_read_missing_file_raises(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(CatalogError):
             read_json(tmp_path / "missing.json")
 
 
@@ -156,6 +156,18 @@ class TestLoadGeoJson:
 
 
 class TestSaveCatalog:
+    def test_catalog_head_json_written(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        assert (tmp_path / "catalog.head.json").exists()
+
+    def test_catalog_head_json_points_to_catalog(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        payload = json.loads((tmp_path / "catalog.head.json").read_text())
+
+        assert payload["catalogUrl"] == "./catalog.json"
+
     def test_catalog_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
@@ -353,17 +365,31 @@ class TestSaveAreaCsv:
 
 
 class TestLoadCatalogErrors:
-    def test_missing_catalog_json_raises(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
+    def test_missing_catalog_head_raises(self, tmp_path):
+        with pytest.raises(CatalogError):
+            load_catalog(tmp_path)
+
+    def test_non_object_catalog_head_raises(self, tmp_path):
+        (tmp_path / "catalog.head.json").write_text('"not an object"')
+
+        with pytest.raises(CatalogError, match="object"):
+            load_catalog(tmp_path)
+
+    def test_missing_catalog_url_in_head_raises(self, tmp_path):
+        (tmp_path / "catalog.head.json").write_text('{"version": 1}')
+
+        with pytest.raises(CatalogError, match="catalogUrl"):
             load_catalog(tmp_path)
 
     def test_non_object_catalog_raises(self, tmp_path):
+        (tmp_path / "catalog.head.json").write_text('{"version": 1, "catalogUrl": "./catalog.json"}')
         (tmp_path / "catalog.json").write_text('["not", "an", "object"]')
 
         with pytest.raises(CatalogError, match="object"):
             load_catalog(tmp_path)
 
     def test_non_list_areas_raises(self, tmp_path):
+        (tmp_path / "catalog.head.json").write_text('{"version": 1, "catalogUrl": "./catalog.json"}')
         (tmp_path / "catalog.json").write_text('{"version": "1.0", "areas": "bad"}')
 
         with pytest.raises(CatalogError, match="areas"):

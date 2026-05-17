@@ -4,19 +4,25 @@ import json
 import os
 import threading
 from pathlib import Path
+from urllib.parse import urlparse
 
 import webview
 
 from ..diagnostics import ConsoleLogSink, Logger, TelemetryLevel
+from ..protocols import Catalog
+from .data_pipeline import DataPipeline
 from .gateway import Gateway
+from .pull import pull as _pull
 
 _DEBUG_PORT = 9222
+_HEAD_FILE = "catalog.head.json"
 _STARTUP_HTML = Path(__file__).parent / "startup.html"
 _STARTUP_JS = Path(__file__).parent / "startup.js"
 
 _core = None
 _form = None
 api: Gateway | None = None
+data_pipeline: DataPipeline | None = None
 _api_ready = threading.Event()
 
 
@@ -35,7 +41,28 @@ def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
 
 
 def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
-    Logger.info(f"WebResourceRequested: {args.Request.Uri}")
+    url = str(args.Request.Uri)
+    # Logger.info(f"WebResourceRequested: {url}")
+    if data_pipeline is not None:
+        deferral = args.GetDeferral()
+
+        def complete(result: tuple[bytes, str] | None) -> None:
+            def on_ui() -> None:
+                try:
+                    if result is not None:
+                        data, content_type = result
+                        from System.IO import MemoryStream  # type: ignore[import]
+                        stream = MemoryStream(bytearray(data))
+                        headers = f"Content-Type: {content_type}\r\nAccess-Control-Allow-Origin: *"
+                        args.Response = _core.Environment.CreateWebResourceResponse(stream, 200, "OK", headers)
+                except Exception as exc:
+                    Logger.warning(f"data pipeline: response error: {exc}")
+                finally:
+                    deferral.Complete()
+            from System import Action  # type: ignore[import]
+            _form.BeginInvoke(Action(on_ui))
+
+        data_pipeline.handle(url, complete)
 
 
 def _on_window_close_requested(*_) -> None:
@@ -49,7 +76,7 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
-def _setup(window: webview.Window, catalog=None) -> None:
+def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path | None) -> None:
     try:
         import webview.platforms.winforms as wf
         from System import Action  # type: ignore[import]
@@ -60,13 +87,14 @@ def _setup(window: webview.Window, catalog=None) -> None:
             return
 
         def on_ui_thread() -> None:
-            global _core, _form, api  # noqa: PLW0603
+            global _core, _form, api, data_pipeline  # noqa: PLW0603
             wv2 = getattr(form, "webview", None) or getattr(form, "browser", None)
             if wv2 is None:
                 Logger.warning("Setup: could not locate WebView2 control.")
                 return
             _form = form
             _core = wv2.CoreWebView2
+            _core.Settings.UserAgent = "GeoBrowser/1.0 (https://github.com/croicu/geo-browser)"
 
             edge = getattr(form, "browser", None)
             if edge is not None and hasattr(edge, "on_script_notify"):
@@ -77,10 +105,16 @@ def _setup(window: webview.Window, catalog=None) -> None:
             _core.ExecuteScriptAsync(script)
 
             api = Gateway(invoke_script)
-            if catalog is not None:
-                catalog.register_handlers(api)
+            catalog.register_handlers(api)
             _api_ready.set()
 
+            data_pipeline = DataPipeline(
+                out_dir=out_dir,
+                in_dir=in_dir,
+            )
+
+            from Microsoft.Web.WebView2.Core import CoreWebView2WebResourceContext  # type: ignore[import]
+            _core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All)
             _core.NavigationCompleted += _on_navigation_completed
             _core.WebResourceRequested += _on_web_resource_requested
             _core.WindowCloseRequested += _on_window_close_requested
@@ -96,12 +130,17 @@ def _setup(window: webview.Window, catalog=None) -> None:
 
 def launch(
     url: str,
-    catalog=None,
+    catalog: Catalog | None = None,
+    out_dir: Path | None = None,
+    in_dir: Path | None = None,
     debug: bool = False,
     break_on_load: bool = False,
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
 ) -> None:
+    resolved_catalog = catalog if catalog is not None else Catalog()
+    resolved_out_dir = out_dir if out_dir is not None else Path("./out")
+
     if debug:
         args = f"--remote-debugging-port={_DEBUG_PORT}"
         if dev_tools:
@@ -125,7 +164,7 @@ def launch(
             setup_done = True
 
             def do_setup() -> None:
-                _setup(window, catalog)
+                _setup(window, resolved_catalog, resolved_out_dir, in_dir)
                 if not break_on_load and api is not None:
                     api.ready()
 
@@ -143,6 +182,13 @@ def launch(
 
     Logger.set_logger(ConsoleLogSink(min_level=log_level))
     try:
+        if in_dir is not None and not (in_dir / _HEAD_FILE).exists():
+            p = urlparse(url)
+            origin = f"{p.scheme}://{p.netloc}"
+            Logger.info(f"Pulling from {origin} into {in_dir}")
+            in_dir.mkdir(parents=True, exist_ok=True)
+            _pull(origin, in_dir)
+
         threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")
         webview.start()

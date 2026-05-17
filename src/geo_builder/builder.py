@@ -123,6 +123,7 @@ class Builder:
         task_dir.mkdir(parents=True, exist_ok=True)
 
         payload = asdict(self.catalog)
+        payload.pop("is_default", None)
         for area_payload in payload["areas"]:
             for layer_payload in area_payload["manifest"]["layers"]:
                 layer_payload.pop("geojson", None)

@@ -73,6 +73,10 @@ class Gateway:
     def call(self, id: str, data: Any, callback: Callable | None = None) -> None:
         self._queue.put(("call", id, callback, data))
 
+    def post(self, fn: Callable[[], None]) -> None:
+        """Enqueue a callable to run on the dispatcher thread."""
+        self._queue.put(("fn", fn))
+
     def ready(self) -> None:
         self.is_open = True
         self.call(_READY_ID, ReadyData())
@@ -91,6 +95,8 @@ class Gateway:
                 self._process_call(item[1], item[2], item[3])
             elif kind == "msg":
                 self._dispatch(item[1])
+            elif kind == "fn":
+                item[1]()
 
     def stop(self) -> None:
         self._queue.put(None)

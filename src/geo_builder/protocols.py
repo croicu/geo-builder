@@ -20,6 +20,7 @@ class Catalog:
     version: str = "1.0"
     createdAt: str = field(default_factory=lambda: str(datetime.now(timezone.utc)))
     areas: list[Area] = field(default_factory=list)
+    is_default: bool = True
 
     def register_handlers(self, gateway) -> None:
         from .api import GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput
