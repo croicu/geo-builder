@@ -44,8 +44,7 @@ def make_area() -> Area:
     return Area(
         id="napoli",
         name="Napoli",
-        center=[40.85, 14.27],
-        radiusMeters=5000,
+        bbox=[14.20, 40.80, 14.33, 40.90],
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,
@@ -166,34 +165,34 @@ class TestSaveCatalog:
 
         payload = json.loads((tmp_path / "catalog.head.json").read_text())
 
-        assert payload["catalogUrl"] == "./catalog.json"
+        assert payload["catalogUrl"] == "./release/catalog.json"
 
     def test_catalog_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "catalog.json").exists()
+        assert (tmp_path / "release" / "catalog.json").exists()
 
     def test_manifest_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
+        assert (tmp_path / "release" / "areas" / "napoli" / "manifest.json").exists()
 
     def test_layer_geojson_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "areas" / "napoli" / "layers" / "overpass_amenity_restaurant.geojson").exists()
+        assert (tmp_path / "release" / "areas" / "napoli" / "layers" / "overpass_amenity_restaurant.geojson").exists()
 
     def test_catalog_json_excludes_manifest(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "catalog.json").read_text())
+        payload = json.loads((tmp_path / "release" / "catalog.json").read_text())
 
         assert "manifest" not in payload["areas"][0]
 
     def test_manifest_json_excludes_geojson(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "areas" / "napoli" / "manifest.json").read_text())
+        payload = json.loads((tmp_path / "release" / "areas" / "napoli" / "manifest.json").read_text())
 
         assert "geojson" not in payload["layers"][0]
 
@@ -222,8 +221,7 @@ class TestRoundTrip:
 
         assert area.id == "napoli"
         assert area.name == "Napoli"
-        assert area.center == pytest.approx([40.85, 14.27])
-        assert area.radiusMeters == 5000
+        assert area.bbox == pytest.approx([14.20, 40.80, 14.33, 40.90])
 
     def test_layer_fields(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
@@ -310,8 +308,8 @@ class TestSaveAreaCsv:
             ]),
         )
         area = Area(
-            id="napoli", name="Napoli", center=[40.85, 14.27],
-            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
             manifest=Manifest(version=1, layers=[layer_a, layer_b]),
         )
@@ -338,8 +336,8 @@ class TestSaveAreaCsv:
             ]),
         )
         area = Area(
-            id="napoli", name="Napoli", center=[40.85, 14.27],
-            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
             manifest=Manifest(version=1, layers=[layer_a, layer_b]),
         )
@@ -349,8 +347,8 @@ class TestSaveAreaCsv:
 
     def test_no_features_writes_no_csv(self, tmp_path):
         area = Area(
-            id="napoli", name="Napoli", center=[40.85, 14.27],
-            radiusMeters=5000, minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
             manifest=Manifest(version=1, layers=[]),
         )
@@ -361,7 +359,7 @@ class TestSaveAreaCsv:
     def test_csv_written_by_save_catalog(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "areas" / "napoli" / "napoli.csv").exists()
+        assert (tmp_path / "release" / "areas" / "napoli" / "napoli.csv").exists()
 
 
 class TestLoadCatalogErrors:

@@ -11,8 +11,7 @@ def make_area() -> Area:
     return Area(
         id="napoli",
         name="Napoli",
-        center=[40.85, 14.27],
-        radiusMeters=5000,
+        bbox=[14.20, 40.80, 14.33, 40.90],
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,
@@ -101,20 +100,15 @@ class TestAddArea:
         assert a1 is a2
         assert len(builder.catalog.areas) == 1
 
-    def test_center_is_bbox_midpoint(self):
+    def test_bbox_matches_task(self):
         area = Builder().add_area(TASK)
 
-        assert area.center == pytest.approx([(40.80 + 40.90) / 2, (14.20 + 14.33) / 2])
+        assert area.bbox == pytest.approx([14.20, 40.80, 14.33, 40.90])
 
     def test_manifest_url_uses_area_id(self):
         area = Builder().add_area(TASK)
 
         assert area.manifestUrl == "./areas/napoli/manifest.json"
-
-    def test_radius_is_positive(self):
-        area = Builder().add_area(TASK)
-
-        assert area.radiusMeters > 0
 
 
 class TestRun:
@@ -174,24 +168,6 @@ class TestRun:
 
         assert result.catalog is builder.catalog
 
-
-class TestHaversineMeters:
-    def setup_method(self):
-        self.builder = Builder()
-
-    def test_same_point_is_zero(self):
-        assert self.builder._haversine_meters(40.85, 14.27, 40.85, 14.27) == pytest.approx(0.0)
-
-    def test_is_symmetric(self):
-        a_to_b = self.builder._haversine_meters(40.85, 14.27, 40.90, 14.33)
-        b_to_a = self.builder._haversine_meters(40.90, 14.33, 40.85, 14.27)
-
-        assert a_to_b == pytest.approx(b_to_a)
-
-    def test_one_degree_latitude_approx_111km(self):
-        dist = self.builder._haversine_meters(0.0, 0.0, 1.0, 0.0)
-
-        assert dist == pytest.approx(111_195.0, rel=0.01)
 
 
 class TestBuilderAddLayer:

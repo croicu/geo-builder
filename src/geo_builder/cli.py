@@ -14,27 +14,25 @@ from .settings import Settings
 
 @dataclass
 class CliArguments:
-    tasks_path: Path | None
-    in_directory: Path | None
+    tasks_path: Path
+    in_directory: Path
     out_directory: Path
+    edit: bool = False
 
 
 def parse_args(argv: list[str]) -> CliArguments:
     parser = argparse.ArgumentParser(
         prog="geo-builder",
-        usage="geo-builder [<tasks_path>] [--in <dir>] [--out <dir>]",
+        usage="geo-builder <tasks_path> [--in <dir>] [--out <dir>] [--edit]",
         description=(
-            "Build static geographic datasets (tasks_path given), "
-            "or launch the designer UI (tasks_path omitted, requires designUrl in build.json)."
+            "Build static geographic datasets, or open the designer UI with --edit."
         ),
     )
 
     parser.add_argument(
         "tasks_path",
         type=Path,
-        nargs="?",
-        default=None,
-        help="tasks JSON file to build; omit to launch the designer",
+        help="tasks JSON file",
     )
 
     parser.add_argument(
@@ -56,12 +54,20 @@ def parse_args(argv: list[str]) -> CliArguments:
         help="output directory for built artifacts (default: ./out)",
     )
 
+    parser.add_argument(
+        "--edit",
+        action="store_true",
+        default=False,
+        help="open the designer WebView (requires designUrl in build.json)",
+    )
+
     args = parser.parse_args(argv)
 
     return CliArguments(
         tasks_path=args.tasks_path,
         in_directory=args.in_directory,
         out_directory=args.out_directory,
+        edit=args.edit,
     )
 
 
@@ -79,9 +85,9 @@ def main() -> int:
         print(f"geo-builder: error: {error}", file=sys.stderr)
         return 1
 
-    if arguments.tasks_path is None:
+    if arguments.edit:
         if not settings.design_url:
-            print("geo-builder: error: no tasks file given and no designUrl configured in build.json", file=sys.stderr)
+            print("geo-builder: error: no designUrl configured in build.json", file=sys.stderr)
             return 1
         try:
             catalog = load_catalog(arguments.in_directory, debug=settings.debug)
@@ -104,7 +110,7 @@ def main() -> int:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        save_catalog(result.catalog, arguments.out_directory)
+        save_catalog(result.catalog, arguments.out_directory, debug=settings.debug)
         return 0
     except GeoError as error:
         if settings.debug:

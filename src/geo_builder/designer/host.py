@@ -76,7 +76,44 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
-def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path | None) -> None:
+def _register_designer_handlers(api: Gateway, catalog: Catalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
+    from ..api import ERR_AREA_NOT_FOUND, OK, SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput
+    from ..builder import Builder
+    from ..errors import GeoError
+    from ..persistence import load_catalog, save_catalog, save_catalog_meta
+
+    api.define_method(SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput)
+
+    def on_set_area_bbox(data: SetAreaBboxInput) -> SetAreaBboxOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+
+        area.bbox = list(data.bbox)
+
+        if in_dir is not None:
+            save_catalog_meta(catalog, in_dir, debug=debug)
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError:
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        result = Builder(fresh_catalog).run()
+        save_catalog(result.catalog, out_dir, debug=debug)
+
+        return SetAreaBboxOutput(error=OK)
+
+    api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
+
+
+def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     try:
         import webview.platforms.winforms as wf
         from System import Action  # type: ignore[import]
@@ -106,6 +143,7 @@ def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path
 
             api = Gateway(invoke_script)
             catalog.register_handlers(api)
+            _register_designer_handlers(api, catalog, out_dir, in_dir, debug)
             _api_ready.set()
 
             data_pipeline = DataPipeline(
@@ -164,7 +202,7 @@ def launch(
             setup_done = True
 
             def do_setup() -> None:
-                _setup(window, resolved_catalog, resolved_out_dir, in_dir)
+                _setup(window, resolved_catalog, resolved_out_dir, in_dir, debug)
                 if not break_on_load and api is not None:
                     api.ready()
 

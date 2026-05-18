@@ -68,6 +68,10 @@ def _fetch_and_save(url: str, in_dir: Path, seen: set[str]) -> bytes | None:
         Logger.info(f"pull: fetch '{url}'")
         resp = requests.get(url, timeout=_TIMEOUT)
         resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "")
+        if "json" not in content_type:
+            Logger.warning(f"pull: '{url}': unexpected Content-Type '{content_type}', skipping")
+            return None
         data = resp.content
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)

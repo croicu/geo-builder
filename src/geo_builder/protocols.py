@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -32,26 +31,19 @@ class Catalog:
         area = next((a for a in self.areas if a.id == data.areaId), None)
         if area is None:
             return GetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
-        return GetAreaBboxOutput(error=OK, bbox=area.bbox())
+        return GetAreaBboxOutput(error=OK, bbox=area.bbox)
 
 
 @dataclass
 class Area:
     id: str
     name: str
-    center: list[float]
-    radiusMeters: int
+    bbox: list[float]  # [west, south, east, north]
     minRadiusPx: int
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
     manifest: Manifest
-
-    def bbox(self) -> list[float]:
-        lat, lon = self.center
-        lat_delta = self.radiusMeters / 111_320.0
-        lon_delta = self.radiusMeters / (111_320.0 * math.cos(math.radians(lat)))
-        return [lon - lon_delta, lat - lat_delta, lon + lon_delta, lat + lat_delta]
 
 
 @dataclass

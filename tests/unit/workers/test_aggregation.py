@@ -8,8 +8,8 @@ def make_area(layers: list[Layer]) -> Area:
     return Area(
         id="napoli",
         name="Napoli",
-        center=[40.85, 14.27],
-        radiusMeters=5000,
+        bbox=[14.20, 40.80, 14.33, 40.90],
+        
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,

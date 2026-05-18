@@ -72,8 +72,12 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> Catalog:
     )
 
 
-def save_catalog(catalog: Catalog, output_dir: str | Path) -> None:
+def save_catalog(catalog: Catalog, output_dir: str | Path, debug: bool = False) -> None:
     output_dir = Path(output_dir)
+    catalog_dir = "debug" if debug else "release"
+    head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
+    catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
+
     payload = asdict(catalog)
     del payload["is_default"]
 
@@ -81,12 +85,28 @@ def save_catalog(catalog: Catalog, output_dir: str | Path) -> None:
         del area_payload["manifest"]
 
     _clean_dir(output_dir)
-    save_json(output_dir / _CATALOG_HEAD, {"version": 1, "catalogUrl": f"./{_CATALOG_FILENAME}"})
-    save_json(output_dir / _CATALOG_FILENAME, payload)
+    save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
+    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, payload)
 
+    catalog_base = output_dir / catalog_dir
     for area in catalog.areas:
-        save_area(area, output_dir)
-        save_area_csv(area, output_dir)
+        save_area(area, catalog_base)
+        save_area_csv(area, catalog_base)
+
+
+def save_catalog_meta(catalog: Catalog, output_dir: str | Path, debug: bool = False) -> None:
+    """Write head + catalog.json only; does not touch area directories."""
+    output_dir = Path(output_dir)
+    catalog_dir = "debug" if debug else "release"
+    head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
+    catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
+
+    payload = asdict(catalog)
+    payload.pop("is_default", None)
+    for area_payload in payload["areas"]:
+        del area_payload["manifest"]
+    save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
+    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, payload)
 
 
 def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> Area:
@@ -97,15 +117,14 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> Area:
 
     manifest = load_manifest(manifest_path, manifest_payload)
 
-    center = payload["center"]
-    if not isinstance(center, list):
-        raise CatalogError("area center must be an array.")
+    bbox = payload.get("bbox")
+    if not isinstance(bbox, list) or len(bbox) != 4:
+        raise CatalogError("area bbox must be an array of four numbers.")
 
     return Area(
         id=str(payload["id"]),
         name=str(payload["name"]),
-        center=[float(center[0]), float(center[1])],
-        radiusMeters=int(payload["radiusMeters"]),
+        bbox=[float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
         minRadiusPx=int(payload["minRadiusPx"]),
         maxRadiusPx=int(payload["maxRadiusPx"]),
         liveMapRadiusPx=int(payload["liveMapRadiusPx"]),

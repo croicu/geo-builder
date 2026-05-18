@@ -4,11 +4,10 @@ import csv
 import json
 import shutil
 from dataclasses import asdict, dataclass, field
-from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 
 from .colors import layer_color
-from .contracts import AcquisitionTask, BoundingBox, Task
+from .contracts import AcquisitionTask, Task
 from .errors import GeoError
 from .protocols import Area, Catalog, JsonObject, Layer, Manifest, Result
 from .workers.factory import WorkerFactory
@@ -77,18 +76,10 @@ class Builder:
 
         bbox = task.bbox
 
-        center = [
-            (bbox.south + bbox.north) / 2.0,
-            (bbox.west + bbox.east) / 2.0,
-        ]
-
-        radius_meters = int(self._bbox_radius_meters(bbox))
-
         area = Area(
             id=area_id,
             name=task.areaName,
-            center=center,
-            radiusMeters=radius_meters,
+            bbox=[bbox.west, bbox.south, bbox.east, bbox.north],
             minRadiusPx=32,
             maxRadiusPx=512,
             liveMapRadiusPx=640,
@@ -162,36 +153,3 @@ class Builder:
     def _create_result(self) -> Result:
         return Result(catalog=self.catalog)
 
-    def _bbox_radius_meters(self, bbox: BoundingBox) -> float:
-        center_lat = (bbox.south + bbox.north) / 2.0
-        center_lon = (bbox.west + bbox.east) / 2.0
-
-        corners = [
-            (bbox.south, bbox.west),
-            (bbox.south, bbox.east),
-            (bbox.north, bbox.west),
-            (bbox.north, bbox.east),
-        ]
-
-        return max(self._haversine_meters(center_lat, center_lon, lat, lon) for lat, lon in corners)
-
-    def _haversine_meters(
-        self,
-        lat1: float,
-        lon1: float,
-        lat2: float,
-        lon2: float,
-    ) -> float:
-        earth_radius_meters = 6_371_000.0
-
-        d_lat = radians(lat2 - lat1)
-        d_lon = radians(lon2 - lon1)
-
-        r_lat1 = radians(lat1)
-        r_lat2 = radians(lat2)
-
-        a = sin(d_lat / 2.0) ** 2 + cos(r_lat1) * cos(r_lat2) * sin(d_lon / 2.0) ** 2
-
-        c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
-
-        return earth_radius_meters * c

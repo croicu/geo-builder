@@ -37,10 +37,15 @@ class TestParseArgs:
 
         assert args.tasks_path == Path("tasks.json")
 
-    def test_tasks_path_defaults_to_none(self):
-        args = parse_args([])
+    def test_edit_defaults_to_false(self):
+        args = parse_args(["tasks.json"])
 
-        assert args.tasks_path is None
+        assert args.edit is False
+
+    def test_edit_flag_parsed(self):
+        args = parse_args(["tasks.json", "--edit"])
+
+        assert args.edit is True
 
     def test_in_directory_defaults_to_in(self):
         args = parse_args(["tasks.json"])
@@ -94,7 +99,7 @@ class TestMain:
 
             main()
 
-            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"))
+            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"), debug=False)
 
     def test_settings_load_error_returns_1(self, capsys):
         with patch("geo_builder.cli.Settings") as MockSettings:
@@ -171,7 +176,7 @@ class TestDesignMode:
     @pytest.fixture(autouse=True)
     def argv(self):
         original = sys.argv
-        sys.argv = ["geo-builder"]
+        sys.argv = ["geo-builder", "tasks.json", "--edit"]
         yield
         sys.argv = original
 

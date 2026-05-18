@@ -34,9 +34,9 @@ pip install -e ".[dev]"
 geo-builder tasks_production.json                        # fresh build to ./out
 geo-builder tasks_production.json --in ./in --out ./out  # incremental build
 
-# Designer (no tasks file — requires designUrl in build.json)
-geo-builder                          # pull from service into ./in on first run, then open WebView
-geo-builder --in ./in --out ./out    # same with explicit paths
+# Designer (requires designUrl in build.json)
+geo-builder tasks_production.json --edit                        # pull on first run, then open WebView
+geo-builder tasks_production.json --in ./in --out ./out --edit  # same with explicit paths
 
 # Lint
 ruff check src/ tests/

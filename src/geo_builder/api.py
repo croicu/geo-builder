@@ -36,3 +36,20 @@ class GetAreaBboxOutput:
 
 
 GET_AREA_BBOX_ID = "__geo_get_area_bbox__"
+
+
+# --- SetAreaBbox ---
+
+@dataclass
+class SetAreaBboxInput:
+    areaId: str
+    bbox: list[float]  # [west, south, east, north]
+
+
+@dataclass
+class SetAreaBboxOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+SET_AREA_BBOX_ID = "__geo_set_area_bbox__"

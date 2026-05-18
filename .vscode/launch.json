@@ -24,7 +24,12 @@
       "type": "debugpy",
       "request": "launch",
       "module": "geo_builder.cli",
-      "args": ["--in", "${workspaceFolder}/in", "--out", "${workspaceFolder}/out"],
+      "args": [
+        "${workspaceFolder}/tasks_production.json", 
+        "--in", "${workspaceFolder}/in", 
+        "--out", "${workspaceFolder}/out", 
+        "--edit"
+      ],
       "console": "integratedTerminal",
       "justMyCode": true
     },

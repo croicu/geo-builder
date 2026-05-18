@@ -6,10 +6,11 @@ import pytest
 from geo_builder.designer.pull import pull
 
 
-def _resp(body: bytes) -> MagicMock:
+def _resp(body: bytes, content_type: str = "application/json") -> MagicMock:
     r = MagicMock()
     r.content = body
     r.raise_for_status = MagicMock()
+    r.headers = {"Content-Type": content_type}
     return r
 
 
