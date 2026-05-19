@@ -156,7 +156,7 @@ interface ReadyData {}
 interface AddAreaInput {
   areaName: string;
   bbox: [number, number, number, number];  // [west, south, east, north]
-  template?: string;  // default "*"
+  template?: string;  // default "default"
 }
 interface AddAreaOutput {
   error: number;
@@ -484,6 +484,6 @@ class AddAreaOutput:
 
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
-- `template` defaults to `"*"` — the conventional name for the default acquisition template.
+- `template` defaults to `"default"` — the conventional name for the default acquisition template.
 - On success the caller should reload the catalog (e.g. re-fetch `catalog.head.json`) to pick up the new area; the in-memory catalog on the Python side is updated immediately.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).

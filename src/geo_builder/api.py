@@ -62,7 +62,7 @@ SET_AREA_BBOX_ID = "__geo_set_area_bbox__"
 class AddAreaInput:
     areaName: str
     bbox: list[float]  # [west, south, east, north]
-    template: str = "*"
+    template: str = "default"
 
 
 @dataclass
