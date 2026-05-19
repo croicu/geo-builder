@@ -22,14 +22,17 @@ class Builder:
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def run(self) -> GeoCatalog:
+    def run(self, tasks: list[Task] | None = None) -> GeoCatalog:
         from .settings import Settings
 
         settings = Settings.current()
         debug = settings.debug
 
         self.errors.clear()
-        self._stack = list(reversed(settings.tasks))
+        if tasks is not None:
+            self._stack = list(reversed(tasks))
+        else:
+            self._stack = list(reversed(settings.tasks))
 
         if debug:
             build_dir = Path("./build")

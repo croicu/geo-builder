@@ -77,10 +77,23 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
 
 
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
-    from ..api import ERR_AREA_NOT_FOUND, OK, SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput
+    from ..api import (
+        ADD_AREA_ID,
+        ERR_AREA_NOT_FOUND,
+        ERR_TEMPLATE_NOT_FOUND,
+        OK,
+        SET_AREA_BBOX_ID,
+        AddAreaInput,
+        AddAreaOutput,
+        SetAreaBboxInput,
+        SetAreaBboxOutput,
+    )
     from ..builder import Builder
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
+    from ..entities import GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
+    from ..settings import Settings
 
     api.define_method(SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput)
 
@@ -111,6 +124,48 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         return SetAreaBboxOutput(error=OK)
 
     api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
+
+    api.define_method(ADD_AREA_ID, AddAreaInput, AddAreaOutput)
+
+    def on_add_area(data: AddAreaInput) -> AddAreaOutput:
+        settings = Settings.current()
+        template = settings.templates.get(data.template)
+        if template is None:
+            return AddAreaOutput(
+                error=ERR_TEMPLATE_NOT_FOUND,
+                errorDescription=f"Template '{data.template}' not found in tasks file",
+            )
+
+        area_id = GeoLayer.id_from_merge_key(data.areaName)
+        bbox = data.bbox  # [west, south, east, north]
+
+        acquisition_task = AcquisitionTask(
+            areaId=area_id,
+            areaName=data.areaName,
+            provider=template.provider,
+            bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
+            filters=template.filters,
+        )
+        tasks = [acquisition_task, AggregationTask(), DedupingTask()]
+
+        if in_dir is not None:
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError:
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        result = Builder(fresh_catalog).run(tasks=tasks)
+        save_catalog(result, out_dir, debug=debug)
+        if in_dir is not None:
+            save_catalog(result, in_dir, debug=debug)
+
+        catalog.areas[:] = result.areas
+
+        return AddAreaOutput(error=OK)
+
+    api.register(ADD_AREA_ID, on_add_area)
 
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:

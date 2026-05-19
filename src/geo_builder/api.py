@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 OK = 0
 ERR_AREA_NOT_FOUND = 1
+ERR_TEMPLATE_NOT_FOUND = 2
 
 
 # --- Ready (connection handshake) ---
@@ -53,3 +54,21 @@ class SetAreaBboxOutput:
 
 
 SET_AREA_BBOX_ID = "__geo_set_area_bbox__"
+
+
+# --- AddArea ---
+
+@dataclass
+class AddAreaInput:
+    areaName: str
+    bbox: list[float]  # [west, south, east, north]
+    template: str = "*"
+
+
+@dataclass
+class AddAreaOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+ADD_AREA_ID = "__geo_add_area__"
