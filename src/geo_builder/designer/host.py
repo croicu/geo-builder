@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import webview
 
 from ..diagnostics import ConsoleLogSink, Logger, TelemetryLevel
-from ..protocols import Catalog
+from ..entities import GeoCatalog
 from .data_pipeline import DataPipeline
 from .gateway import Gateway
 from .pull import pull as _pull
@@ -76,7 +76,7 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
-def _register_designer_handlers(api: Gateway, catalog: Catalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
+def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     from ..api import ERR_AREA_NOT_FOUND, OK, SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput
     from ..builder import Builder
     from ..errors import GeoError
@@ -106,14 +106,14 @@ def _register_designer_handlers(api: Gateway, catalog: Catalog, out_dir: Path, i
             fresh_catalog = catalog
 
         result = Builder(fresh_catalog).run()
-        save_catalog(result.catalog, out_dir, debug=debug)
+        save_catalog(result, out_dir, debug=debug)
 
         return SetAreaBboxOutput(error=OK)
 
     api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
 
 
-def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
+def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     try:
         import webview.platforms.winforms as wf
         from System import Action  # type: ignore[import]
@@ -168,7 +168,7 @@ def _setup(window: webview.Window, catalog: Catalog, out_dir: Path, in_dir: Path
 
 def launch(
     url: str,
-    catalog: Catalog | None = None,
+    catalog: GeoCatalog | None = None,
     out_dir: Path | None = None,
     in_dir: Path | None = None,
     debug: bool = False,
@@ -176,7 +176,7 @@ def launch(
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
 ) -> None:
-    resolved_catalog = catalog if catalog is not None else Catalog()
+    resolved_catalog = catalog if catalog is not None else GeoCatalog()
     resolved_out_dir = out_dir if out_dir is not None else Path("./out")
 
     if debug:

@@ -215,8 +215,8 @@ class TestWildcard:
         assert self.provider._create_merge_key(task) == "overpass:historic=*"
 
     def test_wildcard_layer_id_is_clean(self):
-        from geo_builder.protocols import Layer
-        assert Layer.id_from_merge_key("overpass:historic=*") == "overpass_historic"
+        from geo_builder.entities import GeoLayer
+        assert GeoLayer.id_from_merge_key("overpass:historic=*") == "overpass_historic"
 
     def test_wildcard_mixed_with_specific_value(self):
         task = AcquisitionTask(

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .protocols import Area, Layer
+from .entities import GeoArea
+from .protocols import Layer
 
 
 @dataclass
@@ -67,8 +68,8 @@ class DedupingTask(Task):
 
 
 class Map(Protocol):
-    def add_area(self, task: AcquisitionTask) -> Area: ...
-    def add_layer(self, area: Area, layer: Layer) -> None: ...
+    def add_area(self, task: AcquisitionTask) -> GeoArea: ...
+    def add_layer(self, area: GeoArea, layer: Layer) -> None: ...
 
 
 class Executor(Map, Protocol):

@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from geo_builder.cli import CliArguments, main, parse_args
+from geo_builder.entities import GeoCatalog
 from geo_builder.errors import GeoError
-from geo_builder.protocols import Catalog, Result
 
 
 class StubSettings:
@@ -23,12 +23,12 @@ class StubBuilder:
     def __init__(self, errors: list[str] | None = None, raises: Exception | None = None) -> None:
         self.errors = errors or []
         self._raises = raises
-        self.catalog = Catalog()
+        self.catalog = GeoCatalog()
 
-    def run(self) -> Result:
+    def run(self) -> GeoCatalog:
         if self._raises:
             raise self._raises
-        return Result(catalog=self.catalog)
+        return self.catalog
 
 
 class TestParseArgs:
@@ -123,7 +123,7 @@ class TestMain:
 
     def test_in_directory_loads_catalog(self):
         sys.argv = ["geo-builder", "tasks.json", "--in", "/tmp/in", "--out", "/tmp/out"]
-        loaded_catalog = Catalog()
+        loaded_catalog = GeoCatalog()
 
         with patch("geo_builder.cli.Settings") as MockSettings, \
              patch("geo_builder.cli.Builder") as MockBuilder, \

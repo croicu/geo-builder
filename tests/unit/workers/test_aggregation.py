@@ -1,33 +1,35 @@
 from geo_builder.contracts import WorkerResult
-from geo_builder.protocols import Area, Catalog, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.aggregation import AggregationWorker
 from tests.shared.stubs import StubExecutor
 
 
-def make_area(layers: list[Layer]) -> Area:
-    return Area(
+def make_area(layers: list[Layer]) -> GeoArea:
+    summary = Area(
         id="napoli",
         name="Napoli",
         bbox=[14.20, 40.80, 14.33, 40.90],
-        
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,
         manifestUrl="./areas/napoli/manifest.json",
-        manifest=Manifest(version=1, layers=layers),
     )
+    geo_layers = []
+    for layer in layers:
+        geo_layers.append(GeoLayer(layer))
+    return GeoArea(summary=summary, layers=geo_layers)
 
 
 def make_layer(merge_key: str, feature_count: int, name: str = "Layer") -> Layer:
-    features = [
-        Feature(
+    features = []
+    for _ in range(feature_count):
+        features.append(Feature(
             type="Feature",
             properties={},
             geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
-        )
-        for _ in range(feature_count)
-    ]
-    layer_id = Layer.id_from_merge_key(merge_key)
+        ))
+    layer_id = GeoLayer.id_from_merge_key(merge_key)
     return Layer(
         id=layer_id,
         name=name,
@@ -40,13 +42,13 @@ def make_layer(merge_key: str, feature_count: int, name: str = "Layer") -> Layer
     )
 
 
-def make_executor(areas: list[Area]) -> StubExecutor:
-    catalog = Catalog(areas=areas)
+def make_executor(areas: list[GeoArea]) -> StubExecutor:
+    catalog = GeoCatalog(areas=areas)
     area = areas[0] if areas else make_area([])
     return StubExecutor(area=area, catalog=catalog)
 
 
-def run(areas: list[Area]) -> None:
+def run(areas: list[GeoArea]) -> None:
     executor = make_executor(areas)
     AggregationWorker(task=None).execute(executor)
 
@@ -72,8 +74,8 @@ class TestExecute:
 
         run([area])
 
-        assert len(area.manifest.layers) == 1
-        assert len(area.manifest.layers[0].geojson.features) == 3
+        assert len(area.layers) == 1
+        assert len(area.layers[0].layer.geojson.features) == 3
 
     def test_two_layers_same_merge_key_are_merged(self):
         area = make_area(
@@ -85,8 +87,8 @@ class TestExecute:
 
         run([area])
 
-        assert len(area.manifest.layers) == 1
-        assert len(area.manifest.layers[0].geojson.features) == 5
+        assert len(area.layers) == 1
+        assert len(area.layers[0].layer.geojson.features) == 5
 
     def test_different_merge_keys_stay_separate(self):
         area = make_area(
@@ -98,7 +100,7 @@ class TestExecute:
 
         run([area])
 
-        assert len(area.manifest.layers) == 2
+        assert len(area.layers) == 2
 
     def test_merged_layer_id_derived_from_merge_key(self):
         area = make_area(
@@ -110,7 +112,7 @@ class TestExecute:
 
         run([area])
 
-        assert area.manifest.layers[0].id == "overpass_amenity_restaurant"
+        assert area.layers[0].layer.id == "overpass_amenity_restaurant"
 
     def test_merged_layer_url_derived_from_id(self):
         area = make_area(
@@ -122,8 +124,8 @@ class TestExecute:
 
         run([area])
 
-        layer = area.manifest.layers[0]
-        assert layer.url == f"./layers/{layer.id}.geojson"
+        geo_layer = area.layers[0]
+        assert geo_layer.layer.url == f"./layers/{geo_layer.layer.id}.geojson"
 
 
 class TestCreateLayerId:

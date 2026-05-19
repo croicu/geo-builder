@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
 from geo_builder.errors import CatalogError
 from geo_builder.persistence import (
     child_path,
@@ -16,15 +17,7 @@ from geo_builder.persistence import (
     save_catalog,
     save_json,
 )
-from geo_builder.protocols import Area, Catalog, Feature, GeoJson, Geometry, Layer, Manifest
-
-
-def make_feature() -> Feature:
-    return Feature(
-        type="Feature",
-        properties={"name": "Trattoria da Mario", "amenity": "restaurant"},
-        geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
-    )
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
 
 
 def make_layer() -> Layer:
@@ -40,8 +33,16 @@ def make_layer() -> Layer:
     )
 
 
-def make_area() -> Area:
-    return Area(
+def make_feature() -> Feature:
+    return Feature(
+        type="Feature",
+        properties={"name": "Trattoria da Mario", "amenity": "restaurant"},
+        geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
+    )
+
+
+def make_area() -> GeoArea:
+    summary = Area(
         id="napoli",
         name="Napoli",
         bbox=[14.20, 40.80, 14.33, 40.90],
@@ -49,12 +50,12 @@ def make_area() -> Area:
         maxRadiusPx=512,
         liveMapRadiusPx=640,
         manifestUrl="./areas/napoli/manifest.json",
-        manifest=Manifest(version=1, layers=[make_layer()]),
     )
+    return GeoArea(summary=summary, layers=[GeoLayer(make_layer())])
 
 
-def make_catalog() -> Catalog:
-    return Catalog(version="1.0", createdAt="2026-01-01T00:00:00+00:00", areas=[make_area()])
+def make_catalog() -> GeoCatalog:
+    return GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[make_area()])
 
 
 class TestChildPath:
@@ -182,7 +183,7 @@ class TestSaveCatalog:
 
         assert (tmp_path / "release" / "areas" / "napoli" / "layers" / "overpass_amenity_restaurant.geojson").exists()
 
-    def test_catalog_json_excludes_manifest(self, tmp_path):
+    def test_catalog_json_excludes_manifest_field(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
         payload = json.loads((tmp_path / "release" / "catalog.json").read_text())
@@ -213,7 +214,7 @@ class TestRoundTrip:
         loaded = load_catalog(tmp_path)
 
         assert loaded.version == original.version
-        assert loaded.createdAt == original.createdAt
+        assert loaded.created_at == original.created_at
 
     def test_area_fields(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
@@ -225,21 +226,21 @@ class TestRoundTrip:
 
     def test_layer_fields(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
-        layer = load_catalog(tmp_path).areas[0].manifest.layers[0]
+        geo_layer = load_catalog(tmp_path).areas[0].layers[0]
 
-        assert layer.id == "overpass_amenity_restaurant"
-        assert layer.mergeKey == "overpass:amenity=restaurant"
-        assert layer.style == {"color": "#00ff00"}
+        assert geo_layer.layer.id == "overpass_amenity_restaurant"
+        assert geo_layer.layer.mergeKey == "overpass:amenity=restaurant"
+        assert geo_layer.layer.style == {"color": "#00ff00"}
 
     def test_feature_coordinates(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
-        feature = load_catalog(tmp_path).areas[0].manifest.layers[0].geojson.features[0]
+        feature = load_catalog(tmp_path).areas[0].layers[0].layer.geojson.features[0]
 
         assert feature.geometry.coordinates == pytest.approx([14.27, 40.85])
 
     def test_feature_properties(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
-        feature = load_catalog(tmp_path).areas[0].manifest.layers[0].geojson.features[0]
+        feature = load_catalog(tmp_path).areas[0].layers[0].layer.geojson.features[0]
 
         assert feature.properties["name"] == "Trattoria da Mario"
         assert feature.properties["amenity"] == "restaurant"
@@ -249,7 +250,7 @@ class TestSaveAreaCsv:
     def _area_dir(self, tmp_path: Path) -> Path:
         return tmp_path / "areas" / "napoli"
 
-    def _save(self, area: Area, tmp_path: Path) -> Path:
+    def _save(self, area: GeoArea, tmp_path: Path) -> Path:
         area_dir = self._area_dir(tmp_path)
         area_dir.mkdir(parents=True)
         save_area_csv(area, tmp_path)
@@ -307,12 +308,12 @@ class TestSaveAreaCsv:
                 Feature(type="Feature", properties={"amenity": "cafe"}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
             ]),
         )
-        area = Area(
+        summary = Area(
             id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
             minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
-            manifest=Manifest(version=1, layers=[layer_a, layer_b]),
         )
+        area = GeoArea(summary=summary, layers=[GeoLayer(layer_a), GeoLayer(layer_b)])
         csv_path = self._save(area, tmp_path)
         rows = self._read_csv(csv_path)
 
@@ -335,23 +336,23 @@ class TestSaveAreaCsv:
                 Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.29, 40.87])),
             ]),
         )
-        area = Area(
+        summary = Area(
             id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
             minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
-            manifest=Manifest(version=1, layers=[layer_a, layer_b]),
         )
+        area = GeoArea(summary=summary, layers=[GeoLayer(layer_a), GeoLayer(layer_b)])
         csv_path = self._save(area, tmp_path)
 
         assert len(self._read_csv(csv_path)) == 3
 
     def test_no_features_writes_no_csv(self, tmp_path):
-        area = Area(
+        summary = Area(
             id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
             minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
-            manifest=Manifest(version=1, layers=[]),
         )
+        area = GeoArea(summary=summary, layers=[])
         csv_path = self._save(area, tmp_path)
 
         assert not csv_path.exists()

@@ -21,11 +21,11 @@ class DedupingWorker(Worker):
             return WorkerResult()
 
         for area in executor.catalog.areas:
-            for layer in area.manifest.layers:
-                if layer.geojson is None:
+            for geo_layer in area.layers:
+                if geo_layer.layer.geojson is None:
                     continue
 
-                layer.geojson.features = self._dedupe_features(layer.geojson.features)
+                geo_layer.layer.geojson.features = self._dedupe_features(geo_layer.layer.geojson.features)
 
         return WorkerResult()
 

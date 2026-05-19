@@ -4,6 +4,7 @@ import urllib.parse
 import urllib.request
 
 from ..contracts import Provider
+from ..entities import GeoLayer
 from ..errors import ProviderError
 from ..protocols import Feature, GeoJson, Geometry, Layer
 from ..tasks import AcquisitionTask
@@ -49,7 +50,7 @@ class OverpassProvider(Provider):
         payload = self._execute_query(query)
         geojson = self._to_geojson(payload, surface=surface, layer_type=layer_type)
         merge_key = self._create_merge_key(task)
-        layer_id = Layer.id_from_merge_key(merge_key)
+        layer_id = GeoLayer.id_from_merge_key(merge_key)
 
         style: dict = {"opacity": 0.7, "radiusScale": scale}
         if surface:

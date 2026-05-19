@@ -7,8 +7,9 @@ import shutil
 from dataclasses import asdict
 from pathlib import Path
 
+from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import CatalogError
-from .protocols import Area, Catalog, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest
+from .protocols import Area, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest
 
 
 def read_json(path: Path) -> JsonValue:
@@ -34,7 +35,7 @@ def child_path(parent: Path, relative_path: str) -> Path:
     return parent / relative_path.removeprefix("./")
 
 
-def load_catalog(input_dir: str | Path, debug: bool = False) -> Catalog:
+def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
     input_dir = Path(input_dir)
 
     catalog_head_path = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
@@ -64,64 +65,75 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> Catalog:
             manifest_path = child_path(catalog_path.parent, str(area_payload["manifestUrl"]))
             areas.append(load_area(manifest_path, area_payload))
 
-    return Catalog(
+    return GeoCatalog(
         version=str(payload["version"]),
-        createdAt=str(payload["createdAt"]),
+        created_at=str(payload["createdAt"]),
         areas=areas,
         is_default=False,
     )
 
 
-def save_catalog(catalog: Catalog, output_dir: str | Path, debug: bool = False) -> None:
+def save_catalog(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
     output_dir = Path(output_dir)
     catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
     catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
 
-    payload = asdict(catalog)
-    del payload["is_default"]
+    areas_payload = []
+    for geo_area in geo_catalog.areas:
+        areas_payload.append(asdict(geo_area.summary))
 
-    for area_payload in payload["areas"]:
-        del area_payload["manifest"]
+    catalog_payload = {
+        "version": geo_catalog.version,
+        "createdAt": geo_catalog.created_at,
+        "areas": areas_payload,
+    }
 
     _clean_dir(output_dir)
     save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
-    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, payload)
+    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, catalog_payload)
 
     catalog_base = output_dir / catalog_dir
-    for area in catalog.areas:
-        save_area(area, catalog_base)
-        save_area_csv(area, catalog_base)
+    for geo_area in geo_catalog.areas:
+        save_area(geo_area, catalog_base)
+        save_area_csv(geo_area, catalog_base)
 
 
-def save_catalog_meta(catalog: Catalog, output_dir: str | Path, debug: bool = False) -> None:
+def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
     """Write head + catalog.json only; does not touch area directories."""
     output_dir = Path(output_dir)
     catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
     catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
 
-    payload = asdict(catalog)
-    payload.pop("is_default", None)
-    for area_payload in payload["areas"]:
-        del area_payload["manifest"]
+    areas_payload = []
+    for geo_area in geo_catalog.areas:
+        areas_payload.append(asdict(geo_area.summary))
+
+    catalog_payload = {
+        "version": geo_catalog.version,
+        "createdAt": geo_catalog.created_at,
+        "areas": areas_payload,
+    }
+
     save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
-    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, payload)
+    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, catalog_payload)
 
 
-def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> Area:
+def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
     manifest_payload = read_json(manifest_path)
 
     if not isinstance(manifest_payload, dict):
         raise CatalogError(f"{manifest_path} must contain an object.")
 
-    manifest = load_manifest(manifest_path, manifest_payload)
+    geo_layers = _load_manifest_layers(manifest_path, manifest_payload)
+    manifest_version = int(manifest_payload.get("version", 1))
 
     bbox = payload.get("bbox")
     if not isinstance(bbox, list) or len(bbox) != 4:
         raise CatalogError("area bbox must be an array of four numbers.")
 
-    return Area(
+    summary = Area(
         id=str(payload["id"]),
         name=str(payload["name"]),
         bbox=[float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
@@ -129,40 +141,42 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> Area:
         maxRadiusPx=int(payload["maxRadiusPx"]),
         liveMapRadiusPx=int(payload["liveMapRadiusPx"]),
         manifestUrl=str(payload["manifestUrl"]),
-        manifest=manifest,
     )
 
-
-def save_area(area: Area, output_dir: Path) -> None:
-    manifest_path = child_path(output_dir, area.manifestUrl)
-    payload = asdict(area.manifest)
-
-    for layer_payload in payload["layers"]:
-        del layer_payload["geojson"]
-
-    save_json(manifest_path, payload)
-
-    for layer in area.manifest.layers:
-        save_layer(layer, manifest_path.parent)
+    detail = Manifest(version=manifest_version, layers=[])
+    return GeoArea(summary=summary, layers=geo_layers, detail=detail)
 
 
-def load_manifest(manifest_path: Path, payload: dict[str, JsonValue]) -> Manifest:
+def save_area(geo_area: GeoArea, output_dir: Path) -> None:
+    manifest_path = child_path(output_dir, geo_area.manifestUrl)
+    manifest_version = geo_area.detail.version if geo_area.detail is not None else 1
+
+    layers_payload = []
+    for geo_layer in geo_area.layers:
+        layer_data = asdict(geo_layer.layer)
+        del layer_data["geojson"]
+        layers_payload.append(layer_data)
+
+    save_json(manifest_path, {"version": manifest_version, "layers": layers_payload})
+
+    for geo_layer in geo_area.layers:
+        save_layer(geo_layer.layer, manifest_path.parent)
+
+
+def _load_manifest_layers(manifest_path: Path, payload: dict[str, JsonValue]) -> list[GeoLayer]:
     layers_payload = payload.get("layers", [])
 
     if not isinstance(layers_payload, list):
         raise CatalogError("manifest layers must be an array.")
 
     manifest_dir = manifest_path.parent
-    layers = []
+    geo_layers = []
     for layer_payload in layers_payload:
         if isinstance(layer_payload, dict):
             geojson_path = child_path(manifest_dir, str(layer_payload["url"]))
-            layers.append(load_layer(geojson_path, layer_payload))
+            geo_layers.append(GeoLayer(load_layer(geojson_path, layer_payload)))
 
-    return Manifest(
-        version=int(payload["version"]),
-        layers=layers,
-    )
+    return geo_layers
 
 
 def load_layer(geojson_path: Path, payload: dict[str, JsonValue]) -> Layer:
@@ -237,14 +251,14 @@ def load_geometry(payload: dict[str, JsonValue]) -> Geometry:
     )
 
 
-def save_area_csv(area: Area, output_dir: Path) -> None:
-    area_dir = child_path(output_dir, area.manifestUrl).parent
-    csv_path = area_dir / f"{area.id}.csv"
+def save_area_csv(geo_area: GeoArea, output_dir: Path) -> None:
+    area_dir = child_path(output_dir, geo_area.manifestUrl).parent
+    csv_path = area_dir / f"{geo_area.id}.csv"
 
     rows: list[tuple[str, object]] = []
-    for layer in area.manifest.layers:
-        for feature in layer.geojson.features:
-            rows.append((layer.id, feature))
+    for geo_layer in geo_area.layers:
+        for feature in geo_layer.layer.geojson.features:
+            rows.append((geo_layer.layer.id, feature))
 
     if not rows:
         return

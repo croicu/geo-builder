@@ -1,37 +1,10 @@
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 
 JsonObject = dict[str, object]
 
 JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
-
-
-@dataclass
-class Result:
-    catalog: Catalog
-
-
-@dataclass
-class Catalog:
-    version: str = "1.0"
-    createdAt: str = field(default_factory=lambda: str(datetime.now(timezone.utc)))
-    areas: list[Area] = field(default_factory=list)
-    is_default: bool = True
-
-    def register_handlers(self, gateway) -> None:
-        from .api import GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput
-        gateway.define_method(GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput)
-        gateway.register(GET_AREA_BBOX_ID, self._get_area_bbox)
-
-    def _get_area_bbox(self, data) -> object:
-        from .api import ERR_AREA_NOT_FOUND, OK, GetAreaBboxOutput
-        area = next((a for a in self.areas if a.id == data.areaId), None)
-        if area is None:
-            return GetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
-        return GetAreaBboxOutput(error=OK, bbox=area.bbox)
 
 
 @dataclass
@@ -43,7 +16,6 @@ class Area:
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
-    manifest: Manifest
 
 
 @dataclass
@@ -62,10 +34,6 @@ class Layer:
     style: dict[str, JsonValue]
     mergeKey: str
     geojson: GeoJson
-
-    @staticmethod
-    def id_from_merge_key(merge_key: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "_", merge_key.lower()).strip("_")
 
 
 @dataclass

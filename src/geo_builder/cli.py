@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .builder import Builder
+from .entities import GeoCatalog
 from .errors import GeoError
 from .persistence import load_catalog, save_catalog
-from .protocols import Catalog
 from .settings import Settings
 
 
@@ -92,7 +92,7 @@ def main() -> int:
         try:
             catalog = load_catalog(arguments.in_directory, debug=settings.debug)
         except GeoError:
-            catalog = Catalog(is_default=True)
+            catalog = GeoCatalog(is_default=True)
         _launch_designer(settings.design_url, catalog=catalog, out_dir=arguments.out_directory, in_dir=arguments.in_directory, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
         return 0
 
@@ -103,14 +103,14 @@ def main() -> int:
         except GeoError:
             executor = Builder()
 
-        result = executor.run()
+        geo_catalog = executor.run()
 
         if executor.errors:
             for error in executor.errors:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        save_catalog(result.catalog, arguments.out_directory, debug=settings.debug)
+        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug)
         return 0
     except GeoError as error:
         if settings.debug:

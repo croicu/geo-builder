@@ -1,7 +1,8 @@
 import pytest
 
 from geo_builder.contracts import WorkerResult
-from geo_builder.protocols import Area, Catalog, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.deduping import DedupingWorker
 from tests.shared.stubs import StubExecutor
 
@@ -39,26 +40,28 @@ def make_layer(features: list[Feature]) -> Layer:
     )
 
 
-def make_area(layers: list[Layer]) -> Area:
-    return Area(
+def make_area(layers: list[Layer]) -> GeoArea:
+    summary = Area(
         id="napoli",
         name="Napoli",
         bbox=[14.20, 40.80, 14.33, 40.90],
-        
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,
         manifestUrl="./areas/napoli/manifest.json",
-        manifest=Manifest(version=1, layers=layers),
     )
+    geo_layers = []
+    for layer in layers:
+        geo_layers.append(GeoLayer(layer))
+    return GeoArea(summary=summary, layers=geo_layers)
 
 
-def make_executor(areas: list[Area]) -> StubExecutor:
+def make_executor(areas: list[GeoArea]) -> StubExecutor:
     area = areas[0] if areas else make_area([])
-    return StubExecutor(area=area, catalog=Catalog(areas=areas))
+    return StubExecutor(area=area, catalog=GeoCatalog(areas=areas))
 
 
-def run(areas: list[Area]) -> None:
+def run(areas: list[GeoArea]) -> None:
     DedupingWorker(task=None).execute(make_executor(areas))
 
 
@@ -85,7 +88,7 @@ class TestExecute:
 
         run([area])
 
-        assert len(area.manifest.layers[0].geojson.features) == 2
+        assert len(area.layers[0].layer.geojson.features) == 2
 
     def test_near_duplicate_is_removed(self):
         area = make_area([make_layer([
@@ -95,7 +98,7 @@ class TestExecute:
 
         run([area])
 
-        assert len(area.manifest.layers[0].geojson.features) == 1
+        assert len(area.layers[0].layer.geojson.features) == 1
 
     def test_first_feature_is_kept_on_dedup(self):
         area = make_area([make_layer([
@@ -105,14 +108,14 @@ class TestExecute:
 
         run([area])
 
-        assert area.manifest.layers[0].geojson.features[0].geometry.coordinates == [BASE_LON, BASE_LAT]
+        assert area.layers[0].layer.geojson.features[0].geometry.coordinates == [BASE_LON, BASE_LAT]
 
     def test_empty_layer_stays_empty(self):
         area = make_area([make_layer([])])
 
         run([area])
 
-        assert area.manifest.layers[0].geojson.features == []
+        assert area.layers[0].layer.geojson.features == []
 
 
 class TestDedupeFeatures:

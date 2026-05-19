@@ -2,13 +2,14 @@ import pytest
 
 from geo_builder.builder import Builder
 from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
+from geo_builder.entities import GeoArea, GeoLayer
 from geo_builder.errors import GeoError
-from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.settings import Settings
 
 
-def make_area() -> Area:
-    return Area(
+def make_area() -> GeoArea:
+    summary = Area(
         id="napoli",
         name="Napoli",
         bbox=[14.20, 40.80, 14.33, 40.90],
@@ -16,19 +17,18 @@ def make_area() -> Area:
         maxRadiusPx=512,
         liveMapRadiusPx=640,
         manifestUrl="./areas/napoli/manifest.json",
-        manifest=Manifest(version=1, layers=[]),
     )
+    return GeoArea(summary=summary)
 
 
 def make_layer(merge_key: str, feature_count: int) -> Layer:
-    features = [
-        Feature(
+    features = []
+    for i in range(feature_count):
+        features.append(Feature(
             type="Feature",
             properties={"id": i},
             geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
-        )
-        for i in range(feature_count)
-    ]
+        ))
     return Layer(
         id="overpass",
         name="Overpass",
@@ -159,15 +159,14 @@ class TestRun:
         with pytest.raises(GeoError):
             builder.run()
 
-    def test_returns_result_with_catalog(self):
+    def test_returns_geo_catalog(self):
         builder = Builder()
         builder._worker_factory = StubWorkerFactory([])
         Settings._instance = Settings(debug=False, tasks=[], providers={})
 
         result = builder.run()
 
-        assert result.catalog is builder.catalog
-
+        assert result is builder.catalog
 
 
 class TestBuilderAddLayer:
@@ -178,7 +177,7 @@ class TestBuilderAddLayer:
 
         builder.add_layer(area, layer)
 
-        assert len(area.manifest.layers) == 1
+        assert len(area.layers) == 1
 
     def test_same_merge_key_merges_features(self):
         builder = Builder()
@@ -187,8 +186,8 @@ class TestBuilderAddLayer:
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 3))
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 2))
 
-        assert len(area.manifest.layers) == 1
-        assert len(area.manifest.layers[0].geojson.features) == 5
+        assert len(area.layers) == 1
+        assert len(area.layers[0].layer.geojson.features) == 5
 
     def test_different_merge_key_appends_new_layer(self):
         builder = Builder()
@@ -197,7 +196,7 @@ class TestBuilderAddLayer:
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 3))
         builder.add_layer(area, make_layer("overpass:amenity=cafe", 2))
 
-        assert len(area.manifest.layers) == 2
+        assert len(area.layers) == 2
 
     def test_first_layer_gets_blue(self):
         builder = Builder()
@@ -205,7 +204,7 @@ class TestBuilderAddLayer:
 
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
 
-        assert area.manifest.layers[0].style["color"] == "#0000ff"
+        assert area.layers[0].layer.style["color"] == "#0000ff"
 
     def test_second_layer_gets_different_color(self):
         builder = Builder()
@@ -214,14 +213,14 @@ class TestBuilderAddLayer:
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
         builder.add_layer(area, make_layer("overpass:amenity=cafe", 1))
 
-        assert area.manifest.layers[0].style["color"] != area.manifest.layers[1].style["color"]
+        assert area.layers[0].layer.style["color"] != area.layers[1].layer.style["color"]
 
     def test_merged_layer_keeps_original_color(self):
         builder = Builder()
         area = make_area()
 
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
-        color_before = area.manifest.layers[0].style["color"]
+        color_before = area.layers[0].layer.style["color"]
         builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
 
-        assert area.manifest.layers[0].style["color"] == color_before
+        assert area.layers[0].layer.style["color"] == color_before

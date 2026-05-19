@@ -8,20 +8,21 @@ from pathlib import Path
 
 from .colors import layer_color
 from .contracts import AcquisitionTask, Task
+from .entities import GeoCatalog, GeoArea, GeoLayer
 from .errors import GeoError
-from .protocols import Area, Catalog, JsonObject, Layer, Manifest, Result
+from .protocols import Area, JsonObject, Layer
 from .workers.factory import WorkerFactory
 
 
 @dataclass
 class Builder:
-    catalog: Catalog = field(default_factory=Catalog)
+    catalog: GeoCatalog = field(default_factory=GeoCatalog)
     errors: list[str] = field(default_factory=list)
 
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def run(self) -> Result:
+    def run(self) -> GeoCatalog:
         from .settings import Settings
 
         settings = Settings.current()
@@ -59,7 +60,7 @@ class Builder:
                     self.errors.append(result.error)
                 break
 
-        return self._create_result()
+        return self.catalog
 
     def push_task(self, task: JsonObject) -> None:
         self._stack.append(task)
@@ -67,7 +68,7 @@ class Builder:
     def push_tasks(self, tasks: list[JsonObject]) -> None:
         self._stack.extend(tasks)
 
-    def add_area(self, task: AcquisitionTask) -> Area:
+    def add_area(self, task: AcquisitionTask) -> GeoArea:
         area_id = task.areaId
 
         for area in self.catalog.areas:
@@ -76,7 +77,7 @@ class Builder:
 
         bbox = task.bbox
 
-        area = Area(
+        summary = Area(
             id=area_id,
             name=task.areaName,
             bbox=[bbox.west, bbox.south, bbox.east, bbox.north],
@@ -84,48 +85,56 @@ class Builder:
             maxRadiusPx=512,
             liveMapRadiusPx=640,
             manifestUrl=f"./areas/{area_id}/manifest.json",
-            manifest=Manifest(
-                version=1,
-                layers=[],
-            ),
         )
 
-        self.catalog.areas.append(area)
+        geo_area = GeoArea(summary=summary)
+        self.catalog.areas.append(geo_area)
+        return geo_area
 
-        return area
-
-    def add_layer(self, area: Area, layer: Layer) -> None:
-        for existing in area.manifest.layers:
-            if existing.mergeKey == layer.mergeKey:
-                existing.geojson.features.extend(layer.geojson.features)
+    def add_layer(self, area: GeoArea, layer: Layer) -> None:
+        for existing in area.layers:
+            if existing.layer.mergeKey == layer.mergeKey:
+                existing.layer.geojson.features.extend(layer.geojson.features)
                 return
-        layer.style["color"] = layer_color(len(area.manifest.layers))
-        area.manifest.layers.append(layer)
+        layer.style["color"] = layer_color(len(area.layers))
+        area.layers.append(GeoLayer(layer))
 
     def _layer_snapshot(self) -> dict[tuple[str, str], int]:
-        return {
-            (area.id, layer.id): len(layer.geojson.features)
-            for area in self.catalog.areas
-            for layer in area.manifest.layers
-        }
+        snapshot = {}
+        for area in self.catalog.areas:
+            for geo_layer in area.layers:
+                snapshot[(area.id, geo_layer.layer.id)] = len(geo_layer.layer.geojson.features)
+        return snapshot
 
     def _save_debug_snapshot(self, task: Task, counter: int, pre_snapshot: dict[tuple[str, str], int]) -> None:
         task_dir = Path("./build") / task.type / f"{counter:03d}"
         task_dir.mkdir(parents=True, exist_ok=True)
 
-        payload = asdict(self.catalog)
-        payload.pop("is_default", None)
-        for area_payload in payload["areas"]:
-            for layer_payload in area_payload["manifest"]["layers"]:
-                layer_payload.pop("geojson", None)
+        areas_payload = []
+        for geo_area in self.catalog.areas:
+            layers_payload = []
+            for geo_layer in geo_area.layers:
+                layer_data = asdict(geo_layer.layer)
+                del layer_data["geojson"]
+                layers_payload.append(layer_data)
+            area_data = asdict(geo_area.summary)
+            area_data["layers"] = layers_payload
+            areas_payload.append(area_data)
+
+        payload = {
+            "version": self.catalog.version,
+            "createdAt": self.catalog.created_at,
+            "areas": areas_payload,
+        }
+
         with open(task_dir / "catalog.json", "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
 
-        for area in self.catalog.areas:
-            for layer in area.manifest.layers:
-                pre_count = pre_snapshot.get((area.id, layer.id))
-                if pre_count is None or pre_count != len(layer.geojson.features):
-                    self._save_debug_layer(layer, task_dir)
+        for geo_area in self.catalog.areas:
+            for geo_layer in geo_area.layers:
+                pre_count = pre_snapshot.get((geo_area.id, geo_layer.layer.id))
+                if pre_count is None or pre_count != len(geo_layer.layer.geojson.features):
+                    self._save_debug_layer(geo_layer.layer, task_dir)
 
     def _save_debug_layer(self, layer: Layer, task_dir: Path) -> None:
         geojson_path = task_dir / f"{layer.id}.geojson"
@@ -149,7 +158,3 @@ class Builder:
                 for key in property_keys:
                     row[key] = feat.properties.get(key, "")
                 writer.writerow(row)
-
-    def _create_result(self) -> Result:
-        return Result(catalog=self.catalog)
-

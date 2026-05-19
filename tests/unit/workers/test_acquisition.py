@@ -1,6 +1,6 @@
 from geo_builder.contracts import AcquisitionTask, AreaStyle, BoundingBox, WorkerResult
-from geo_builder.errors import ProviderError
-from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.entities import GeoArea
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.acquisition import AcquisitionWorker
 from tests.shared.stubs import StubExecutor, StubFactory, StubProvider
 
@@ -15,18 +15,17 @@ def make_task(west=0.0, south=0.0, east=2.0, north=2.0) -> AcquisitionTask:
     )
 
 
-def make_area() -> Area:
-    return Area(
+def make_area() -> GeoArea:
+    summary = Area(
         id="napoli",
         name="Napoli",
         bbox=[14.20, 40.80, 14.33, 40.90],
-        
         minRadiusPx=32,
         maxRadiusPx=512,
         liveMapRadiusPx=640,
         manifestUrl="./areas/napoli/manifest.json",
-        manifest=Manifest(version=1, layers=[]),
     )
+    return GeoArea(summary=summary)
 
 
 def make_layer() -> Layer:
@@ -77,6 +76,7 @@ class TestExecute:
         assert result == WorkerResult()
 
     def test_provider_error_pushes_four_child_tasks(self):
+        from geo_builder.errors import ProviderError
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -85,6 +85,7 @@ class TestExecute:
         assert len(executor.pushed_tasks) == 4
 
     def test_provider_error_returns_non_fatal(self):
+        from geo_builder.errors import ProviderError
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -93,6 +94,7 @@ class TestExecute:
         assert result.fatal is False
 
     def test_provider_error_does_not_add_layer(self):
+        from geo_builder.errors import ProviderError
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -101,6 +103,7 @@ class TestExecute:
         assert executor.added_layers == []
 
     def test_provider_error_on_degenerate_bbox_is_fatal(self):
+        from geo_builder.errors import ProviderError
         task = make_task(west=1.0, south=1.0, east=1.0, north=1.0)
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")), task=task)
