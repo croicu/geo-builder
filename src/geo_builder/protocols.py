@@ -1,10 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 JsonObject = dict[str, object]
 
 JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+
+
+@dataclass
+class AreaStyle:
+    values: list[str]
+    name: str | None = None
+    color: str | None = None
+    scale: float | None = None
+    surface: bool = False
+    type: str = "heatmap"
+
+
+@dataclass
+class Acquisition:
+    provider: str
+    filters: dict[str, AreaStyle] = field(default_factory=dict)
 
 
 @dataclass
@@ -16,6 +32,7 @@ class Area:
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
+    acquisition: Acquisition | None = None
 
 
 @dataclass

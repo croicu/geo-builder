@@ -1,6 +1,7 @@
 import pytest
 
-from geo_builder.contracts import AreaStyle, BoundingBox
+from geo_builder.contracts import BoundingBox
+from geo_builder.protocols import AreaStyle
 from geo_builder.errors import ProviderError
 from geo_builder.providers.fake import FakeProvider
 from geo_builder.tasks import AcquisitionTask

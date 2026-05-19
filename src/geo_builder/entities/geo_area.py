@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..protocols import Area, Manifest
+from ..protocols import Acquisition, Area, Manifest
 from .geo_layer import GeoLayer
 
 
@@ -50,3 +50,11 @@ class GeoArea:
     @property
     def liveMapRadiusPx(self) -> int:
         return self._summary.liveMapRadiusPx
+
+    @property
+    def acquisition(self) -> Acquisition | None:
+        return self._summary.acquisition
+
+    @acquisition.setter
+    def acquisition(self, value: Acquisition | None) -> None:
+        self._summary.acquisition = value

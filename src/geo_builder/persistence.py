@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import CatalogError
-from .protocols import Area, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest
+from .protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest
 
 
 def read_json(path: Path) -> JsonValue:
@@ -133,6 +133,8 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
     if not isinstance(bbox, list) or len(bbox) != 4:
         raise CatalogError("area bbox must be an array of four numbers.")
 
+    acquisition = _load_acquisition(payload.get("acquisition"))
+
     summary = Area(
         id=str(payload["id"]),
         name=str(payload["name"]),
@@ -141,10 +143,37 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
         maxRadiusPx=int(payload["maxRadiusPx"]),
         liveMapRadiusPx=int(payload["liveMapRadiusPx"]),
         manifestUrl=str(payload["manifestUrl"]),
+        acquisition=acquisition,
     )
 
     detail = Manifest(version=manifest_version, layers=[])
     return GeoArea(summary=summary, layers=geo_layers, detail=detail)
+
+
+def _load_acquisition(data: object) -> Acquisition | None:
+    if not isinstance(data, dict):
+        return None
+
+    filters: dict[str, AreaStyle] = {}
+    for key, style_data in dict(data.get("filters", {})).items():
+        if not isinstance(style_data, dict):
+            continue
+        values: list[str] = []
+        for v in style_data.get("values", []):
+            values.append(str(v))
+        filters[str(key)] = AreaStyle(
+            values=values,
+            name=str(style_data["name"]) if style_data.get("name") is not None else None,
+            color=str(style_data["color"]) if style_data.get("color") is not None else None,
+            scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
+            surface=bool(style_data.get("surface", False)),
+            type=str(style_data.get("type", "heatmap")),
+        )
+
+    return Acquisition(
+        provider=str(data["provider"]),
+        filters=filters,
+    )
 
 
 def save_area(geo_area: GeoArea, output_dir: Path) -> None:
@@ -263,7 +292,11 @@ def save_area_csv(geo_area: GeoArea, output_dir: Path) -> None:
     if not rows:
         return
 
-    property_keys = sorted({key for _, feature in rows for key in feature.properties})
+    all_keys: set[str] = set()
+    for _, feature in rows:
+        for key in feature.properties:
+            all_keys.add(key)
+    property_keys = sorted(all_keys)
     fieldnames = ["lon", "lat", "layer_id"] + property_keys
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:

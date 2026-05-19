@@ -1,5 +1,6 @@
 from ..contracts import Executor, Worker, WorkerResult
 from ..errors import ProviderError
+from ..protocols import Acquisition
 from ..providers.factory import ProviderFactory
 from ..tasks import AcquisitionTask
 
@@ -18,10 +19,22 @@ class AcquisitionWorker(Worker):
         print("AcquisitionWorker: execute")
 
         if len(self._task.filters) > 1:
+            area = executor.add_area(self._task)
+            if area.acquisition is None:
+                area.acquisition = Acquisition(
+                    provider=self._task.provider,
+                    filters=self._task.filters,
+                )
             executor.push_tasks(self._split_by_key(self._task))
             return WorkerResult()
 
         area = executor.add_area(self._task)
+        if area.acquisition is None:
+            area.acquisition = Acquisition(
+                provider=self._task.provider,
+                filters=self._task.filters,
+            )
+
         provider = self._provider_factory.create(self._task.provider)
 
         try:
@@ -46,16 +59,16 @@ class AcquisitionWorker(Worker):
         return WorkerResult()
 
     def _split_by_key(self, task: AcquisitionTask) -> list[AcquisitionTask]:
-        return [
-            AcquisitionTask(
+        result: list[AcquisitionTask] = []
+        for key, style in task.filters.items():
+            result.append(AcquisitionTask(
                 areaId=task.areaId,
                 areaName=task.areaName,
                 provider=task.provider,
                 bbox=task.bbox,
                 filters={key: style},
-            )
-            for key, style in task.filters.items()
-        ]
+            ))
+        return result
 
     def _split_task(self, task: AcquisitionTask) -> list[AcquisitionTask]:
         bbox = task.bbox

@@ -1,4 +1,5 @@
-from geo_builder.contracts import AcquisitionTask, AreaStyle, BoundingBox, WorkerResult
+from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
+from geo_builder.protocols import AreaStyle
 from geo_builder.entities import GeoArea
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.acquisition import AcquisitionWorker
@@ -138,8 +139,11 @@ class TestSplitByKey:
         children = worker._split_by_key(task)
 
         assert all(len(c.filters) == 1 for c in children)
-        assert "amenity" in [next(iter(c.filters)) for c in children]
-        assert "leisure" in [next(iter(c.filters)) for c in children]
+        filter_keys = []
+        for c in children:
+            filter_keys.append(next(iter(c.filters)))
+        assert "amenity" in filter_keys
+        assert "leisure" in filter_keys
 
     def test_child_tasks_inherit_bbox_and_area(self):
         task = AcquisitionTask(
@@ -225,6 +229,46 @@ class TestExecuteMultiKey:
         assert executor.added_layers == []
 
 
+class TestAcquisition:
+    def test_single_filter_sets_acquisition(self):
+        area = make_area()
+        executor = StubExecutor(area)
+        worker = make_worker(StubProvider(layer=make_layer()))
+
+        worker.execute(executor)
+
+        assert area.acquisition is not None
+        assert area.acquisition.provider == "stub"
+        assert "amenity" in area.acquisition.filters
+
+    def test_multi_filter_sets_acquisition_from_full_task(self):
+        task = AcquisitionTask(
+            areaId="napoli", areaName="Napoli", provider="stub",
+            bbox=BoundingBox(west=0, south=0, east=1, north=1),
+            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
+        )
+        area = make_area()
+        executor = StubExecutor(area)
+        worker = make_worker(StubProvider(layer=make_layer()), task=task)
+
+        worker.execute(executor)
+
+        assert area.acquisition is not None
+        assert "amenity" in area.acquisition.filters
+        assert "leisure" in area.acquisition.filters
+
+    def test_existing_acquisition_not_overwritten(self):
+        from geo_builder.protocols import Acquisition
+        area = make_area()
+        area.acquisition = Acquisition(provider="existing", filters={})
+        executor = StubExecutor(area)
+        worker = make_worker(StubProvider(layer=make_layer()))
+
+        worker.execute(executor)
+
+        assert area.acquisition.provider == "existing"
+
+
 class TestSplitTask:
     def test_returns_four_quadrants(self):
         task = make_task(west=0.0, south=0.0, east=2.0, north=2.0)
@@ -266,7 +310,8 @@ class TestSplitTask:
         children = worker._split_task(task)
 
         assert all(c.provider == "stub" for c in children)
-        assert all(c.filters == {"amenity": AreaStyle(values=["restaurant"])} for c in children)
+        for c in children:
+            assert c.filters == {"amenity": AreaStyle(values=["restaurant"])}
 
     def test_degenerate_bbox_returns_empty(self):
         task = make_task(west=1.0, south=1.0, east=1.0, north=1.0)

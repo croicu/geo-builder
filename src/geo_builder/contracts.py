@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .entities import GeoArea
-from .protocols import Layer
+from .protocols import AreaStyle, Layer
 
 
 @dataclass
@@ -18,16 +18,6 @@ class BoundingBox:
     south: float
     east: float
     north: float
-
-
-@dataclass
-class AreaStyle:
-    values: list[str]
-    name: str | None = None
-    color: str | None = None
-    scale: float | None = None
-    surface: bool = False
-    type: str = "heatmap"
 
 
 class AcquisitionTask(Task):

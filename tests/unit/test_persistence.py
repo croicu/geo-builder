@@ -17,7 +17,7 @@ from geo_builder.persistence import (
     save_catalog,
     save_json,
 )
-from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, Layer, Manifest
 
 
 def make_layer() -> Layer:
@@ -361,6 +361,78 @@ class TestSaveAreaCsv:
         save_catalog(make_catalog(), tmp_path)
 
         assert (tmp_path / "release" / "areas" / "napoli" / "napoli.csv").exists()
+
+
+class TestAcquisitionRoundTrip:
+    def test_acquisition_survives_round_trip(self, tmp_path):
+        area_summary = Area(
+            id="napoli",
+            name="Napoli",
+            bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
+            manifestUrl="./areas/napoli/manifest.json",
+            acquisition=Acquisition(
+                provider="overpass",
+                filters={
+                    "amenity": AreaStyle(values=["restaurant", "cafe"], name="Food"),
+                },
+            ),
+        )
+        area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
+        catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
+
+        save_catalog(catalog, tmp_path)
+        loaded_area = load_catalog(tmp_path).areas[0]
+
+        assert loaded_area.acquisition is not None
+        assert loaded_area.acquisition.provider == "overpass"
+        assert "amenity" in loaded_area.acquisition.filters
+        assert loaded_area.acquisition.filters["amenity"].name == "Food"
+        assert loaded_area.acquisition.filters["amenity"].values == ["restaurant", "cafe"]
+
+    def test_area_without_acquisition_loads_as_none(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+        loaded_area = load_catalog(tmp_path).areas[0]
+
+        assert loaded_area.acquisition is None
+
+    def test_acquisition_all_style_fields_survive_round_trip(self, tmp_path):
+        area_summary = Area(
+            id="napoli",
+            name="Napoli",
+            bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
+            manifestUrl="./areas/napoli/manifest.json",
+            acquisition=Acquisition(
+                provider="overpass",
+                filters={
+                    "leisure": AreaStyle(
+                        values=["park"],
+                        name="Parks",
+                        color="#007f00",
+                        scale=2.0,
+                        surface=True,
+                        type="circle",
+                    ),
+                },
+            ),
+        )
+        area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
+        catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
+
+        save_catalog(catalog, tmp_path)
+        style = load_catalog(tmp_path).areas[0].acquisition.filters["leisure"]
+
+        assert style.values == ["park"]
+        assert style.name == "Parks"
+        assert style.color == "#007f00"
+        assert style.scale == pytest.approx(2.0)
+        assert style.surface is True
+        assert style.type == "circle"
 
 
 class TestLoadCatalogErrors:
