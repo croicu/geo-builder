@@ -35,13 +35,12 @@ class Tasks:
             if not isinstance(item, dict):
                 raise TaskError(f"Task '{name}' must be a JSON object.")
 
-            task_type = str(item.get("type", "acquisition"))
-
-            if task_type == "template":
-                continue
+            task_type = str(item.get("type", ""))
 
             if task_type == "acquisition":
-                bbox_data = item["bbox"]
+                bbox_data = item.get("bbox")
+                if bbox_data is None:
+                    continue
 
                 bbox = BoundingBox(
                     west=float(bbox_data["west"]),
@@ -80,7 +79,9 @@ class Tasks:
         for name, item in payload.items():
             if not isinstance(item, dict):
                 continue
-            if str(item.get("type", "acquisition")) != "template":
+            if str(item.get("type", "")) != "acquisition":
+                continue
+            if item.get("bbox") is not None:
                 continue
 
             filters = _parse_filters(item.get("filters", {}), name)

@@ -65,7 +65,7 @@ class DataPipeline:
 
 def _from_network(url: str) -> tuple[bytes, str] | None:
     try:
-        # Logger.info(f"data pipeline: network '{url}'")
+        Logger.info(f"data pipeline: network '{url}'")
         resp = _session.get(url, timeout=_TIMEOUT)
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", _JSON).split(";")[0].strip()
@@ -77,7 +77,7 @@ def _from_network(url: str) -> tuple[bytes, str] | None:
 
 def _read_file(path: Path) -> bytes | None:
     try:
-        if path.exists():
+        if path.exists() and path.is_file():
             return path.read_bytes()
     except Exception as exc:
         Logger.warning(f"data pipeline: file read '{path}': {exc}")

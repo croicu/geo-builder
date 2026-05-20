@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..protocols import Acquisition, Area, Manifest
+from ..protocols import Acquisition, Area, Manifest, PipelineStep
 from .geo_layer import GeoLayer
 
 
@@ -53,8 +53,19 @@ class GeoArea:
 
     @property
     def acquisition(self) -> Acquisition | None:
-        return self._summary.acquisition
+        if self.detail is None:
+            return None
+        for step in self.detail.tasks:
+            if step.type == "acquisition" and step.provider is not None and step.filters is not None:
+                return Acquisition(provider=step.provider, filters=step.filters)
+        return None
 
     @acquisition.setter
     def acquisition(self, value: Acquisition | None) -> None:
-        self._summary.acquisition = value
+        if self.detail is None:
+            self.detail = Manifest(version=1)
+        other_steps = [s for s in self.detail.tasks if s.type != "acquisition"]
+        if value is not None:
+            self.detail.tasks = [PipelineStep(type="acquisition", provider=value.provider, filters=value.filters)] + other_steps
+        else:
+            self.detail.tasks = other_steps

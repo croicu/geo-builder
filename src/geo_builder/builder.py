@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .colors import layer_color
-from .contracts import AcquisitionTask, Task
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
 from .entities import GeoCatalog, GeoArea, GeoLayer
 from .errors import GeoError
 from .protocols import Area, JsonObject, Layer
@@ -32,7 +32,7 @@ class Builder:
         if tasks is not None:
             self._stack = list(reversed(tasks))
         else:
-            self._stack = list(reversed(settings.tasks))
+            self._stack = list(reversed(self._tasks_from_catalog()))
 
         if debug:
             build_dir = Path("./build")
@@ -64,6 +64,23 @@ class Builder:
                 break
 
         return self.catalog
+
+    def _tasks_from_catalog(self) -> list[Task]:
+        result: list[Task] = []
+        for area in self.catalog.areas:
+            if area.acquisition is not None and len(area.layers) == 0:
+                bbox = area.bbox
+                result.append(AcquisitionTask(
+                    areaId=area.id,
+                    areaName=area.name,
+                    provider=area.acquisition.provider,
+                    bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
+                    filters=area.acquisition.filters,
+                ))
+        if result:
+            result.append(AggregationTask())
+            result.append(DedupingTask())
+        return result
 
     def push_task(self, task: JsonObject) -> None:
         self._stack.append(task)

@@ -85,6 +85,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
+        AreaSummary,
         SetAreaBboxInput,
         SetAreaBboxOutput,
     )
@@ -93,6 +94,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     from ..entities import GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
+    from ..protocols import Manifest, PipelineStep
     from ..settings import Settings
 
     api.define_method(SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput)
@@ -117,6 +119,11 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 fresh_catalog = catalog
         else:
             fresh_catalog = catalog
+
+        for a in fresh_catalog.areas:
+            if a.id == data.areaId:
+                a.layers.clear()
+                break
 
         result = Builder(fresh_catalog).run()
         save_catalog(result, out_dir, debug=debug)
@@ -163,7 +170,36 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         catalog.areas[:] = result.areas
 
-        return AddAreaOutput(error=OK)
+        new_area = None
+        for a in result.areas:
+            if a.id == area_id:
+                new_area = a
+                break
+
+        if new_area is not None:
+            if new_area.detail is None:
+                new_area.detail = Manifest(version=1)
+            acq_steps = [s for s in new_area.detail.tasks if s.type == "acquisition"]
+            new_area.detail.tasks = acq_steps + [
+                PipelineStep(type="aggregation"),
+                PipelineStep(type="deduping"),
+            ]
+
+        area_summary = None
+        if new_area is not None:
+            catalog_subdir = "debug" if debug else "release"
+            manifest_url = new_area.manifestUrl.removeprefix("./")
+            area_summary = AreaSummary(
+                id=new_area.id,
+                name=new_area.name,
+                bbox=new_area.bbox,
+                minRadiusPx=new_area.minRadiusPx,
+                maxRadiusPx=new_area.maxRadiusPx,
+                liveMapRadiusPx=new_area.liveMapRadiusPx,
+                manifestUrl=f"./{catalog_subdir}/{manifest_url}",
+            )
+
+        return AddAreaOutput(error=OK, area=area_summary)
 
     api.register(ADD_AREA_ID, on_add_area)
 
@@ -285,7 +321,7 @@ def launch(
         threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")
         webview.start()
-        Logger.info("WebView control closing.")
+        Logger.info("WebView control closed.")
         if api is not None:
             api.stop()
     finally:

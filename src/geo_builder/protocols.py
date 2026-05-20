@@ -32,13 +32,20 @@ class Area:
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
-    acquisition: Acquisition | None = None
+
+
+@dataclass
+class PipelineStep:
+    type: str
+    provider: str | None = None
+    filters: dict[str, AreaStyle] | None = None
 
 
 @dataclass
 class Manifest:
     version: int
-    layers: list[Layer]
+    tasks: list[PipelineStep] = field(default_factory=list)
+    layers: list[Layer] = field(default_factory=list)
 
 
 @dataclass

@@ -13,7 +13,7 @@ class AggregationWorker(Worker):
         self._task = task
 
     def execute(self, executor: Executor) -> WorkerResult:
-        print("AggregationWorker: execute")
+        print("AggregationWorker: execute.")
 
         catalog = executor.catalog
         if catalog is None:
@@ -22,6 +22,7 @@ class AggregationWorker(Worker):
         for area in list(catalog.areas):
             self._aggregate_area(area)
 
+        print("AggregationWorker: completed.")
         return WorkerResult()
 
     def _aggregate_area(self, area) -> None:

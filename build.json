@@ -2,8 +2,8 @@
   "settings": {
     "debug": true,
     "logging": "verbose",
-    "devTools": true,
-    "designUrl": "http://localhost:5173/?design=1&debug=1",
+    "devTools": false,
+    "designUrl": "http://localhost:5173/?design=1&debug=1&center=50.09,14.42&zoom=14",
     "break": false
   },
   "providers": {

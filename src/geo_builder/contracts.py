@@ -26,6 +26,7 @@ class AcquisitionTask(Task):
     provider: str
     bbox: BoundingBox
     filters: dict[str, AreaStyle]
+    depth: int
 
     def __init__(
         self,
@@ -34,6 +35,7 @@ class AcquisitionTask(Task):
         provider: str,
         bbox: BoundingBox,
         filters: dict[str, AreaStyle],
+        depth: int = 0,
     ) -> None:
         super().__init__("acquisition")
         self.areaId = areaId
@@ -41,6 +43,7 @@ class AcquisitionTask(Task):
         self.provider = provider
         self.bbox = bbox
         self.filters = filters
+        self.depth = depth
 
 
 class AggregationTask(Task):

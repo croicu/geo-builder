@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import CatalogError
-from .protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest
+from .protocols import Area, AreaStyle, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest, PipelineStep
 
 
 def read_json(path: Path) -> JsonValue:
@@ -127,13 +127,12 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
         raise CatalogError(f"{manifest_path} must contain an object.")
 
     geo_layers = _load_manifest_layers(manifest_path, manifest_payload)
+    pipeline_steps = _load_pipeline_steps(manifest_payload.get("tasks", []))
     manifest_version = int(manifest_payload.get("version", 1))
 
     bbox = payload.get("bbox")
     if not isinstance(bbox, list) or len(bbox) != 4:
         raise CatalogError("area bbox must be an array of four numbers.")
-
-    acquisition = _load_acquisition(payload.get("acquisition"))
 
     summary = Area(
         id=str(payload["id"]),
@@ -143,42 +142,58 @@ def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
         maxRadiusPx=int(payload["maxRadiusPx"]),
         liveMapRadiusPx=int(payload["liveMapRadiusPx"]),
         manifestUrl=str(payload["manifestUrl"]),
-        acquisition=acquisition,
     )
 
-    detail = Manifest(version=manifest_version, layers=[])
+    detail = Manifest(version=manifest_version, tasks=pipeline_steps)
     return GeoArea(summary=summary, layers=geo_layers, detail=detail)
 
 
-def _load_acquisition(data: object) -> Acquisition | None:
-    if not isinstance(data, dict):
-        return None
-
-    filters: dict[str, AreaStyle] = {}
-    for key, style_data in dict(data.get("filters", {})).items():
-        if not isinstance(style_data, dict):
+def _load_pipeline_steps(data: object) -> list[PipelineStep]:
+    steps: list[PipelineStep] = []
+    if not isinstance(data, list):
+        return steps
+    for item in data:
+        if not isinstance(item, dict):
             continue
-        values: list[str] = []
-        for v in style_data.get("values", []):
-            values.append(str(v))
-        filters[str(key)] = AreaStyle(
-            values=values,
-            name=str(style_data["name"]) if style_data.get("name") is not None else None,
-            color=str(style_data["color"]) if style_data.get("color") is not None else None,
-            scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
-            surface=bool(style_data.get("surface", False)),
-            type=str(style_data.get("type", "heatmap")),
-        )
-
-    return Acquisition(
-        provider=str(data["provider"]),
-        filters=filters,
-    )
+        step_type = str(item.get("type", ""))
+        if step_type == "acquisition":
+            filters: dict[str, AreaStyle] = {}
+            for key, style_data in dict(item.get("filters", {})).items():
+                if not isinstance(style_data, dict):
+                    continue
+                values: list[str] = []
+                for v in style_data.get("values", []):
+                    values.append(str(v))
+                filters[str(key)] = AreaStyle(
+                    values=values,
+                    name=str(style_data["name"]) if style_data.get("name") is not None else None,
+                    color=str(style_data["color"]) if style_data.get("color") is not None else None,
+                    scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
+                    surface=bool(style_data.get("surface", False)),
+                    type=str(style_data.get("type", "heatmap")),
+                )
+            steps.append(PipelineStep(type="acquisition", provider=str(item.get("provider", "")), filters=filters))
+        elif step_type in ("aggregation", "deduping"):
+            steps.append(PipelineStep(type=step_type))
+    return steps
 
 
 def save_area(geo_area: GeoArea, output_dir: Path) -> None:
     manifest_path = child_path(output_dir, geo_area.manifestUrl)
     manifest_version = geo_area.detail.version if geo_area.detail is not None else 1
+
+    tasks_payload = []
+    if geo_area.detail is not None:
+        for step in geo_area.detail.tasks:
+            if step.type == "acquisition":
+                step_data: dict[str, object] = {"type": "acquisition"}
+                if step.provider is not None:
+                    step_data["provider"] = step.provider
+                if step.filters is not None:
+                    step_data["filters"] = {k: asdict(v) for k, v in step.filters.items()}
+                tasks_payload.append(step_data)
+            else:
+                tasks_payload.append({"type": step.type})
 
     layers_payload = []
     for geo_layer in geo_area.layers:
@@ -186,7 +201,7 @@ def save_area(geo_area: GeoArea, output_dir: Path) -> None:
         del layer_data["geojson"]
         layers_payload.append(layer_data)
 
-    save_json(manifest_path, {"version": manifest_version, "layers": layers_payload})
+    save_json(manifest_path, {"version": manifest_version, "tasks": tasks_payload, "layers": layers_payload})
 
     for geo_layer in geo_area.layers:
         save_layer(geo_layer.layer, manifest_path.parent)

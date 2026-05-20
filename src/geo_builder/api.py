@@ -62,13 +62,25 @@ SET_AREA_BBOX_ID = "__geo_set_area_bbox__"
 class AddAreaInput:
     areaName: str
     bbox: list[float]  # [west, south, east, north]
-    template: str = "default"
+    template: str = "acquisition"
+
+
+@dataclass
+class AreaSummary:
+    id: str
+    name: str
+    bbox: list[float]  # [west, south, east, north]
+    minRadiusPx: int
+    maxRadiusPx: int
+    liveMapRadiusPx: int
+    manifestUrl: str
 
 
 @dataclass
 class AddAreaOutput:
     error: int
     errorDescription: str | None = None
+    area: AreaSummary | None = None
 
 
 ADD_AREA_ID = "__geo_add_area__"

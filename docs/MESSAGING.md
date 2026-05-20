@@ -156,11 +156,21 @@ interface ReadyData {}
 interface AddAreaInput {
   areaName: string;
   bbox: [number, number, number, number];  // [west, south, east, north]
-  template?: string;  // default "default"
+  template?: string;  // default "acquisition"
+}
+interface AreaSummary {
+  id: string;
+  name: string;
+  bbox: [number, number, number, number];  // [west, south, east, north]
+  minRadiusPx: number;
+  maxRadiusPx: number;
+  liveMapRadiusPx: number;
+  manifestUrl: string;
 }
 interface AddAreaOutput {
   error: number;
   errorDescription: string | null;
+  area: AreaSummary | null;  // populated on success; null when error !== OK
 }
 
 // __geo_get_area_bbox__ (method: JS → Python)
@@ -452,12 +462,13 @@ Creates a new area by running the named template's acquisition pipeline against 
 ```typescript
 const AddArea: MethodDef<AddAreaInput, AddAreaOutput> = { id: "__geo_add_area__" };
 
-gateway.invoke(AddArea, { areaName: "Rome", bbox: [12.30, 41.80, 12.60, 42.00] }, ({ error, errorDescription }) => {
+gateway.invoke(AddArea, { areaName: "Rome", bbox: [12.30, 41.80, 12.60, 42.00] }, ({ error, errorDescription, area }) => {
   if (error !== OK) {
     console.error(errorDescription);
     return;
   }
-  // area built — reload catalog to see the new area
+  // area built — append to in-memory catalog and re-render
+  catalog.addArea(area!);
 });
 ```
 
@@ -467,12 +478,14 @@ gateway.invoke(AddArea, { areaName: "Rome", bbox: [12.30, 41.80, 12.60, 42.00] }
 class AddAreaInput:
     areaName: str
     bbox: list[float]     # [west, south, east, north]
-    template: str = "*"   # name of the template task in tasks.json
+    template: str = "acquisition"  # key of the acquisition entry in tasks.json
 
 @dataclass
 class AddAreaOutput:
     error: int
     errorDescription: str | None
+    area: AreaSummary | None  # populated on success; None when error != OK
+                              # shape matches the AreaSummary entry in catalog.json (see Static Artifacts)
 ```
 
 **Error codes:**
@@ -484,6 +497,6 @@ class AddAreaOutput:
 
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
-- `template` defaults to `"default"` — the conventional name for the default acquisition template.
-- On success the caller should reload the catalog (e.g. re-fetch `catalog.head.json`) to pick up the new area; the in-memory catalog on the Python side is updated immediately.
+- `template` defaults to `"acquisition"` — the key of the acquisition entry in `tasks.json`. `tasks.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
+- On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).

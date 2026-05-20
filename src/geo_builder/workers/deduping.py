@@ -15,7 +15,7 @@ class DedupingWorker(Worker):
         self._task = task
 
     def execute(self, executor: Executor) -> WorkerResult:
-        print("DedupingWorker: execute")
+        print("DedupingWorker: execute.")
 
         if executor.catalog is None:
             return WorkerResult()
@@ -27,6 +27,7 @@ class DedupingWorker(Worker):
 
                 geo_layer.layer.geojson.features = self._dedupe_features(geo_layer.layer.geojson.features)
 
+        print("DedupingWorker: completed.")
         return WorkerResult()
 
     def _dedupe_features(self, features: list) -> list:
