@@ -75,7 +75,7 @@ Each entry in `filters` is an `AreaStyle` record:
 
 ### Templates
 
-An acquisition entry without a `bbox` is a **template** — it defines an acquisition config (provider + filters) that the designer can apply to new areas at design time. Templates are stored in `Settings.templates` and never executed directly by the build pipeline.
+A `"type": "acquisition"` entry without a `bbox` field is a **template** — it defines an acquisition config (provider + filters) that the designer can apply to new areas at design time. Templates are stored in `Settings.templates` and never executed directly by the build pipeline.
 
 ```json
 {

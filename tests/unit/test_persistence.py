@@ -419,14 +419,14 @@ class TestAcquisitionRoundTrip:
             maxRadiusPx=512,
             liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
-            acquisition=Acquisition(
-                provider="overpass",
-                filters={
-                    "amenity": AreaStyle(values=["restaurant", "cafe"], name="Food"),
-                },
-            ),
         )
         area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
+        area.acquisition = Acquisition(
+            provider="overpass",
+            filters={
+                "amenity": AreaStyle(values=["restaurant", "cafe"], name="Food"),
+            },
+        )
         catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
 
         save_catalog(catalog, tmp_path)
@@ -453,21 +453,21 @@ class TestAcquisitionRoundTrip:
             maxRadiusPx=512,
             liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
-            acquisition=Acquisition(
-                provider="overpass",
-                filters={
-                    "leisure": AreaStyle(
-                        values=["park"],
-                        name="Parks",
-                        color="#007f00",
-                        scale=2.0,
-                        surface=True,
-                        type="circle",
-                    ),
-                },
-            ),
         )
         area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
+        area.acquisition = Acquisition(
+            provider="overpass",
+            filters={
+                "leisure": AreaStyle(
+                    values=["park"],
+                    name="Parks",
+                    color="#007f00",
+                    scale=2.0,
+                    surface=True,
+                    type="circle",
+                ),
+            },
+        )
         catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
 
         save_catalog(catalog, tmp_path)

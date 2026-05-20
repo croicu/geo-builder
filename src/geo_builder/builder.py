@@ -32,7 +32,8 @@ class Builder:
         if tasks is not None:
             self._stack = list(reversed(tasks))
         else:
-            self._stack = list(reversed(self._tasks_from_catalog()))
+            catalog_tasks = self._tasks_from_catalog()
+            self._stack = list(reversed(catalog_tasks if catalog_tasks else settings.tasks))
 
         if debug:
             build_dir = Path("./build")

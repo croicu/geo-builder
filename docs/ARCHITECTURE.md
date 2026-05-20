@@ -55,9 +55,9 @@ catalog.json
 
 Entries in the tasks file (e.g. `tasks.json`) are keyed by an arbitrary name and distinguished by the presence of `bbox`:
 
-**Concrete task** (has `bbox`) — parsed into an `AcquisitionTask` and added to `settings.tasks`. Drives a full fresh build when passed to `Builder.run()`.
+**Concrete task** (`"type": "acquisition"` with `bbox`) — parsed into an `AcquisitionTask` and added to `settings.tasks`. Drives a full fresh build when passed to `Builder.run()`.
 
-**Template** (no `bbox`) — parsed into an `Acquisition` and stored in `settings.templates` by name. The `"default"` template is used by the `AddArea` designer API when no explicit acquisition config is provided. Templates are never executed directly; they are applied to new areas at design time.
+**Template** (`"type": "acquisition"` without `bbox`) — parsed into an `Acquisition` and stored in `settings.templates` by name. Templates are never executed directly; they are applied to new areas at design time via the `AddArea` designer API.
 
 ```json
 {
@@ -67,7 +67,7 @@ Entries in the tasks file (e.g. `tasks.json`) are keyed by an arbitrary name and
     "bbox": { "west": 14.1, "south": 40.8, "east": 14.4, "north": 40.9 },
     "filters": { ... }
   },
-  "default": {
+  "acquisition": {
     "type": "acquisition",
     "provider": "overpass",
     "filters": { ... }

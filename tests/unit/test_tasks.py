@@ -17,7 +17,7 @@ def _acquisition_payload(filters: dict | None = None) -> dict:
 
 def _template_payload(filters: dict | None = None, provider: str = "overpass") -> dict:
     return {
-        "type": "template",
+        "type": "acquisition",
         "provider": provider,
         "filters": filters or {},
     }
