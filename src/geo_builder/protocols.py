@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
 JsonObject = dict[str, object]
 
@@ -10,34 +8,44 @@ JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "Jso
 
 
 @dataclass
-class Result:
-    catalog: Catalog
+class AreaStyle:
+    values: list[str]
+    name: str | None = None
+    color: str | None = None
+    scale: float | None = None
+    surface: bool = False
+    type: str = "heatmap"
 
 
 @dataclass
-class Catalog:
-    version: str = "1.0"
-    createdAt: str = field(default_factory=lambda: str(datetime.now(timezone.utc)))
-    areas: list[Area] = field(default_factory=list)
+class Acquisition:
+    provider: str
+    filters: dict[str, AreaStyle] = field(default_factory=dict)
 
 
 @dataclass
 class Area:
     id: str
     name: str
-    center: list[float]
-    radiusMeters: int
+    bbox: list[float]  # [west, south, east, north]
     minRadiusPx: int
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
-    manifest: Manifest
+
+
+@dataclass
+class PipelineStep:
+    type: str
+    provider: str | None = None
+    filters: dict[str, AreaStyle] | None = None
 
 
 @dataclass
 class Manifest:
     version: int
-    layers: list[Layer]
+    tasks: list[PipelineStep] = field(default_factory=list)
+    layers: list[Layer] = field(default_factory=list)
 
 
 @dataclass
@@ -50,10 +58,6 @@ class Layer:
     style: dict[str, JsonValue]
     mergeKey: str
     geojson: GeoJson
-
-    @staticmethod
-    def id_from_merge_key(merge_key: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "_", merge_key.lower()).strip("_")
 
 
 @dataclass

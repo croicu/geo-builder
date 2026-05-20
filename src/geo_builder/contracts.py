@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .protocols import Area, Layer
+from .entities import GeoArea
+from .protocols import AreaStyle, Layer
 
 
 @dataclass
@@ -11,7 +12,6 @@ class Task:
     type: str
 
 
-@dataclass
 @dataclass
 class BoundingBox:
     west: float
@@ -25,7 +25,8 @@ class AcquisitionTask(Task):
     areaName: str
     provider: str
     bbox: BoundingBox
-    filter: dict[str, list[str]]
+    filters: dict[str, AreaStyle]
+    depth: int
 
     def __init__(
         self,
@@ -33,14 +34,16 @@ class AcquisitionTask(Task):
         areaName: str,
         provider: str,
         bbox: BoundingBox,
-        filter: dict[str, list[str]],
+        filters: dict[str, AreaStyle],
+        depth: int = 0,
     ) -> None:
         super().__init__("acquisition")
         self.areaId = areaId
         self.areaName = areaName
         self.provider = provider
         self.bbox = bbox
-        self.filter = filter
+        self.filters = filters
+        self.depth = depth
 
 
 class AggregationTask(Task):
@@ -58,8 +61,8 @@ class DedupingTask(Task):
 
 
 class Map(Protocol):
-    def add_area(self, task: AcquisitionTask) -> Area: ...
-    def add_layer(self, area: Area, layer: Layer) -> None: ...
+    def add_area(self, task: AcquisitionTask) -> GeoArea: ...
+    def add_layer(self, area: GeoArea, layer: Layer) -> None: ...
 
 
 class Executor(Map, Protocol):

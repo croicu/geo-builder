@@ -1,5 +1,29 @@
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
 from .errors import TaskError
+from .protocols import Acquisition, AreaStyle
+
+
+def _parse_filters(filters_data: object, task_name: str) -> dict[str, AreaStyle]:
+    _LAYER_TYPES = ("heatmap", "circle")
+    filters: dict[str, AreaStyle] = {}
+    for key, style_data in dict(filters_data if isinstance(filters_data, dict) else {}).items():
+        if not isinstance(style_data, dict):
+            raise TaskError(f"Filter '{key}' in task '{task_name}' must be a JSON object.")
+        layer_type = str(style_data.get("type", "heatmap"))
+        if layer_type not in _LAYER_TYPES:
+            raise TaskError(f"Filter '{key}' in task '{task_name}' has unknown type '{layer_type}'.")
+        values: list[str] = []
+        for v in style_data.get("values", []):
+            values.append(str(v))
+        filters[str(key)] = AreaStyle(
+            values=values,
+            name=str(style_data["name"]) if style_data.get("name") is not None else None,
+            color=str(style_data["color"]) if style_data.get("color") is not None else None,
+            scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
+            surface=bool(style_data.get("surface", False)),
+            type=layer_type,
+        )
+    return filters
 
 
 class Tasks:
@@ -11,10 +35,12 @@ class Tasks:
             if not isinstance(item, dict):
                 raise TaskError(f"Task '{name}' must be a JSON object.")
 
-            task_type = str(item.get("type", "acquisition"))
+            task_type = str(item.get("type", ""))
 
             if task_type == "acquisition":
-                bbox_data = item["bbox"]
+                bbox_data = item.get("bbox")
+                if bbox_data is None:
+                    continue
 
                 bbox = BoundingBox(
                     west=float(bbox_data["west"]),
@@ -29,7 +55,7 @@ class Tasks:
                         areaName=str(item["areaName"]),
                         provider=str(item["provider"]),
                         bbox=bbox,
-                        filter=dict(item.get("filter", {})),
+                        filters=_parse_filters(item.get("filters", {}), name),
                     )
                 )
                 continue
@@ -45,3 +71,23 @@ class Tasks:
             raise TaskError(f"Unknown task type: '{task_type}' in task '{name}'.")
 
         return tasks
+
+    @staticmethod
+    def templates_from_payload(payload: dict[str, object]) -> dict[str, Acquisition]:
+        templates: dict[str, Acquisition] = {}
+
+        for name, item in payload.items():
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("type", "")) != "acquisition":
+                continue
+            if item.get("bbox") is not None:
+                continue
+
+            filters = _parse_filters(item.get("filters", {}), name)
+            templates[name] = Acquisition(
+                provider=str(item["provider"]),
+                filters=filters,
+            )
+
+        return templates

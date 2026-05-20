@@ -15,18 +15,19 @@ class DedupingWorker(Worker):
         self._task = task
 
     def execute(self, executor: Executor) -> WorkerResult:
-        print("DedupingWorker: execute")
+        print("DedupingWorker: execute.")
 
         if executor.catalog is None:
             return WorkerResult()
 
         for area in executor.catalog.areas:
-            for layer in area.manifest.layers:
-                if layer.geojson is None:
+            for geo_layer in area.layers:
+                if geo_layer.layer.geojson is None:
                     continue
 
-                layer.geojson.features = self._dedupe_features(layer.geojson.features)
+                geo_layer.layer.geojson.features = self._dedupe_features(geo_layer.layer.geojson.features)
 
+        print("DedupingWorker: completed.")
         return WorkerResult()
 
     def _dedupe_features(self, features: list) -> list:
@@ -135,10 +136,7 @@ class DedupingWorker(Worker):
         delta_phi = math.radians(lat2 - lat1)
         delta_lambda = math.radians(lon2 - lon1)
 
-        a = (
-            math.sin(delta_phi / 2.0) ** 2
-            + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
-        )
+        a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
 
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
 

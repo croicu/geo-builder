@@ -1,36 +1,17 @@
 {
   "settings": {
-    "debug": true
+    "debug": true,
+    "logging": "verbose",
+    "devTools": false,
+    "designUrl": "http://localhost:5173/?design=1&debug=1&center=47.726,-122.106&zoom=14",
+    "break": false
   },
   "providers": {
     "overpass": {
       "url": "https://overpass-api.de/api/interpreter"
     },
-    "fake_overpass": {
-      "dataPath": "tests/data/providers/overpass.json"
-    }
-  },
-  "tasks": {
-    "fetch_napoli": {
-      "type": "acquisition",
-      "areaId": "napoli",
-      "areaName": "Napoli",
-      "provider": "fake_overpass",
-      "bbox": {
-        "west": 14.20,
-        "south": 40.80,
-        "east": 14.33,
-        "north": 40.90
-      },
-      "filter": {
-        "amenity": ["restaurant", "cafe", "bar"]
-      }
-    },
-    "aggregate": {
-      "type": "aggregation"
-    },
-    "dedupe": {
-      "type": "deduping"
+    "fake": {
+      "dataPath": "tests/data/providers/fake.json"
     }
   }
 }

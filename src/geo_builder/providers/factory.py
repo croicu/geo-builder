@@ -1,6 +1,6 @@
 from ..contracts import Provider
 from ..errors import ProviderError
-from .fake_overpass import FakeOverpassProvider
+from .fake import FakeProvider
 from .overpass import OverpassProvider
 
 
@@ -13,7 +13,7 @@ class ProviderFactory:
         if name == "overpass":
             return OverpassProvider(config)
 
-        if name == "fake_overpass":
-            return FakeOverpassProvider(config)
+        if name == "fake":
+            return FakeProvider(config)
 
         raise ProviderError(f"Unknown provider: {name}")

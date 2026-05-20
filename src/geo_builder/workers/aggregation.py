@@ -1,6 +1,8 @@
 from collections import defaultdict
 
 from ..contracts import Executor, Task, Worker, WorkerResult
+from ..entities import GeoLayer
+from ..protocols import GeoJson
 
 
 class AggregationWorker(Worker):
@@ -11,7 +13,7 @@ class AggregationWorker(Worker):
         self._task = task
 
     def execute(self, executor: Executor) -> WorkerResult:
-        print("AggregationWorker: execute")
+        print("AggregationWorker: execute.")
 
         catalog = executor.catalog
         if catalog is None:
@@ -20,61 +22,57 @@ class AggregationWorker(Worker):
         for area in list(catalog.areas):
             self._aggregate_area(area)
 
+        print("AggregationWorker: completed.")
         return WorkerResult()
 
     def _aggregate_area(self, area) -> None:
-        if area.manifest is None:
-            return
-
         groups = defaultdict(list)
 
-        for layer in area.manifest.layers:
-            merge_key = getattr(layer, "mergeKey", None)
+        for geo_layer in area.layers:
+            merge_key = geo_layer.layer.mergeKey
             if merge_key is None:
                 continue
 
-            groups[merge_key].append(layer)
+            groups[merge_key].append(geo_layer)
 
-        for merge_key, layers in groups.items():
-            if len(layers) < 2:
+        for merge_key, geo_layers in groups.items():
+            if len(geo_layers) < 2:
                 continue
 
-            merged_layer = self._merge_layers(area, merge_key, layers)
+            merged_geo_layer = self._merge_layers(merge_key, geo_layers)
 
-            source_ids = {layer.id for layer in layers}
+            source_ids = {gl.layer.id for gl in geo_layers}
 
-            area.manifest.layers = [
-                layer for layer in area.manifest.layers if layer.id not in source_ids
-            ]
+            filtered = []
+            for gl in area.layers:
+                if gl.layer.id not in source_ids:
+                    filtered.append(gl)
+            area.layers = filtered
 
-            area.manifest.layers.append(merged_layer)
+            area.layers.append(merged_geo_layer)
 
-    def _merge_layers(self, area, merge_key: str, layers: list):
-        first = layers[0]
+    def _merge_layers(self, merge_key: str, geo_layers: list) -> GeoLayer:
+        first = geo_layers[0]
+        merged_geojson = self._merge_geojson(geo_layers)
 
-        geojson = self._merge_geojson(layers)
-
-        first.geojson = geojson
-        first.id = self._create_layer_id(merge_key)
-        first.name = self._create_layer_name(first)
-        first.url = f"./layers/{first.id}.geojson"
-        first.mergeKey = merge_key
+        first.layer.geojson = merged_geojson
+        first.layer.id = self._create_layer_id(merge_key)
+        first.layer.name = self._create_layer_name(first)
+        first.layer.url = f"./layers/{first.layer.id}.geojson"
+        first.layer.mergeKey = merge_key
 
         return first
 
-    def _merge_geojson(self, layers: list):
+    def _merge_geojson(self, geo_layers: list) -> GeoJson:
         features = []
 
-        for layer in layers:
-            if layer.geojson is None:
+        for geo_layer in geo_layers:
+            if geo_layer.layer.geojson is None:
                 continue
 
-            features.extend(layer.geojson.features)
+            features.extend(geo_layer.layer.geojson.features)
 
-        return type(layers[0].geojson)(
-            type="FeatureCollection",
-            features=features,
-        )
+        return GeoJson(type="FeatureCollection", features=features)
 
     def _create_layer_id(self, merge_key: str) -> str:
         value = merge_key.lower()
@@ -89,5 +87,5 @@ class AggregationWorker(Worker):
 
         return value.strip("_")
 
-    def _create_layer_name(self, layer) -> str:
-        return layer.name
+    def _create_layer_name(self, geo_layer: GeoLayer) -> str:
+        return geo_layer.layer.name

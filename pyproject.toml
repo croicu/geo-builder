@@ -12,6 +12,7 @@ requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",
     "truststore>=0.10; sys_platform == 'win32'",
+    "pywebview>=5.0",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +31,7 @@ pythonpath = [
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 160
 target-version = "py312"
 
 [tool.ruff.lint]

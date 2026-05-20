@@ -2,25 +2,26 @@ import pytest
 
 from geo_builder.contracts import BoundingBox
 from geo_builder.errors import ProviderError
-from geo_builder.providers.fake_overpass import FakeOverpassProvider
+from geo_builder.protocols import AreaStyle
+from geo_builder.providers.fake import FakeProvider
 from geo_builder.tasks import AcquisitionTask
 
-DATA_PATH = "tests/data/providers/overpass.json"
+DATA_PATH = "tests/data/providers/fake.json"
 
 TASK = AcquisitionTask(
     areaId="napoli",
     areaName="Napoli",
-    provider="fake_overpass",
+    provider="fake",
     bbox=BoundingBox(west=14.20, south=40.80, east=14.33, north=40.90),
-    filter={"amenity": ["restaurant", "cafe", "bar"]},
+    filters={"amenity": AreaStyle(values=["restaurant", "cafe", "bar"])},
 )
 
 
-def make_provider(data_path: str = DATA_PATH) -> FakeOverpassProvider:
-    return FakeOverpassProvider({"dataPath": data_path})
+def make_provider(data_path: str = DATA_PATH) -> FakeProvider:
+    return FakeProvider({"dataPath": data_path})
 
 
-class TestFakeOverpassProvider:
+class TestFakeProvider:
     def test_returns_layer(self):
         layer = make_provider().fetch(TASK)
 
@@ -49,17 +50,17 @@ class TestFakeOverpassProvider:
     def test_merge_key_format(self):
         layer = make_provider().fetch(TASK)
 
-        assert layer.mergeKey == "fake_overpass:amenity=bar,cafe,restaurant"
+        assert layer.mergeKey == "fake:amenity=bar,cafe,restaurant"
 
     def test_id_and_url_derived_from_merge_key(self):
         layer = make_provider().fetch(TASK)
 
-        assert layer.id == "fake_overpass_amenity_bar_cafe_restaurant"
-        assert layer.url == "./layers/fake_overpass_amenity_bar_cafe_restaurant.geojson"
+        assert layer.id == "fake_amenity_bar_cafe_restaurant"
+        assert layer.url == "./layers/fake_amenity_bar_cafe_restaurant.geojson"
 
     def test_missing_data_path_raises(self):
         with pytest.raises(ProviderError, match="dataPath"):
-            FakeOverpassProvider({})
+            FakeProvider({})
 
     def test_missing_data_file_raises(self):
         with pytest.raises(FileNotFoundError):

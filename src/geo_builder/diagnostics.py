@@ -7,7 +7,7 @@ from enum import Enum
 
 class TelemetryLevel(Enum):
     VERBOSE = "verbose"
-    INFORMATIONAL = "informational"
+    INFO = "info"
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
@@ -52,7 +52,7 @@ class DiagnosticsLogSink:
         self.log(TelemetryLevel.VERBOSE, message)
 
     def info(self, message: str) -> None:
-        self.log(TelemetryLevel.INFORMATIONAL, message)
+        self.log(TelemetryLevel.INFO, message)
 
     def warning(self, message: str) -> None:
         self.log(TelemetryLevel.WARNING, message)
@@ -62,6 +62,26 @@ class DiagnosticsLogSink:
 
     def fatal(self, message: str) -> None:
         self.log(TelemetryLevel.CRITICAL, message)
+
+
+_LEVEL_RANK: dict[TelemetryLevel, int] = {
+    TelemetryLevel.VERBOSE: 0,
+    TelemetryLevel.INFO: 1,
+    TelemetryLevel.WARNING: 2,
+    TelemetryLevel.ERROR: 3,
+    TelemetryLevel.CRITICAL: 4,
+}
+
+
+class ConsoleLogSink(DiagnosticsLogSink):
+    def __init__(self, min_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
+        self._min_level = min_level
+
+    def log(self, level: TelemetryLevel, message: str) -> TelemetryRecord:
+        record = super().log(level, message)
+        if _LEVEL_RANK[level] >= _LEVEL_RANK[self._min_level]:
+            print(f"[{level.value.upper()}] {record.message}", flush=True)
+        return record
 
 
 class Logger:
