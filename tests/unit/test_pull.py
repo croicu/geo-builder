@@ -1,8 +1,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from geo_builder.designer.pull import pull
 
 
@@ -88,7 +86,6 @@ class TestFileLayout:
 class TestUrlResolution:
     @patch("geo_builder.designer.pull.requests.get")
     def test_catalog_url_resolved_relative_to_head(self, mock_get, tmp_path):
-        fetched = []
         responses = {
             "http://svc/catalog.head.json": _resp(_head("./v2/catalog.json")),
             "http://svc/catalog.head.debug.json": _resp(_head("./v2/catalog.json")),

@@ -17,7 +17,7 @@ from geo_builder.persistence import (
     save_catalog,
     save_json,
 )
-from geo_builder.protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, Layer, Manifest
+from geo_builder.protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, Layer
 
 
 def make_layer() -> Layer:

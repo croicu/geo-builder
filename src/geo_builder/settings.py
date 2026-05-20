@@ -55,7 +55,10 @@ class Settings:
             try:
                 log_level = TelemetryLevel(settings_payload.get("logging", "error"))
             except ValueError:
-                raise TaskError(f"'settings.logging' in build.json must be one of: {', '.join(l.value for l in TelemetryLevel)}")
+                valid_levels = []
+                for level in TelemetryLevel:
+                    valid_levels.append(level.value)
+                raise TaskError(f"'settings.logging' in build.json must be one of: {', '.join(valid_levels)}")
 
         tasks: list[Task] = []
         templates: dict[str, Acquisition] = {}

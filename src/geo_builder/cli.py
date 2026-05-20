@@ -71,9 +71,27 @@ def parse_args(argv: list[str]) -> CliArguments:
     )
 
 
-def _launch_designer(url: str, catalog=None, out_dir=None, in_dir=None, debug: bool = False, break_on_load: bool = False, dev_tools: bool = False, log_level=None) -> None:
+def _launch_designer(
+    url: str,
+    catalog=None,
+    out_dir=None,
+    in_dir=None,
+    debug: bool = False,
+    break_on_load: bool = False,
+    dev_tools: bool = False,
+    log_level=None,
+) -> None:
     from geo_builder.designer.host import launch
-    launch(url, catalog=catalog, out_dir=out_dir, in_dir=in_dir, debug=debug, break_on_load=break_on_load, dev_tools=dev_tools, log_level=log_level)
+    launch(
+        url,
+        catalog=catalog,
+        out_dir=out_dir,
+        in_dir=in_dir,
+        debug=debug,
+        break_on_load=break_on_load,
+        dev_tools=dev_tools,
+        log_level=log_level,
+    )
 
 
 def main() -> int:
@@ -93,7 +111,16 @@ def main() -> int:
             catalog = load_catalog(arguments.in_directory, debug=settings.debug)
         except GeoError:
             catalog = GeoCatalog(is_default=True)
-        _launch_designer(settings.design_url, catalog=catalog, out_dir=arguments.out_directory, in_dir=arguments.in_directory, debug=settings.debug, break_on_load=settings.break_on_load, dev_tools=settings.dev_tools, log_level=settings.logging)
+        _launch_designer(
+            settings.design_url,
+            catalog=catalog,
+            out_dir=arguments.out_directory,
+            in_dir=arguments.in_directory,
+            debug=settings.debug,
+            break_on_load=settings.break_on_load,
+            dev_tools=settings.dev_tools,
+            log_level=settings.logging,
+        )
         return 0
 
     try:

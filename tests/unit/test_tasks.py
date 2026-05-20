@@ -1,7 +1,6 @@
 import pytest
 
 from geo_builder.errors import TaskError
-from geo_builder.protocols import AreaStyle
 from geo_builder.tasks import Tasks
 
 

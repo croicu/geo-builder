@@ -1,7 +1,6 @@
 from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
-from geo_builder.protocols import AreaStyle
 from geo_builder.entities import GeoArea
-from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
+from geo_builder.protocols import Area, AreaStyle, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.acquisition import AcquisitionWorker
 from tests.shared.stubs import StubExecutor, StubFactory, StubProvider
 

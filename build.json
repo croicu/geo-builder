@@ -3,7 +3,7 @@
     "debug": true,
     "logging": "verbose",
     "devTools": false,
-    "designUrl": "http://localhost:5173/?design=1&debug=1&center=50.09,14.42&zoom=14",
+    "designUrl": "http://localhost:5173/?design=1&debug=1&center=47.726,-122.106&zoom=14",
     "break": false
   },
   "providers": {

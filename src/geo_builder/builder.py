@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .colors import layer_color
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
-from .entities import GeoCatalog, GeoArea, GeoLayer
+from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import GeoError
 from .protocols import Area, JsonObject, Layer
 from .workers.factory import WorkerFactory

@@ -251,6 +251,24 @@ Entry point. Tells the browser where the catalog file lives.
 ```jsonc
 {
   "version": 1,
+  "tasks": [
+    {
+      "type": "acquisition",
+      "provider": "overpass",
+      "filters": {
+        "amenity": {
+          "values": ["restaurant", "cafe"],
+          "name": "Restaurants",
+          "type": "heatmap",
+          "color": null,
+          "scale": null,
+          "surface": false
+        }
+      }
+    },
+    { "type": "deduping" },
+    { "type": "aggregation" }
+  ],
   "layers": [
     {
       "id": "overpass_amenity_restaurant_cafe",
@@ -269,6 +287,8 @@ Entry point. Tells the browser where the catalog file lives.
   ]
 }
 ```
+
+`tasks` records the acquisition config that produced this area's layers. The browser treats it as read-only metadata — it is the source of truth for incremental rebuilds on the Python side.
 
 | Field | Type | Description |
 |---|---|---|

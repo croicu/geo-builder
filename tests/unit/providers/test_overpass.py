@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from geo_builder.contracts import AcquisitionTask, BoundingBox
-from geo_builder.protocols import AreaStyle
 from geo_builder.errors import ProviderError
+from geo_builder.protocols import AreaStyle
 from geo_builder.providers.overpass import OverpassProvider
 
 TASK = AcquisitionTask(

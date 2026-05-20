@@ -2,7 +2,7 @@ import pytest
 
 from geo_builder.builder import Builder
 from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
-from geo_builder.entities import GeoArea, GeoLayer
+from geo_builder.entities import GeoArea
 from geo_builder.errors import GeoError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.settings import Settings

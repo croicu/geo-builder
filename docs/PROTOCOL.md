@@ -64,11 +64,32 @@ Configuration is split across two files:
 
 Each entry in `filters` is an `AreaStyle` record:
 
-| Field    | Type            | Required | Description |
-|----------|-----------------|----------|-------------|
-| `values` | `list[str]`     | yes      | OSM tag values (literals, meta names, or `["*"]` wildcard) |
-| `color`  | `str`           | no       | Hex color override for this layer (e.g. `"#ffff00"`) |
-| `scale`  | `float`         | no       | `radiusScale` override for the heatmap layer (default `1.0`) |
+| Field     | Type                      | Required | Description |
+|-----------|---------------------------|----------|-------------|
+| `values`  | `list[str]`               | yes      | OSM tag values (literals, meta names, or `["*"]` wildcard) |
+| `name`    | `str`                     | no       | Display name for the layer in the manifest |
+| `type`    | `"heatmap" \| "circle"`   | no       | Render mode (default `"heatmap"`) |
+| `color`   | `str`                     | no       | Hex color override for this layer (e.g. `"#ffff00"`) |
+| `scale`   | `float`                   | no       | `radiusScale` override for the heatmap layer (default `1.0`) |
+| `surface` | `bool`                    | no       | `circle` only — treat feature as an area rather than a point (default `false`) |
+
+### Templates
+
+An acquisition entry without a `bbox` is a **template** — it defines an acquisition config (provider + filters) that the designer can apply to new areas at design time. Templates are stored in `Settings.templates` and never executed directly by the build pipeline.
+
+```json
+{
+  "acquisition": {
+    "type": "acquisition",
+    "provider": "overpass",
+    "filters": {
+      "amenity": { "name": "Restaurants", "values": ["sustenance"], "type": "heatmap" }
+    }
+  }
+}
+```
+
+The `"acquisition"` key is the default template name referenced by the `AddArea` designer API. Any number of named templates may coexist with concrete (bbox-bearing) tasks in the same file.
 
 `settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. It also writes per-task snapshots to `./build/{task_type}/{counter:03d}/` (see **Debug Output** below).
 
