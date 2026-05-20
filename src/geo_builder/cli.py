@@ -24,9 +24,7 @@ def parse_args(argv: list[str]) -> CliArguments:
     parser = argparse.ArgumentParser(
         prog="geo-builder",
         usage="geo-builder <tasks_path> [--in <dir>] [--out <dir>] [--edit]",
-        description=(
-            "Build static geographic datasets, or open the designer UI with --edit."
-        ),
+        description=("Build static geographic datasets, or open the designer UI with --edit."),
     )
 
     parser.add_argument(
@@ -41,8 +39,7 @@ def parse_args(argv: list[str]) -> CliArguments:
         type=Path,
         default=Path("./in"),
         metavar="dir",
-        help="working directory for service artifacts (default: ./in); "
-             "auto-created if absent; pulled from the service on first designer launch",
+        help="working directory for service artifacts (default: ./in); auto-created if absent; pulled from the service on first designer launch",
     )
 
     parser.add_argument(
@@ -82,6 +79,7 @@ def _launch_designer(
     log_level=None,
 ) -> None:
     from geo_builder.designer.host import launch
+
     launch(
         url,
         catalog=catalog,

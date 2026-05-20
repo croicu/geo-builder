@@ -20,11 +20,13 @@ class GeoCatalog:
 
     def register_handlers(self, gateway) -> None:
         from ..api import GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput
+
         gateway.define_method(GET_AREA_BBOX_ID, GetAreaBboxInput, GetAreaBboxOutput)
         gateway.register(GET_AREA_BBOX_ID, self._get_area_bbox)
 
     def _get_area_bbox(self, data) -> object:
         from ..api import ERR_AREA_NOT_FOUND, OK, GetAreaBboxOutput
+
         for area in self.areas:
             if area.id == data.areaId:
                 return GetAreaBboxOutput(error=OK, bbox=area.bbox)

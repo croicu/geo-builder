@@ -90,7 +90,9 @@ class TestFetch:
 
     def test_circle_type_propagates_to_layer(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"leisure": AreaStyle(values=["park"], type="circle")},
         )
@@ -157,7 +159,9 @@ class TestBuildQuery:
 
     def test_emits_node_way_relation_per_value(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"])},
         )
@@ -186,7 +190,9 @@ class TestWildcard:
 
     def test_wildcard_emits_key_only_filter(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"historic": AreaStyle(values=["*"])},
         )
@@ -197,7 +203,9 @@ class TestWildcard:
 
     def test_wildcard_emits_node_way_relation(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"historic": AreaStyle(values=["*"])},
         )
@@ -209,7 +217,9 @@ class TestWildcard:
 
     def test_wildcard_merge_key_uses_asterisk(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"historic": AreaStyle(values=["*"])},
         )
@@ -217,11 +227,14 @@ class TestWildcard:
 
     def test_wildcard_layer_id_is_clean(self):
         from geo_builder.entities import GeoLayer
+
         assert GeoLayer.id_from_merge_key("overpass:historic=*") == "overpass_historic"
 
     def test_wildcard_mixed_with_specific_value(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"historic": AreaStyle(values=["*"]), "amenity": AreaStyle(values=["restaurant"])},
         )
@@ -237,7 +250,9 @@ class TestCreateMergeKey:
 
     def test_single_filter(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"])},
         )
@@ -249,7 +264,9 @@ class TestCreateMergeKey:
 
     def test_multiple_keys_sorted(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"leisure": AreaStyle(values=["park"]), "amenity": AreaStyle(values=["cafe"])},
         )
@@ -296,7 +313,9 @@ class TestExpandFilter:
 
     def test_query_uses_correct_key_for_non_amenity_filter(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"leisure": AreaStyle(values=["park"])},
         )
@@ -307,7 +326,9 @@ class TestExpandFilter:
 
     def test_meta_name_preserved_in_merge_key(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["sustenance"])},
         )
@@ -317,7 +338,9 @@ class TestExpandFilter:
 
     def test_query_contains_expanded_values_not_meta_name(self):
         task = AcquisitionTask(
-            areaId="x", areaName="X", provider="overpass",
+            areaId="x",
+            areaName="X",
+            provider="overpass",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["sustenance"])},
         )
@@ -371,9 +394,11 @@ class TestSurface:
         assert "surface" not in layer.style
 
     def test_circle_way_gets_area_and_radius(self):
-        payload = {"elements": [
-            {"type": "way", "id": 1, "geometry": _SQUARE_GEOMETRY, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "way", "id": 1, "geometry": _SQUARE_GEOMETRY, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="circle")
 
         props = geojson.features[0].properties
@@ -383,9 +408,11 @@ class TestSurface:
         assert props["radius_m"] == pytest.approx((props["area_sqm"] / 3.14159) ** 0.5, rel=0.01)
 
     def test_heatmap_way_has_no_area_or_radius_properties(self):
-        payload = {"elements": [
-            {"type": "way", "id": 1, "geometry": _SQUARE_GEOMETRY, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "way", "id": 1, "geometry": _SQUARE_GEOMETRY, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="heatmap")
 
         props = geojson.features[0].properties
@@ -400,10 +427,12 @@ class TestSurface:
             {"lat": 45.0004, "lon": 0.0006},
             {"lat": 45.0000, "lon": 0.0006},
         ]
-        payload = {"elements": [
-            {"type": "way", "id": 1, "geometry": large, "tags": {}},
-            {"type": "way", "id": 2, "geometry": small, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "way", "id": 1, "geometry": large, "tags": {}},
+                {"type": "way", "id": 2, "geometry": small, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="heatmap")
 
         weights = [f.properties["weight"] for f in geojson.features]
@@ -412,17 +441,21 @@ class TestSurface:
         assert all(0.0 <= w <= 1.0 for w in weights)
 
     def test_heatmap_surface_node_keeps_default_weight(self):
-        payload = {"elements": [
-            {"type": "node", "id": 1, "lat": 45.0, "lon": 0.0, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "node", "id": 1, "lat": 45.0, "lon": 0.0, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="heatmap")
 
         assert geojson.features[0].properties["weight"] == 1.0
 
     def test_node_in_surface_mode_has_no_area_properties(self):
-        payload = {"elements": [
-            {"type": "node", "id": 1, "lat": 45.0, "lon": 0.0, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "node", "id": 1, "lat": 45.0, "lon": 0.0, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="circle")
 
         props = geojson.features[0].properties
@@ -430,9 +463,11 @@ class TestSurface:
         assert "radius_m" not in props
 
     def test_way_without_geometry_has_no_area_properties(self):
-        payload = {"elements": [
-            {"type": "way", "id": 1, "center": {"lat": 45.0, "lon": 0.0}, "tags": {}},
-        ]}
+        payload = {
+            "elements": [
+                {"type": "way", "id": 1, "center": {"lat": 45.0, "lon": 0.0}, "tags": {}},
+            ]
+        }
         geojson = self.provider._to_geojson(payload, surface=True, layer_type="circle")
 
         props = geojson.features[0].properties
@@ -453,12 +488,15 @@ class TestGetCoordinates:
         assert self.provider._get_coordinates(element) == [14.27, 40.85]
 
     def test_way_geometry_returns_centroid(self):
-        element = {"type": "way", "geometry": [
-            {"lat": 0.0, "lon": 0.0},
-            {"lat": 0.0, "lon": 2.0},
-            {"lat": 2.0, "lon": 2.0},
-            {"lat": 2.0, "lon": 0.0},
-        ]}
+        element = {
+            "type": "way",
+            "geometry": [
+                {"lat": 0.0, "lon": 0.0},
+                {"lat": 0.0, "lon": 2.0},
+                {"lat": 2.0, "lon": 2.0},
+                {"lat": 2.0, "lon": 0.0},
+            ],
+        }
         coords = self.provider._get_coordinates(element)
         assert coords == pytest.approx([1.0, 1.0])
 
@@ -479,7 +517,7 @@ class TestPolygonAreaSqm:
             {"lat": 0.0, "lon": 1.0},
         ]
         area = self.provider._polygon_area_sqm(geom)
-        assert area == pytest.approx(111_000.0 ** 2, rel=0.01)
+        assert area == pytest.approx(111_000.0**2, rel=0.01)
 
     def test_winding_order_does_not_matter(self):
         cw = [
@@ -489,9 +527,7 @@ class TestPolygonAreaSqm:
             {"lat": 0.0, "lon": 1.0},
         ]
         ccw = list(reversed(cw))
-        assert self.provider._polygon_area_sqm(cw) == pytest.approx(
-            self.provider._polygon_area_sqm(ccw), rel=1e-9
-        )
+        assert self.provider._polygon_area_sqm(cw) == pytest.approx(self.provider._polygon_area_sqm(ccw), rel=1e-9)
 
     def test_area_shrinks_toward_pole(self):
         def square_at(lat):
@@ -501,4 +537,5 @@ class TestPolygonAreaSqm:
                 {"lat": lat + 1.0, "lon": 1.0},
                 {"lat": lat, "lon": 1.0},
             ]
+
         assert self.provider._polygon_area_sqm(square_at(60.0)) < self.provider._polygon_area_sqm(square_at(0.0))

@@ -77,6 +77,7 @@ class TestExecute:
 
     def test_provider_error_pushes_four_child_tasks(self):
         from geo_builder.errors import ProviderError
+
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -86,6 +87,7 @@ class TestExecute:
 
     def test_provider_error_returns_non_fatal(self):
         from geo_builder.errors import ProviderError
+
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -95,6 +97,7 @@ class TestExecute:
 
     def test_provider_error_does_not_add_layer(self):
         from geo_builder.errors import ProviderError
+
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")))
 
@@ -104,6 +107,7 @@ class TestExecute:
 
     def test_provider_error_on_degenerate_bbox_is_fatal(self):
         from geo_builder.errors import ProviderError
+
         task = make_task(west=1.0, south=1.0, east=1.0, north=1.0)
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(raises=ProviderError("too large")), task=task)
@@ -117,7 +121,9 @@ class TestExecute:
 class TestSplitByKey:
     def test_returns_one_task_per_key(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -129,7 +135,9 @@ class TestSplitByKey:
 
     def test_each_child_has_single_key_filter(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -146,7 +154,9 @@ class TestSplitByKey:
 
     def test_child_tasks_inherit_bbox_and_area(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=1, south=2, east=3, north=4),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -162,7 +172,9 @@ class TestSplitByKey:
 class TestColorOverride:
     def test_filter_color_applied_to_layer(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"leisure": AreaStyle(values=["park"], color="#00ff00")},
         )
@@ -183,7 +195,9 @@ class TestColorOverride:
 
     def test_color_inherited_by_key_split_children(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={
                 "amenity": AreaStyle(values=["restaurant"]),
@@ -203,7 +217,9 @@ class TestColorOverride:
 class TestExecuteMultiKey:
     def test_multi_key_filter_pushes_one_task_per_key(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -216,7 +232,9 @@ class TestExecuteMultiKey:
 
     def test_multi_key_filter_does_not_add_layer(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -242,7 +260,9 @@ class TestAcquisition:
 
     def test_multi_filter_sets_acquisition_from_full_task(self):
         task = AcquisitionTask(
-            areaId="napoli", areaName="Napoli", provider="stub",
+            areaId="napoli",
+            areaName="Napoli",
+            provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
             filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
         )
@@ -258,6 +278,7 @@ class TestAcquisition:
 
     def test_existing_acquisition_not_overwritten(self):
         from geo_builder.protocols import Acquisition
+
         area = make_area()
         area.acquisition = Acquisition(provider="existing", filters={})
         executor = StubExecutor(area)

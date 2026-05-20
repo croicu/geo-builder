@@ -13,16 +13,16 @@ _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
 
 FEATURE_META: dict[str, dict[str, list[str]]] = {
     "amenity": {
-        "sustenance":    ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"],
-        "education":     ["college", "kindergarten", "library", "school", "university"],
-        "healthcare":    ["clinic", "dentist", "doctors", "hospital", "pharmacy", "veterinary"],
-        "financial":     ["atm", "bank", "bureau_de_change"],
+        "sustenance": ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"],
+        "education": ["college", "kindergarten", "library", "school", "university"],
+        "healthcare": ["clinic", "dentist", "doctors", "hospital", "pharmacy", "veterinary"],
+        "financial": ["atm", "bank", "bureau_de_change"],
         "entertainment": ["arts_centre", "casino", "cinema", "nightclub", "theatre"],
-        "transportation":["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
+        "transportation": ["bicycle_parking", "bicycle_rental", "bus_station", "car_rental", "fuel", "parking", "taxi"],
     },
     "historic": {
-        "monuments":  ["castle", "fort", "manor", "tower", "gate", "ruins", "archaeological_site", "city_gate"],
-        "memorials":  ["monument", "memorial", "milestone", "boundary_stone", "wayside_cross", "wayside_shrine"],
+        "monuments": ["castle", "fort", "manor", "tower", "gate", "ruins", "archaeological_site", "city_gate"],
+        "memorials": ["monument", "memorial", "milestone", "boundary_stone", "wayside_cross", "wayside_shrine"],
     },
 }
 
@@ -220,7 +220,7 @@ out {out_mode};
 
         center_lat = sum(p["lat"] for p in geometry) / n
         meters_per_deg = 111_000.0
-        return area_deg2 * meters_per_deg ** 2 * math.cos(math.radians(center_lat))
+        return area_deg2 * meters_per_deg**2 * math.cos(math.radians(center_lat))
 
     def _create_merge_key(self, task: AcquisitionTask) -> str:
         parts: list[str] = [task.provider]

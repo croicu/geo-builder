@@ -55,9 +55,7 @@ class AcquisitionWorker(Worker):
                 Logger.warning(f"AcquisitionWorker [{task.areaId}] depth={task.depth} bbox too small to split further — giving up")
                 return self._result(fatal=True, error=str(error))
 
-            Logger.info(
-                f"AcquisitionWorker [{task.areaId}] depth={task.depth} → {len(child_tasks)} quadrants at depth={task.depth + 1}"
-            )
+            Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} → {len(child_tasks)} quadrants at depth={task.depth + 1}")
             executor.push_tasks(child_tasks)
             return self._result()
 
@@ -71,11 +69,7 @@ class AcquisitionWorker(Worker):
 
         return self._result()
 
-    def _result(
-        self,
-        fatal: bool = False,
-        error: str | None = None
-    ) -> WorkerResult:
+    def _result(self, fatal: bool = False, error: str | None = None) -> WorkerResult:
         task = self._task
 
         Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} Completed. Error: {error}")
@@ -84,14 +78,16 @@ class AcquisitionWorker(Worker):
     def _split_by_key(self, task: AcquisitionTask) -> list[AcquisitionTask]:
         result: list[AcquisitionTask] = []
         for key, style in task.filters.items():
-            result.append(AcquisitionTask(
-                areaId=task.areaId,
-                areaName=task.areaName,
-                provider=task.provider,
-                bbox=task.bbox,
-                filters={key: style},
-                depth=task.depth,
-            ))
+            result.append(
+                AcquisitionTask(
+                    areaId=task.areaId,
+                    areaName=task.areaName,
+                    provider=task.provider,
+                    bbox=task.bbox,
+                    filters={key: style},
+                    depth=task.depth,
+                )
+            )
         return result
 
     def _split_task(self, task: AcquisitionTask) -> list[AcquisitionTask]:

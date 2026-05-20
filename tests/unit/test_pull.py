@@ -17,21 +17,18 @@ def _head(catalog_url: str = "./release/catalog.json") -> bytes:
 
 
 def _catalog(*manifest_urls: str) -> bytes:
-    return json.dumps({
-        "areas": [{"id": f"area{i}", "manifestUrl": url} for i, url in enumerate(manifest_urls)]
-    }).encode()
+    return json.dumps({"areas": [{"id": f"area{i}", "manifestUrl": url} for i, url in enumerate(manifest_urls)]}).encode()
 
 
 def _manifest(*layer_urls: str) -> bytes:
-    return json.dumps({
-        "layers": [{"id": f"layer{i}", "url": url} for i, url in enumerate(layer_urls)]
-    }).encode()
+    return json.dumps({"layers": [{"id": f"layer{i}", "url": url} for i, url in enumerate(layer_urls)]}).encode()
 
 
 _GEOJSON = json.dumps({"type": "FeatureCollection", "features": []}).encode()
 
 
 # ─── File layout ───────────────────────────────────────────────────────────────
+
 
 class TestFileLayout:
     @patch("geo_builder.designer.pull.requests.get")
@@ -83,6 +80,7 @@ class TestFileLayout:
 
 # ─── URL resolution ─────────────────────────────────────────────────────────────
 
+
 class TestUrlResolution:
     @patch("geo_builder.designer.pull.requests.get")
     def test_catalog_url_resolved_relative_to_head(self, mock_get, tmp_path):
@@ -123,6 +121,7 @@ class TestUrlResolution:
 
 # ─── Deduplication ─────────────────────────────────────────────────────────────
 
+
 class TestDeduplication:
     @patch("geo_builder.designer.pull.requests.get")
     def test_same_catalog_not_fetched_twice(self, mock_get, tmp_path):
@@ -142,10 +141,12 @@ class TestDeduplication:
         responses = {
             "http://svc/catalog.head.json": _resp(_head()),
             "http://svc/catalog.head.debug.json": _resp(_head()),
-            "http://svc/release/catalog.json": _resp(_catalog(
-                "../areas/a/manifest.json",
-                "../areas/b/manifest.json",
-            )),
+            "http://svc/release/catalog.json": _resp(
+                _catalog(
+                    "../areas/a/manifest.json",
+                    "../areas/b/manifest.json",
+                )
+            ),
             "http://svc/areas/a/manifest.json": _resp(_manifest("../shared/layers/common.geojson")),
             "http://svc/areas/b/manifest.json": _resp(_manifest("../shared/layers/common.geojson")),
             "http://svc/areas/shared/layers/common.geojson": _resp(_GEOJSON),
@@ -157,6 +158,7 @@ class TestDeduplication:
 
 
 # ─── Error handling ─────────────────────────────────────────────────────────────
+
 
 class TestErrorHandling:
     @patch("geo_builder.designer.pull.requests.get")
@@ -171,10 +173,7 @@ class TestErrorHandling:
             "http://svc/catalog.head.debug.json": _resp(_head("./debug/catalog.json")),
             "http://svc/debug/catalog.json": _resp(_catalog()),
         }
-        mock_get.side_effect = lambda url, **kw: (
-            (_ for _ in ()).throw(responses[url]) if isinstance(responses[url], Exception)
-            else responses[url]
-        )
+        mock_get.side_effect = lambda url, **kw: (_ for _ in ()).throw(responses[url]) if isinstance(responses[url], Exception) else responses[url]
         pull("http://svc", tmp_path)
         assert (tmp_path / "debug" / "catalog.json").exists()
 
@@ -187,10 +186,7 @@ class TestErrorHandling:
             "http://svc/areas/napoli/manifest.json": _resp(_manifest("./layers/foo.geojson")),
             "http://svc/areas/napoli/layers/foo.geojson": Exception("timeout"),
         }
-        mock_get.side_effect = lambda url, **kw: (
-            (_ for _ in ()).throw(responses[url]) if isinstance(responses[url], Exception)
-            else responses[url]
-        )
+        mock_get.side_effect = lambda url, **kw: (_ for _ in ()).throw(responses[url]) if isinstance(responses[url], Exception) else responses[url]
         pull("http://svc", tmp_path)  # must not raise
         assert not (tmp_path / "areas" / "napoli" / "layers" / "foo.geojson").exists()
 

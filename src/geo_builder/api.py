@@ -14,6 +14,7 @@ ERR_TEMPLATE_NOT_FOUND = 2
 
 # --- Ready (connection handshake) ---
 
+
 @dataclass
 class ReadyData:
     pass
@@ -23,6 +24,7 @@ READY_ID = "__geo_ready__"
 
 
 # --- GetAreaBbox ---
+
 
 @dataclass
 class GetAreaBboxInput:
@@ -41,6 +43,7 @@ GET_AREA_BBOX_ID = "__geo_get_area_bbox__"
 
 # --- SetAreaBbox ---
 
+
 @dataclass
 class SetAreaBboxInput:
     areaId: str
@@ -57,6 +60,7 @@ SET_AREA_BBOX_ID = "__geo_set_area_bbox__"
 
 
 # --- AddArea ---
+
 
 @dataclass
 class AddAreaInput:

@@ -70,13 +70,15 @@ class Builder:
         for area in self.catalog.areas:
             if area.acquisition is not None and len(area.layers) == 0:
                 bbox = area.bbox
-                result.append(AcquisitionTask(
-                    areaId=area.id,
-                    areaName=area.name,
-                    provider=area.acquisition.provider,
-                    bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
-                    filters=area.acquisition.filters,
-                ))
+                result.append(
+                    AcquisitionTask(
+                        areaId=area.id,
+                        areaName=area.name,
+                        provider=area.acquisition.provider,
+                        bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
+                        filters=area.acquisition.filters,
+                    )
+                )
         if result:
             result.append(AggregationTask())
             result.append(DedupingTask())

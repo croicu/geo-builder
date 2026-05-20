@@ -120,11 +120,13 @@ class TestLoadFeature:
 
     def test_non_dict_properties_raises(self):
         with pytest.raises(CatalogError, match="properties"):
-            load_feature({
-                "type": "Feature",
-                "properties": "bad",
-                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
-            })
+            load_feature(
+                {
+                    "type": "Feature",
+                    "properties": "bad",
+                    "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                }
+            )
 
     def test_non_dict_geometry_raises(self):
         with pytest.raises(CatalogError, match="geometry"):
@@ -295,22 +297,42 @@ class TestSaveAreaCsv:
 
     def test_missing_property_is_empty_string(self, tmp_path):
         layer_a = Layer(
-            id="a", name="A", type="heatmap", url="./layers/a.geojson",
-            visible=True, style={}, mergeKey="k:a",
-            geojson=GeoJson(type="FeatureCollection", features=[
-                Feature(type="Feature", properties={"name": "X"}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
-            ]),
+            id="a",
+            name="A",
+            type="heatmap",
+            url="./layers/a.geojson",
+            visible=True,
+            style={},
+            mergeKey="k:a",
+            geojson=GeoJson(
+                type="FeatureCollection",
+                features=[
+                    Feature(type="Feature", properties={"name": "X"}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
+                ],
+            ),
         )
         layer_b = Layer(
-            id="b", name="B", type="heatmap", url="./layers/b.geojson",
-            visible=True, style={}, mergeKey="k:b",
-            geojson=GeoJson(type="FeatureCollection", features=[
-                Feature(type="Feature", properties={"amenity": "cafe"}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
-            ]),
+            id="b",
+            name="B",
+            type="heatmap",
+            url="./layers/b.geojson",
+            visible=True,
+            style={},
+            mergeKey="k:b",
+            geojson=GeoJson(
+                type="FeatureCollection",
+                features=[
+                    Feature(type="Feature", properties={"amenity": "cafe"}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
+                ],
+            ),
         )
         summary = Area(
-            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
-            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli",
+            name="Napoli",
+            bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
         )
         area = GeoArea(summary=summary, layers=[GeoLayer(layer_a), GeoLayer(layer_b)])
@@ -322,23 +344,43 @@ class TestSaveAreaCsv:
 
     def test_all_features_from_all_layers(self, tmp_path):
         layer_a = Layer(
-            id="a", name="A", type="heatmap", url="./layers/a.geojson",
-            visible=True, style={}, mergeKey="k:a",
-            geojson=GeoJson(type="FeatureCollection", features=[
-                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
-                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
-            ]),
+            id="a",
+            name="A",
+            type="heatmap",
+            url="./layers/a.geojson",
+            visible=True,
+            style={},
+            mergeKey="k:a",
+            geojson=GeoJson(
+                type="FeatureCollection",
+                features=[
+                    Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.27, 40.85])),
+                    Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.28, 40.86])),
+                ],
+            ),
         )
         layer_b = Layer(
-            id="b", name="B", type="heatmap", url="./layers/b.geojson",
-            visible=True, style={}, mergeKey="k:b",
-            geojson=GeoJson(type="FeatureCollection", features=[
-                Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.29, 40.87])),
-            ]),
+            id="b",
+            name="B",
+            type="heatmap",
+            url="./layers/b.geojson",
+            visible=True,
+            style={},
+            mergeKey="k:b",
+            geojson=GeoJson(
+                type="FeatureCollection",
+                features=[
+                    Feature(type="Feature", properties={}, geometry=Geometry(type="Point", coordinates=[14.29, 40.87])),
+                ],
+            ),
         )
         summary = Area(
-            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
-            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli",
+            name="Napoli",
+            bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
         )
         area = GeoArea(summary=summary, layers=[GeoLayer(layer_a), GeoLayer(layer_b)])
@@ -348,8 +390,12 @@ class TestSaveAreaCsv:
 
     def test_no_features_writes_no_csv(self, tmp_path):
         summary = Area(
-            id="napoli", name="Napoli", bbox=[14.20, 40.80, 14.33, 40.90],
-            minRadiusPx=32, maxRadiusPx=512, liveMapRadiusPx=640,
+            id="napoli",
+            name="Napoli",
+            bbox=[14.20, 40.80, 14.33, 40.90],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
             manifestUrl="./areas/napoli/manifest.json",
         )
         area = GeoArea(summary=summary, layers=[])

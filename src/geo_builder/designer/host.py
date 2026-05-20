@@ -31,10 +31,12 @@ def invoke_script(script: str) -> None:
         Logger.warning("invoke_script: WebView2 not ready.")
         return
     from System import Action  # type: ignore[import]
+
     _form.BeginInvoke(Action(lambda: _core.ExecuteScriptAsync(script)))
 
 
 # --- CoreWebView2 event handlers (fire on WebView2 browser/UI thread) ---
+
 
 def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
     Logger.info(f"NavigationCompleted: success={args.IsSuccess} url={sender.Source}")
@@ -52,6 +54,7 @@ def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
                     if result is not None:
                         data, content_type = result
                         from System.IO import MemoryStream  # type: ignore[import]
+
                         stream = MemoryStream(bytearray(data))
                         headers = f"Content-Type: {content_type}\r\nAccess-Control-Allow-Origin: *"
                         args.Response = _core.Environment.CreateWebResourceResponse(stream, 200, "OK", headers)
@@ -59,7 +62,9 @@ def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
                     Logger.warning(f"data pipeline: response error: {exc}")
                 finally:
                     deferral.Complete()
+
             from System import Action  # type: ignore[import]
+
             _form.BeginInvoke(Action(on_ui))
 
         data_pipeline.handle(url, complete)
@@ -243,6 +248,7 @@ def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: P
             )
 
             from Microsoft.Web.WebView2.Core import CoreWebView2WebResourceContext  # type: ignore[import]
+
             _core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All)
             _core.NavigationCompleted += _on_navigation_completed
             _core.WebResourceRequested += _on_web_resource_requested

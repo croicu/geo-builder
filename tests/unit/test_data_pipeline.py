@@ -32,6 +32,7 @@ def _collect(pipeline: DataPipeline, url: str, timeout: float = 5.0) -> tuple[by
 
 # ─── L1 memory ────────────────────────────────────────────────────────────────
 
+
 class TestMemory:
     def test_set_and_resolve(self, tmp_path):
         p = _pipeline(tmp_path)
@@ -56,6 +57,7 @@ class TestMemory:
 
 # ─── L2 out dir ───────────────────────────────────────────────────────────────
 
+
 class TestOutDir:
     def test_file_served_from_out_dir(self, tmp_path):
         (tmp_path / "release").mkdir()
@@ -79,6 +81,7 @@ class TestOutDir:
 
 # ─── L3 in dir ────────────────────────────────────────────────────────────────
 
+
 class TestInDir:
     def test_file_served_from_in_dir(self, tmp_path):
         out_dir = tmp_path / "out"
@@ -99,6 +102,7 @@ class TestInDir:
 
 
 # ─── L4 network ───────────────────────────────────────────────────────────────
+
 
 class TestNetwork:
     @patch("geo_builder.designer.data_pipeline._session.get")
@@ -134,6 +138,7 @@ class TestNetwork:
 
 
 # ─── handle ───────────────────────────────────────────────────────────────────
+
 
 class TestHandle:
     def test_complete_called_with_result(self, tmp_path):

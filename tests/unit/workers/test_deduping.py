@@ -81,30 +81,48 @@ class TestExecute:
         assert result == WorkerResult()
 
     def test_unique_features_are_kept(self):
-        area = make_area([make_layer([
-            make_feature(BASE_LON, BASE_LAT),
-            make_feature(FAR_LON, FAR_LAT),
-        ])])
+        area = make_area(
+            [
+                make_layer(
+                    [
+                        make_feature(BASE_LON, BASE_LAT),
+                        make_feature(FAR_LON, FAR_LAT),
+                    ]
+                )
+            ]
+        )
 
         run([area])
 
         assert len(area.layers[0].layer.geojson.features) == 2
 
     def test_near_duplicate_is_removed(self):
-        area = make_area([make_layer([
-            make_feature(BASE_LON, BASE_LAT),
-            make_feature(NEAR_LON, NEAR_LAT),
-        ])])
+        area = make_area(
+            [
+                make_layer(
+                    [
+                        make_feature(BASE_LON, BASE_LAT),
+                        make_feature(NEAR_LON, NEAR_LAT),
+                    ]
+                )
+            ]
+        )
 
         run([area])
 
         assert len(area.layers[0].layer.geojson.features) == 1
 
     def test_first_feature_is_kept_on_dedup(self):
-        area = make_area([make_layer([
-            make_feature(BASE_LON, BASE_LAT, {"name": "A"}),
-            make_feature(NEAR_LON, NEAR_LAT, {"name": "B"}),
-        ])])
+        area = make_area(
+            [
+                make_layer(
+                    [
+                        make_feature(BASE_LON, BASE_LAT, {"name": "A"}),
+                        make_feature(NEAR_LON, NEAR_LAT, {"name": "B"}),
+                    ]
+                )
+            ]
+        )
 
         run([area])
 

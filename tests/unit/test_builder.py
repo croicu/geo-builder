@@ -24,11 +24,13 @@ def make_area() -> GeoArea:
 def make_layer(merge_key: str, feature_count: int) -> Layer:
     features = []
     for i in range(feature_count):
-        features.append(Feature(
-            type="Feature",
-            properties={"id": i},
-            geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
-        ))
+        features.append(
+            Feature(
+                type="Feature",
+                properties={"id": i},
+                geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
+            )
+        )
     return Layer(
         id="overpass",
         name="Overpass",

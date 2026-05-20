@@ -12,6 +12,7 @@ from geo_builder.errors import GeoError
 class StubSettings:
     def __init__(self, debug: bool = False, design_url: str | None = None, break_on_load: bool = False, dev_tools: bool = False, logging=None) -> None:
         from geo_builder.diagnostics import TelemetryLevel
+
         self.debug = debug
         self.design_url = design_url
         self.break_on_load = break_on_load
@@ -82,9 +83,7 @@ class TestMain:
     def test_returns_0_on_success(self):
         builder = StubBuilder()
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder", return_value=builder), \
-             patch("geo_builder.cli.save_catalog"):
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli.Builder", return_value=builder), patch("geo_builder.cli.save_catalog"):
             MockSettings.load.return_value = StubSettings()
 
             assert main() == 0
@@ -92,9 +91,11 @@ class TestMain:
     def test_save_catalog_called_with_out_directory(self):
         builder = StubBuilder()
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder", return_value=builder), \
-             patch("geo_builder.cli.save_catalog") as mock_save:
+        with (
+            patch("geo_builder.cli.Settings") as MockSettings,
+            patch("geo_builder.cli.Builder", return_value=builder),
+            patch("geo_builder.cli.save_catalog") as mock_save,
+        ):
             MockSettings.load.return_value = StubSettings()
 
             main()
@@ -112,9 +113,7 @@ class TestMain:
     def test_builder_errors_returns_1(self, capsys):
         builder = StubBuilder(errors=["something failed"])
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder", return_value=builder), \
-             patch("geo_builder.cli.save_catalog"):
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli.Builder", return_value=builder), patch("geo_builder.cli.save_catalog"):
             MockSettings.load.return_value = StubSettings()
 
             assert main() == 1
@@ -125,10 +124,12 @@ class TestMain:
         sys.argv = ["geo-builder", "tasks.json", "--in", "/tmp/in", "--out", "/tmp/out"]
         loaded_catalog = GeoCatalog()
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder") as MockBuilder, \
-             patch("geo_builder.cli.load_catalog", return_value=loaded_catalog), \
-             patch("geo_builder.cli.save_catalog"):
+        with (
+            patch("geo_builder.cli.Settings") as MockSettings,
+            patch("geo_builder.cli.Builder") as MockBuilder,
+            patch("geo_builder.cli.load_catalog", return_value=loaded_catalog),
+            patch("geo_builder.cli.save_catalog"),
+        ):
             MockSettings.load.return_value = StubSettings()
             MockBuilder.return_value = StubBuilder()
 
@@ -137,10 +138,12 @@ class TestMain:
             MockBuilder.assert_called_once_with(loaded_catalog)
 
     def test_empty_in_directory_creates_empty_builder(self):
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder") as MockBuilder, \
-             patch("geo_builder.cli.load_catalog", side_effect=GeoError("not found")), \
-             patch("geo_builder.cli.save_catalog"):
+        with (
+            patch("geo_builder.cli.Settings") as MockSettings,
+            patch("geo_builder.cli.Builder") as MockBuilder,
+            patch("geo_builder.cli.load_catalog", side_effect=GeoError("not found")),
+            patch("geo_builder.cli.save_catalog"),
+        ):
             MockSettings.load.return_value = StubSettings()
             MockBuilder.return_value = StubBuilder()
 
@@ -151,9 +154,7 @@ class TestMain:
     def test_geo_error_in_non_debug_mode_returns_1(self, capsys):
         builder = StubBuilder(raises=GeoError("run failed"))
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder", return_value=builder), \
-             patch("geo_builder.cli.save_catalog"):
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli.Builder", return_value=builder), patch("geo_builder.cli.save_catalog"):
             MockSettings.load.return_value = StubSettings()
 
             assert main() == 1
@@ -163,9 +164,7 @@ class TestMain:
     def test_geo_error_in_debug_mode_reraises(self):
         builder = StubBuilder(raises=GeoError("run failed"))
 
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli.Builder", return_value=builder), \
-             patch("geo_builder.cli.save_catalog"):
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli.Builder", return_value=builder), patch("geo_builder.cli.save_catalog"):
             MockSettings.load.return_value = StubSettings(debug=True)
 
             with pytest.raises(GeoError):
@@ -181,13 +180,13 @@ class TestDesignMode:
         sys.argv = original
 
     def test_launches_webview_with_design_url(self):
-        with patch("geo_builder.cli.Settings") as MockSettings, \
-             patch("geo_builder.cli._launch_designer") as mock_launch:
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli._launch_designer") as mock_launch:
             MockSettings.load.return_value = StubSettings(design_url="http://localhost:5173/")
 
             result = main()
 
             from geo_builder.diagnostics import TelemetryLevel
+
             mock_launch.assert_called_once_with(
                 "http://localhost:5173/",
                 catalog=mock_launch.call_args.kwargs["catalog"],

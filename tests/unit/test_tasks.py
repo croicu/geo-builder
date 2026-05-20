@@ -98,9 +98,11 @@ class TestTemplatesFromPayload:
 
     def test_template_filters_parsed(self):
         payload = {
-            "default": _template_payload(filters={
-                "amenity": {"values": ["restaurant"], "type": "heatmap"},
-            }),
+            "default": _template_payload(
+                filters={
+                    "amenity": {"values": ["restaurant"], "type": "heatmap"},
+                }
+            ),
         }
 
         templates = Tasks.templates_from_payload(payload)
@@ -109,16 +111,18 @@ class TestTemplatesFromPayload:
 
     def test_template_filter_all_style_fields(self):
         payload = {
-            "default": _template_payload(filters={
-                "leisure": {
-                    "values": ["park"],
-                    "name": "Parks",
-                    "color": "#007f00",
-                    "scale": 2.0,
-                    "surface": True,
-                    "type": "circle",
-                },
-            }),
+            "default": _template_payload(
+                filters={
+                    "leisure": {
+                        "values": ["park"],
+                        "name": "Parks",
+                        "color": "#007f00",
+                        "scale": 2.0,
+                        "surface": True,
+                        "type": "circle",
+                    },
+                }
+            ),
         }
 
         templates = Tasks.templates_from_payload(payload)

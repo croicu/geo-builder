@@ -15,6 +15,7 @@ from ..diagnostics import Logger
 @dataclasses.dataclass
 class MethodDef:
     """JS → Python: a method the browser can call."""
+
     id: str
     input_type: type
     output_type: type | None
@@ -23,6 +24,7 @@ class MethodDef:
 @dataclasses.dataclass
 class EventDef:
     """Python → JS: an event the builder can fire."""
+
     id: str
     input_type: type
     output_type: type | None
@@ -34,8 +36,8 @@ class Gateway:
         self._queue: _queue.Queue[tuple | None] = _queue.Queue()
         self._thread: threading.Thread | None = None
 
-        self._methods: dict[str, MethodDef] = {}   # JS → Python
-        self._events: dict[str, EventDef] = {}     # Python → JS
+        self._methods: dict[str, MethodDef] = {}  # JS → Python
+        self._events: dict[str, EventDef] = {}  # Python → JS
         self._pending: dict[str, tuple[Callable, type | None]] = {}
         self._handlers: dict[str, dict[int, Callable]] = {}
         self._next_cookie: int = 0
