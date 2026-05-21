@@ -81,6 +81,14 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
+def _normalize_bbox(bbox: list[float]) -> list[float]:
+    """Normalize bbox longitudes to [-180, 180). Browsers can send values outside this range when the map is panned past the antimeridian."""
+    def norm(lon: float) -> float:
+        return ((lon + 180) % 360) - 180
+
+    return [norm(bbox[0]), bbox[1], norm(bbox[2]), bbox[3]]
+
+
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     from ..api import (
         ADD_AREA_ID,
@@ -114,7 +122,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         if area is None:
             return SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
 
-        area.bbox = list(data.bbox)
+        area.bbox = _normalize_bbox(list(data.bbox))
 
         if in_dir is not None:
             save_catalog_meta(catalog, in_dir, debug=debug)
@@ -149,7 +157,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             )
 
         area_id = GeoLayer.id_from_merge_key(data.areaName)
-        bbox = data.bbox  # [west, south, east, north]
+        bbox = _normalize_bbox(list(data.bbox))  # [west, south, east, north]
 
         acquisition_task = AcquisitionTask(
             areaId=area_id,
