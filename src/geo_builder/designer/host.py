@@ -83,6 +83,7 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
 
 def _normalize_bbox(bbox: list[float]) -> list[float]:
     """Normalize bbox longitudes to [-180, 180). Browsers can send values outside this range when the map is panned past the antimeridian."""
+
     def norm(lon: float) -> float:
         return ((lon + 180) % 360) - 180
 

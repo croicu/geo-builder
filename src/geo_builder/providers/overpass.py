@@ -155,17 +155,11 @@ out {out_mode};
                 if error.code in (429, 504):
                     if attempt < len(_RETRY_DELAYS):
                         delay = _RETRY_DELAYS[attempt]
-                        Logger.warning(
-                            f"OverpassProvider: HTTP {error.code} — retry {attempt + 1}/{len(_RETRY_DELAYS)} in {delay}s"
-                        )
+                        Logger.warning(f"OverpassProvider: HTTP {error.code} — retry {attempt + 1}/{len(_RETRY_DELAYS)} in {delay}s")
                         time.sleep(delay)
                         continue
-                    Logger.warning(
-                        f"OverpassProvider: HTTP {error.code} — retries exhausted, treating as split trigger"
-                    )
-                    raise ProviderError(
-                        f"Overpass rate limited (HTTP {error.code}) after {len(_RETRY_DELAYS)} retries."
-                    ) from error
+                    Logger.warning(f"OverpassProvider: HTTP {error.code} — retries exhausted, treating as split trigger")
+                    raise ProviderError(f"Overpass rate limited (HTTP {error.code}) after {len(_RETRY_DELAYS)} retries.") from error
                 Logger.warning(f"OverpassProvider: HTTP {error.code} — unexpected, re-raising")
                 raise
 

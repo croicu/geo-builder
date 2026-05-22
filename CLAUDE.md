@@ -11,6 +11,16 @@ Build a simple, deterministic Python application that creates static geographic 
 - Before implementing any feature or non-trivial change, ask clarifying questions until the intent is unambiguous.
 - If anything is unclear or could be interpreted multiple ways, ask — do not assume and implement.
 
+## Before committing
+
+Run these before every commit:
+
+```bash
+ruff format src/ tests/
+ruff check src/ tests/
+pytest
+```
+
 ## Documentation rule
 
 After any change that affects the public interface, CLI, file formats, or core architecture, update the relevant docs:
