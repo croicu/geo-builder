@@ -13,5 +13,16 @@
   },
   "dedupe": {
     "type": "deduping"
+  },
+  "poi": {
+    "type": "poi",
+    "style": {
+      "name": "POI",
+      "type": "circle",
+      "color": "#3b82f6",
+      "opacity": 0.9,
+      "radius": 8,
+      "surface": false
+    }
   }
 }

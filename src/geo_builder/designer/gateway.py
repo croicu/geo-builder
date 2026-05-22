@@ -153,6 +153,7 @@ class Gateway:
                     if result is not None:
                         output = result
                 if request_id and method.output_type and output is not None:
+                    Logger.info(f"response: {method_id}")
                     response: dict[str, Any] = {
                         "requestId": request_id,
                         "data": dataclasses.asdict(output),

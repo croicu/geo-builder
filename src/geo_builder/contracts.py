@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .entities import GeoArea
-from .protocols import AreaStyle, Layer
+from .protocols import AreaStyle, Layer, PoiStyle
 
 
 @dataclass
@@ -58,6 +58,14 @@ class DedupingTask(Task):
         self,
     ) -> None:
         super().__init__("deduping")
+
+
+class PoiTask(Task):
+    style: PoiStyle
+
+    def __init__(self, style: PoiStyle | None = None) -> None:
+        super().__init__("poi")
+        self.style = style if style is not None else PoiStyle()
 
 
 class Map(Protocol):

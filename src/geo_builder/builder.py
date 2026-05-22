@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .colors import layer_color
-from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import GeoError
 from .protocols import Area, JsonObject, Layer
@@ -83,6 +83,7 @@ class Builder:
         if result:
             result.append(AggregationTask())
             result.append(DedupingTask())
+            result.append(PoiTask())
         return result
 
     def push_task(self, task: JsonObject) -> None:
@@ -117,7 +118,8 @@ class Builder:
     def add_layer(self, area: GeoArea, layer: Layer) -> None:
         for existing in area.layers:
             if existing.layer.mergeKey == layer.mergeKey:
-                existing.layer.geojson.features.extend(layer.geojson.features)
+                if existing.layer.geojson is not None and layer.geojson is not None:
+                    existing.layer.geojson.features.extend(layer.geojson.features)
                 return
         layer.style["color"] = layer_color(len(area.layers))
         area.layers.append(GeoLayer(layer))
@@ -126,7 +128,9 @@ class Builder:
         snapshot = {}
         for area in self.catalog.areas:
             for geo_layer in area.layers:
-                snapshot[(area.id, geo_layer.layer.id)] = len(geo_layer.layer.geojson.features)
+                geojson = geo_layer.layer.geojson
+                count = len(geojson.features) if geojson is not None else 0
+                snapshot[(area.id, geo_layer.layer.id)] = count
         return snapshot
 
     def _save_debug_snapshot(self, task: Task, counter: int, pre_snapshot: dict[tuple[str, str], int]) -> None:
@@ -155,6 +159,8 @@ class Builder:
 
         for geo_area in self.catalog.areas:
             for geo_layer in geo_area.layers:
+                if geo_layer.layer.geojson is None:
+                    continue
                 pre_count = pre_snapshot.get((geo_area.id, geo_layer.layer.id))
                 if pre_count is None or pre_count != len(geo_layer.layer.geojson.features):
                     self._save_debug_layer(geo_layer.layer, task_dir)

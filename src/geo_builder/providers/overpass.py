@@ -1,15 +1,21 @@
 import json
 import math
+import time
 import urllib.parse
 import urllib.request
 
 from ..contracts import Provider
+from ..diagnostics import Logger
 from ..entities import GeoLayer
 from ..errors import ProviderError
 from ..protocols import Feature, GeoJson, Geometry, Layer
 from ..tasks import AcquisitionTask
 
 _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
+
+# Delays (seconds) between successive retries on HTTP 429 / 504.
+# After exhausting these, the error is re-raised as ProviderError.
+_RETRY_DELAYS = (5, 15, 45)
 
 FEATURE_META: dict[str, dict[str, list[str]]] = {
     "amenity": {
@@ -95,17 +101,20 @@ out {out_mode};
         else:
             raw = {key: style.values for key, style in task.filters.items()}
             for key, values in self._expand_filter(raw).items():
-                for value in values:
-                    if value == "*":
-                        lines.append(f'  node["{key}"]({bbox_text});')
-                        lines.append(f'  way["{key}"]({bbox_text});')
-                        lines.append(f'  relation["{key}"]({bbox_text});')
-                    else:
-                        lines.append(f'  node["{key}"="{value}"]({bbox_text});')
-                        lines.append(f'  way["{key}"="{value}"]({bbox_text});')
-                        lines.append(f'  relation["{key}"="{value}"]({bbox_text});')
+                filter_expr = self._build_filter_expr(key, values)
+                lines.append(f"  node{filter_expr}({bbox_text});")
+                lines.append(f"  way{filter_expr}({bbox_text});")
+                lines.append(f"  relation{filter_expr}({bbox_text});")
 
         return "\n".join(lines)
+
+    def _build_filter_expr(self, key: str, values: list[str]) -> str:
+        if "*" in values:
+            return f'["{key}"]'
+        if len(values) == 1:
+            return f'["{key}"="{values[0]}"]'
+        joined = "|".join(sorted(values))
+        return f'["{key}"~"^({joined})$"]'
 
     def _expand_filter(self, filter: dict[str, list[str]]) -> dict[str, list[str]]:
         result: dict[str, list[str]] = {}
@@ -121,6 +130,7 @@ out {out_mode};
 
     def _execute_query(self, query: str) -> dict:
         data = urllib.parse.urlencode({"data": query}).encode("utf-8")
+        Logger.info(f"OverpassProvider: POST {len(data)} bytes → {self._url}")
 
         request = urllib.request.Request(
             self._url,
@@ -132,14 +142,34 @@ out {out_mode};
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as error:
-            if error.code in (400, 429, 504):
-                raise ProviderError("Overpass request too large or rate limited.") from error
+        for attempt in range(len(_RETRY_DELAYS) + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    body = response.read()
+                    Logger.info(f"OverpassProvider: {len(body)} bytes received")
+                    return json.loads(body.decode("utf-8"))
+            except urllib.error.HTTPError as error:
+                if error.code == 400:
+                    Logger.warning("OverpassProvider: HTTP 400 — query rejected, will split bbox")
+                    raise ProviderError("Overpass query rejected (HTTP 400).") from error
+                if error.code in (429, 504):
+                    if attempt < len(_RETRY_DELAYS):
+                        delay = _RETRY_DELAYS[attempt]
+                        Logger.warning(
+                            f"OverpassProvider: HTTP {error.code} — retry {attempt + 1}/{len(_RETRY_DELAYS)} in {delay}s"
+                        )
+                        time.sleep(delay)
+                        continue
+                    Logger.warning(
+                        f"OverpassProvider: HTTP {error.code} — retries exhausted, treating as split trigger"
+                    )
+                    raise ProviderError(
+                        f"Overpass rate limited (HTTP {error.code}) after {len(_RETRY_DELAYS)} retries."
+                    ) from error
+                Logger.warning(f"OverpassProvider: HTTP {error.code} — unexpected, re-raising")
+                raise
 
-            raise
+        raise ProviderError("Overpass query failed after all retries.")
 
     def _to_geojson(self, payload: dict, surface: bool = False, layer_type: str = "heatmap") -> GeoJson:
         features: list[Feature] = []
@@ -153,9 +183,17 @@ out {out_mode};
 
             tags = element.get("tags", {})
 
+            name = tags.get("name")
+            cuisine = tags.get("cuisine")
+            address = self._build_address(tags)
+            phone = tags.get("contact:phone") or tags.get("phone")
+            website = tags.get("contact:website") or tags.get("website")
+            opening_hours = tags.get("opening_hours")
+            has_details = bool(cuisine or address or phone or website or opening_hours)
+
             properties: dict = {
                 "id": element.get("id"),
-                "name": tags.get("name"),
+                "name": name,
                 "amenity": tags.get("amenity"),
                 "weight": 1.0,
             }
@@ -170,6 +208,19 @@ out {out_mode};
                         properties["radius_m"] = round(math.sqrt(area_sqm / math.pi), 1)
 
             properties = {key: value for key, value in properties.items() if value is not None}
+
+            if cuisine:
+                properties["cuisine"] = cuisine
+            if address:
+                properties["address"] = address
+            if phone:
+                properties["phone"] = phone
+            if website:
+                properties["website"] = website
+            if opening_hours:
+                properties["opening_hours"] = opening_hours
+            if has_details:
+                properties["hasDetails"] = True
 
             features.append(
                 Feature(
@@ -221,6 +272,29 @@ out {out_mode};
         center_lat = sum(p["lat"] for p in geometry) / n
         meters_per_deg = 111_000.0
         return area_deg2 * meters_per_deg**2 * math.cos(math.radians(center_lat))
+
+    def _build_address(self, tags: dict) -> str | None:
+        street = tags.get("addr:street")
+        number = tags.get("addr:housenumber")
+        city = tags.get("addr:city")
+
+        if street or number or city:
+            street_parts: list[str] = []
+            if street:
+                street_parts.append(street)
+            if number:
+                street_parts.append(number)
+            street_line = " ".join(street_parts)
+
+            parts: list[str] = []
+            if street_line:
+                parts.append(street_line)
+            if city:
+                parts.append(city)
+            if parts:
+                return ", ".join(parts)
+
+        return tags.get("addr:full") or None
 
     def _create_merge_key(self, task: AcquisitionTask) -> str:
         parts: list[str] = [task.provider]

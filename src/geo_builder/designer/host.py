@@ -103,7 +103,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SetAreaBboxOutput,
     )
     from ..builder import Builder
-    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
     from ..entities import GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
@@ -166,7 +166,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
             filters=template.filters,
         )
-        tasks = [acquisition_task, AggregationTask(), DedupingTask()]
+        tasks = [acquisition_task, AggregationTask(), DedupingTask(), PoiTask()]
 
         if in_dir is not None:
             try:
@@ -200,8 +200,6 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         area_summary = None
         if new_area is not None:
-            catalog_subdir = "debug" if debug else "release"
-            manifest_url = new_area.manifestUrl.removeprefix("./")
             area_summary = AreaSummary(
                 id=new_area.id,
                 name=new_area.name,
@@ -209,7 +207,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 minRadiusPx=new_area.minRadiusPx,
                 maxRadiusPx=new_area.maxRadiusPx,
                 liveMapRadiusPx=new_area.liveMapRadiusPx,
-                manifestUrl=f"./{catalog_subdir}/{manifest_url}",
+                manifestUrl=new_area.manifestUrl,
             )
 
         return AddAreaOutput(error=OK, area=area_summary)
