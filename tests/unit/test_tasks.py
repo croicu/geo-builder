@@ -50,6 +50,14 @@ class TestFromPayload:
         assert len(tasks) == 1
         assert tasks[0].type == "acquisition"
 
+    def test_poi_task_parsed(self):
+        payload = {"pois": {"type": "poi"}}
+
+        tasks = Tasks.from_payload(payload)
+
+        assert len(tasks) == 1
+        assert tasks[0].type == "poi"
+
     def test_unknown_type_raises(self):
         payload = {"bad": {"type": "unknown"}}
 

@@ -81,6 +81,15 @@ def _on_web_message_received(_, args) -> None:  # noqa: ANN001
         api._on_message(raw)
 
 
+def _normalize_bbox(bbox: list[float]) -> list[float]:
+    """Normalize bbox longitudes to [-180, 180). Browsers can send values outside this range when the map is panned past the antimeridian."""
+
+    def norm(lon: float) -> float:
+        return ((lon + 180) % 360) - 180
+
+    return [norm(bbox[0]), bbox[1], norm(bbox[2]), bbox[3]]
+
+
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     from ..api import (
         ADD_AREA_ID,
@@ -95,7 +104,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SetAreaBboxOutput,
     )
     from ..builder import Builder
-    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
     from ..entities import GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
@@ -114,7 +123,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         if area is None:
             return SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
 
-        area.bbox = list(data.bbox)
+        area.bbox = _normalize_bbox(list(data.bbox))
 
         if in_dir is not None:
             save_catalog_meta(catalog, in_dir, debug=debug)
@@ -149,7 +158,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             )
 
         area_id = GeoLayer.id_from_merge_key(data.areaName)
-        bbox = data.bbox  # [west, south, east, north]
+        bbox = _normalize_bbox(list(data.bbox))  # [west, south, east, north]
 
         acquisition_task = AcquisitionTask(
             areaId=area_id,
@@ -158,7 +167,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
             filters=template.filters,
         )
-        tasks = [acquisition_task, AggregationTask(), DedupingTask()]
+        tasks = [acquisition_task, AggregationTask(), DedupingTask(), PoiTask()]
 
         if in_dir is not None:
             try:
@@ -192,8 +201,6 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         area_summary = None
         if new_area is not None:
-            catalog_subdir = "debug" if debug else "release"
-            manifest_url = new_area.manifestUrl.removeprefix("./")
             area_summary = AreaSummary(
                 id=new_area.id,
                 name=new_area.name,
@@ -201,7 +208,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 minRadiusPx=new_area.minRadiusPx,
                 maxRadiusPx=new_area.maxRadiusPx,
                 liveMapRadiusPx=new_area.liveMapRadiusPx,
-                manifestUrl=f"./{catalog_subdir}/{manifest_url}",
+                manifestUrl=new_area.manifestUrl,
             )
 
         return AddAreaOutput(error=OK, area=area_summary)

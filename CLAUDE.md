@@ -11,6 +11,16 @@ Build a simple, deterministic Python application that creates static geographic 
 - Before implementing any feature or non-trivial change, ask clarifying questions until the intent is unambiguous.
 - If anything is unclear or could be interpreted multiple ways, ask — do not assume and implement.
 
+## Before committing
+
+Run these before every commit:
+
+```bash
+ruff format src/ tests/
+ruff check src/ tests/
+pytest
+```
+
 ## Documentation rule
 
 After any change that affects the public interface, CLI, file formats, or core architecture, update the relevant docs:
@@ -60,6 +70,24 @@ pytest tests/test_foo.py::test_bar   # single test
 9. Tests must run offline.
 10. Static artifacts are immutable and deterministic.
 
+## Logging
+
+Logging is essential for diagnosing build failures, provider errors, and unexpected behavior in production runs.
+
+- **Use `Logger`** (`from geo_builder.diagnostics import Logger`) — not bare `print()`. Every worker and provider must log through `Logger`.
+- **All features must log** — every feature logs success and errors. No silent success, no swallowed errors.
+- **Message length by severity**:
+  - **Success (info)** — short: feature started, feature ended. Features that run frequently (hot paths, per-item loops) are exempt from start/end logging.
+  - **Recoverable issues (warning)** — medium: enough context to understand what went wrong and why it was non-fatal (e.g., HTTP status, what was retried or skipped).
+  - **Errors (error/fatal)** — detailed: full context needed to reproduce and diagnose (e.g., inputs, HTTP status, exception text, what was abandoned).
+- **Workers** — log start (`Logger.info("XyzWorker: execute.")`) and completion (`Logger.info("XyzWorker: completed. ...")`). Include a useful summary on completion (e.g., counts of items processed or created).
+- **Providers** — log every HTTP interaction: request size, URL, response size, and any error with its HTTP status code.
+- **Errors and retries** — always log the HTTP status code and the action taken (`Logger.warning`). Never swallow a status code silently.
+- **Level guide**:
+  - `Logger.info` — normal notable events (start, end, success, counts)
+  - `Logger.warning` — recoverable problems (retries, splits, skipped items)
+  - `Logger.error` / `Logger.fatal` — unrecoverable failures
+
 ## Coding Style
 
 - **Protocols are pure data** — `protocols.py` holds dataclasses only. No methods, no logic. Behavior lives in entity classes (`geo_builder/entities/`).
@@ -106,7 +134,7 @@ Future:
 
 **Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`).
 
-**Bbox decomposition** — When OverpassProvider receives a 400/429/504, AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. This is the mechanism for handling "request too large" errors without caller involvement.
+**Bbox decomposition** — When OverpassProvider receives HTTP 400 (query rejected / data too large), AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. HTTP 429 (rate limited) and 504 (timeout) trigger a retry-with-backoff inside `_execute_query` (delays: 5 s, 15 s, 45 s) before the split path is reached.
 
 **AreaStyle** — Each filter key in an acquisition task carries an `AreaStyle(values, color, scale)` record. `color` overrides the auto-assigned layer color; `scale` overrides `radiusScale` in the heatmap style (useful for sparse layers like historic places). Both are optional.
 

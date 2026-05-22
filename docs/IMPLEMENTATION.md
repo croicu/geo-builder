@@ -63,3 +63,59 @@ All reads and writes to the model (catalog, areas, layers) must happen on the `r
 `Gateway` enforces this by routing every inbound message and every outbound call through its internal `Queue`. Both JS→Python events and Python→JS method callbacks are dispatched by that same loop, so handler code is always on the dispatcher thread.
 
 Any model access that bypasses this queue (e.g. reading catalog state from the WinForms UI thread or from a one-off `threading.Thread`) is subject to race conditions and must be avoided.
+
+## Feature Enrichment (Overpass)
+
+During acquisition, `OverpassProvider._to_geojson` extracts additional OSM tags for each element:
+
+- `name`, `cuisine`, `opening_hours` — taken directly from element tags
+- `address` — assembled from `addr:street` + `addr:housenumber` + `addr:city`; falls back to `addr:full`
+- `phone` — `contact:phone` preferred, falls back to `phone`
+- `website` — `contact:website` preferred, falls back to `website`
+
+`hasDetails: true` is set on a feature when at least one of the above fields is present. Features without any detail fields carry only `weight` (and the standard id/name/amenity properties).
+
+Review/search URLs (Foursquare, Google Maps, Yelp) are **not** baked into the GeoJSON; they are computed at render time in the browser from `name` and coordinates.
+
+## POI Layer
+
+`PoiWorker` runs after aggregation and deduping. For each area it:
+
+1. Scans all layers for features with `hasDetails: true`.
+2. If any are found, inserts a **stub** `Layer` with `type: "poi-heat"` into the area's layer list. The stub has no `url` and no `geojson`; it is manifest-only metadata.
+3. If none are found (or the area was updated and details disappeared), removes any existing stub.
+
+The stub's presence in the manifest is the signal to the browser that POI data exists and the layer should appear in the layer selection widget. Style properties (name, color, radius, opacity) are driven by the `style` block in the `poi` task definition in tasks.json and stored as `PoiStyle` in `protocols.py`.
+
+Persistence skips `save_layer` for stub layers (`url is None`). Loading skips the GeoJSON file read for the same reason.
+
+## Overpass Query Shape
+
+Multi-value filters use a **regex union** instead of one filter line per value:
+
+```
+# Before (N values × 3 element types = 3N lines):
+node["amenity"="bar"](bbox);
+node["amenity"="cafe"](bbox);
+...
+
+# After (always 3 lines per key):
+node["amenity"~"^(bar|cafe|restaurant|...)$"](bbox);
+way["amenity"~"^(bar|cafe|restaurant|...)$"](bbox);
+relation["amenity"~"^(bar|cafe|restaurant|...)$"](bbox);
+```
+
+Single-value filters still use `=` equality. Wildcards (`*`) use the bare key form `["amenity"]`.
+
+## Overpass Error Handling
+
+HTTP status codes are handled differently:
+
+| Code | Meaning | Action |
+|------|---------|--------|
+| 400 | Query rejected / data too large | Raise `ProviderError` immediately → AcquisitionWorker splits bbox |
+| 429 | Rate limited | Retry with backoff (5 s, 15 s, 45 s); after exhausting retries → raise `ProviderError` |
+| 504 | Gateway timeout | Same as 429 |
+| other | Unexpected | Re-raise as-is |
+
+Retry delays are defined in `_RETRY_DELAYS = (5, 15, 45)` in `overpass.py`.

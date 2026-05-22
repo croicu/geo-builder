@@ -151,11 +151,10 @@ class TestBuildQuery:
         assert "40.8,14.2,40.9,14.33" in query
 
     def test_contains_filter_key_and_value(self):
+        # Three values → regex union (3 lines instead of 9)
         query = self.provider._build_query(TASK)
 
-        assert '"amenity"="restaurant"' in query
-        assert '"amenity"="cafe"' in query
-        assert '"amenity"="bar"' in query
+        assert '"amenity"~"^(bar|cafe|restaurant)$"' in query
 
     def test_emits_node_way_relation_per_value(self):
         task = AcquisitionTask(
@@ -242,6 +241,25 @@ class TestWildcard:
 
         assert 'node["historic"]' in query
         assert '"amenity"="restaurant"' in query
+
+
+class TestBuildFilterExpr:
+    def setup_method(self):
+        self.provider = OverpassProvider()
+
+    def test_single_value_uses_equality(self):
+        assert self.provider._build_filter_expr("amenity", ["restaurant"]) == '["amenity"="restaurant"]'
+
+    def test_multiple_values_uses_regex_union(self):
+        expr = self.provider._build_filter_expr("amenity", ["cafe", "bar", "restaurant"])
+        assert expr == '["amenity"~"^(bar|cafe|restaurant)$"]'
+
+    def test_multiple_values_sorted_in_regex(self):
+        expr = self.provider._build_filter_expr("amenity", ["restaurant", "bar"])
+        assert "bar|restaurant" in expr
+
+    def test_wildcard_uses_key_only(self):
+        assert self.provider._build_filter_expr("historic", ["*"]) == '["historic"]'
 
 
 class TestCreateMergeKey:
@@ -337,6 +355,7 @@ class TestExpandFilter:
         assert key == "overpass:amenity=sustenance"
 
     def test_query_contains_expanded_values_not_meta_name(self):
+        # sustenance expands to 8 values → regex union
         task = AcquisitionTask(
             areaId="x",
             areaName="X",
@@ -347,8 +366,9 @@ class TestExpandFilter:
         query = self.provider._build_query(task)
 
         assert '"amenity"="sustenance"' not in query
-        assert '"amenity"="restaurant"' in query
-        assert '"amenity"="cafe"' in query
+        assert '"amenity"~' in query
+        assert "restaurant" in query
+        assert "cafe" in query
 
 
 class TestExecuteQuery:
@@ -360,14 +380,41 @@ class TestExecuteQuery:
 
         assert result == PAYLOAD
 
-    @pytest.mark.parametrize("code", [400, 429, 504])
-    def test_rate_limit_codes_raise_provider_error(self, code):
+    def test_400_raises_provider_error_immediately(self):
+        provider = OverpassProvider({"url": "http://fake"})
+        error = urllib.error.HTTPError(url="", code=400, msg="", hdrs=None, fp=None)
+
+        with patch("urllib.request.urlopen", side_effect=error) as mock_urlopen:
+            with patch("time.sleep") as mock_sleep:
+                with pytest.raises(ProviderError):
+                    provider._execute_query("query")
+
+        assert mock_urlopen.call_count == 1
+        assert mock_sleep.call_count == 0
+
+    @pytest.mark.parametrize("code", [429, 504])
+    def test_retryable_codes_retry_then_raise(self, code):
         provider = OverpassProvider({"url": "http://fake"})
         error = urllib.error.HTTPError(url="", code=code, msg="", hdrs=None, fp=None)
 
-        with patch("urllib.request.urlopen", side_effect=error):
-            with pytest.raises(ProviderError):
-                provider._execute_query("query")
+        with patch("urllib.request.urlopen", side_effect=error) as mock_urlopen:
+            with patch("time.sleep") as mock_sleep:
+                with pytest.raises(ProviderError):
+                    provider._execute_query("query")
+
+        assert mock_urlopen.call_count == 4  # 1 initial + 3 retries
+        assert mock_sleep.call_count == 3
+
+    @pytest.mark.parametrize("code", [429, 504])
+    def test_retry_succeeds_on_second_attempt(self, code):
+        provider = OverpassProvider({"url": "http://fake"})
+        error = urllib.error.HTTPError(url="", code=code, msg="", hdrs=None, fp=None)
+
+        with patch("urllib.request.urlopen", side_effect=[error, make_response(PAYLOAD)]):
+            with patch("time.sleep"):
+                result = provider._execute_query("query")
+
+        assert result == PAYLOAD
 
     def test_other_http_error_reraises(self):
         provider = OverpassProvider({"url": "http://fake"})

@@ -173,7 +173,7 @@ def _load_pipeline_steps(data: object) -> list[PipelineStep]:
                     type=str(style_data.get("type", "heatmap")),
                 )
             steps.append(PipelineStep(type="acquisition", provider=str(item.get("provider", "")), filters=filters))
-        elif step_type in ("aggregation", "deduping"):
+        elif step_type in ("aggregation", "deduping", "poi"):
             steps.append(PipelineStep(type=step_type))
     return steps
 
@@ -204,7 +204,8 @@ def save_area(geo_area: GeoArea, output_dir: Path) -> None:
     save_json(manifest_path, {"version": manifest_version, "tasks": tasks_payload, "layers": layers_payload})
 
     for geo_layer in geo_area.layers:
-        save_layer(geo_layer.layer, manifest_path.parent)
+        if geo_layer.layer.url is not None:
+            save_layer(geo_layer.layer, manifest_path.parent)
 
 
 def _load_manifest_layers(manifest_path: Path, payload: dict[str, JsonValue]) -> list[GeoLayer]:
@@ -216,11 +217,30 @@ def _load_manifest_layers(manifest_path: Path, payload: dict[str, JsonValue]) ->
     manifest_dir = manifest_path.parent
     geo_layers = []
     for layer_payload in layers_payload:
-        if isinstance(layer_payload, dict):
-            geojson_path = child_path(manifest_dir, str(layer_payload["url"]))
+        if not isinstance(layer_payload, dict):
+            continue
+        url = layer_payload.get("url")
+        if url is None:
+            geo_layers.append(GeoLayer(_load_stub_layer(layer_payload)))
+        else:
+            geojson_path = child_path(manifest_dir, str(url))
             geo_layers.append(GeoLayer(load_layer(geojson_path, layer_payload)))
 
     return geo_layers
+
+
+def _load_stub_layer(payload: dict[str, JsonValue]) -> Layer:
+    style = payload.get("style", {})
+    if not isinstance(style, dict):
+        style = {}
+    return Layer(
+        id=str(payload["id"]),
+        name=str(payload["name"]),
+        type=str(payload["type"]),
+        visible=bool(payload["visible"]),
+        style=style,
+        mergeKey=str(payload["mergeKey"]),
+    )
 
 
 def load_layer(geojson_path: Path, payload: dict[str, JsonValue]) -> Layer:
@@ -301,6 +321,8 @@ def save_area_csv(geo_area: GeoArea, output_dir: Path) -> None:
 
     rows: list[tuple[str, object]] = []
     for geo_layer in geo_area.layers:
+        if geo_layer.layer.geojson is None:
+            continue
         for feature in geo_layer.layer.geojson.features:
             rows.append((geo_layer.layer.id, feature))
 

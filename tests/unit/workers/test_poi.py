@@ -1,0 +1,130 @@
+from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
+from geo_builder.workers.poi import PoiWorker
+from tests.shared.stubs import StubExecutor
+
+
+def make_area(layers: list[Layer]) -> GeoArea:
+    summary = Area(
+        id="napoli",
+        name="Napoli",
+        bbox=[14.20, 40.80, 14.33, 40.90],
+        minRadiusPx=32,
+        maxRadiusPx=512,
+        liveMapRadiusPx=640,
+        manifestUrl="./areas/napoli/manifest.json",
+    )
+    geo_layers = []
+    for layer in layers:
+        geo_layers.append(GeoLayer(layer))
+    return GeoArea(summary=summary, layers=geo_layers)
+
+
+def make_layer(layer_id: str, features: list[Feature]) -> Layer:
+    return Layer(
+        id=layer_id,
+        name="Test Layer",
+        type="heatmap",
+        visible=True,
+        style={},
+        mergeKey=f"overpass:{layer_id}",
+        url=f"./layers/{layer_id}.geojson",
+        geojson=GeoJson(type="FeatureCollection", features=features),
+    )
+
+
+def make_feature(has_details: bool = False) -> Feature:
+    properties: dict = {"weight": 1.0}
+    if has_details:
+        properties["hasDetails"] = True
+        properties["name"] = "Bar Gaetano"
+    return Feature(
+        type="Feature",
+        properties=properties,
+        geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
+    )
+
+
+def make_executor(areas: list[GeoArea]) -> StubExecutor:
+    catalog = GeoCatalog(areas=areas)
+    area = areas[0] if areas else make_area([])
+    return StubExecutor(area=area, catalog=catalog)
+
+
+def run(areas: list[GeoArea]) -> None:
+    executor = make_executor(areas)
+    PoiWorker(task=None).execute(executor)
+
+
+class TestPoiWorker:
+    def test_returns_non_fatal(self):
+        executor = make_executor([make_area([])])
+        result = PoiWorker(task=None).execute(executor)
+        assert not result.fatal
+
+    def test_no_stub_when_no_details(self):
+        layer = make_layer("restaurants", [make_feature(has_details=False)])
+        area = make_area([layer])
+        run([area])
+        layer_ids = [gl.layer.id for gl in area.layers]
+        assert "poi-heat" not in layer_ids
+
+    def test_stub_added_when_details_present(self):
+        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        area = make_area([layer])
+        run([area])
+        layer_ids = [gl.layer.id for gl in area.layers]
+        assert "poi-heat" in layer_ids
+
+    def test_stub_has_correct_type(self):
+        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        area = make_area([layer])
+        run([area])
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi-heat"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].type == "poi-heat"
+
+    def test_stub_has_no_geojson(self):
+        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        area = make_area([layer])
+        run([area])
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi-heat"]
+        assert poi_layers[0].geojson is None
+        assert poi_layers[0].url is None
+
+    def test_existing_stub_removed_when_no_details(self):
+        stub = Layer(
+            id="poi-heat",
+            name="POI Details",
+            type="poi-heat",
+            visible=True,
+            style={"opacity": 0.7},
+            mergeKey="poi-heat",
+        )
+        layer = make_layer("restaurants", [make_feature(has_details=False)])
+        area = make_area([layer, stub])
+        run([area])
+        layer_ids = [gl.layer.id for gl in area.layers]
+        assert "poi-heat" not in layer_ids
+
+    def test_stub_not_duplicated_on_repeated_run(self):
+        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        area = make_area([layer])
+        run([area])
+        run([area])
+        poi_layers = [gl for gl in area.layers if gl.layer.id == "poi-heat"]
+        assert len(poi_layers) == 1
+
+    def test_details_in_any_layer_triggers_stub(self):
+        layer_a = make_layer("cafes", [make_feature(has_details=False)])
+        layer_b = make_layer("bars", [make_feature(has_details=True)])
+        area = make_area([layer_a, layer_b])
+        run([area])
+        layer_ids = [gl.layer.id for gl in area.layers]
+        assert "poi-heat" in layer_ids
+
+    def test_no_catalog_returns_non_fatal(self):
+        area = make_area([])
+        executor = StubExecutor(area=area, catalog=None)
+        result = PoiWorker(task=None).execute(executor)
+        assert not result.fatal

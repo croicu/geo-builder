@@ -18,6 +18,16 @@ class AreaStyle:
 
 
 @dataclass
+class PoiStyle:
+    name: str = "POI"
+    type: str = "circle"
+    color: str | None = None
+    opacity: float = 0.7
+    radius: float | None = None
+    surface: bool = False
+
+
+@dataclass
 class Acquisition:
     provider: str
     filters: dict[str, AreaStyle] = field(default_factory=dict)
@@ -53,11 +63,11 @@ class Layer:
     id: str
     name: str
     type: str
-    url: str
     visible: bool
     style: dict[str, JsonValue]
     mergeKey: str
-    geojson: GeoJson
+    url: str | None = None
+    geojson: GeoJson | None = None
 
 
 @dataclass

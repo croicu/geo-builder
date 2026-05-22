@@ -1,6 +1,6 @@
-from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, Task
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task
 from .errors import TaskError
-from .protocols import Acquisition, AreaStyle
+from .protocols import Acquisition, AreaStyle, PoiStyle
 
 
 def _parse_filters(filters_data: object, task_name: str) -> dict[str, AreaStyle]:
@@ -66,6 +66,21 @@ class Tasks:
 
             if task_type == "deduping":
                 tasks.append(DedupingTask())
+                continue
+
+            if task_type == "poi":
+                style_data = item.get("style", {})
+                if not isinstance(style_data, dict):
+                    style_data = {}
+                style = PoiStyle(
+                    name=str(style_data.get("name", "POI")),
+                    type=str(style_data.get("type", "circle")),
+                    color=str(style_data["color"]) if style_data.get("color") is not None else None,
+                    opacity=float(style_data.get("opacity", 0.7)),
+                    radius=float(style_data["radius"]) if style_data.get("radius") is not None else None,
+                    surface=bool(style_data.get("surface", False)),
+                )
+                tasks.append(PoiTask(style=style))
                 continue
 
             raise TaskError(f"Unknown task type: '{task_type}' in task '{name}'.")
