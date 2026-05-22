@@ -126,14 +126,90 @@ class TestToGeoJson:
 
         assert geojson.features == []
 
-    def test_none_tag_values_excluded_from_properties(self):
+    def test_non_enriched_feature_has_only_weight(self):
         payload = {"elements": [{"type": "node", "id": 1, "lat": 40.85, "lon": 14.27, "tags": {"amenity": "restaurant"}}]}
 
         geojson = self.provider._to_geojson(payload)
 
+        assert geojson.features[0].properties == {"weight": 1.0}
+
+    def test_enriched_feature_has_details_fields(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 42,
+                    "lat": 40.85,
+                    "lon": 14.27,
+                    "tags": {
+                        "name": "Trattoria da Mario",
+                        "amenity": "restaurant",
+                        "cuisine": "italian",
+                        "addr:street": "Via Roma",
+                        "addr:housenumber": "42",
+                        "addr:city": "Naples",
+                        "website": "https://example.com",
+                        "opening_hours": "Mo-Su 12:00-23:00",
+                    },
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
         props = geojson.features[0].properties
-        assert "name" not in props
+        assert props["hasDetails"] is True
+        assert props["id"] == 42
+        assert props["name"] == "Trattoria da Mario"
         assert props["amenity"] == "restaurant"
+        assert props["cuisine"] == "italian"
+        assert props["address"] == "Via Roma 42, Naples"
+        assert props["website"] == "https://example.com"
+        assert props["opening_hours"] == "Mo-Su 12:00-23:00"
+        assert props["weight"] == 1.0
+
+    def test_phone_not_included_in_properties(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 1,
+                    "lat": 40.85,
+                    "lon": 14.27,
+                    "tags": {
+                        "amenity": "restaurant",
+                        "phone": "+1-555-0100",
+                        "contact:phone": "+1-555-0100",
+                        "cuisine": "italian",
+                    },
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert "phone" not in props
+
+    def test_phone_alone_does_not_trigger_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 1,
+                    "lat": 40.85,
+                    "lon": 14.27,
+                    "tags": {
+                        "amenity": "restaurant",
+                        "phone": "+1-555-0100",
+                    },
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        assert "hasDetails" not in geojson.features[0].properties
 
     def test_empty_elements_returns_empty_collection(self):
         geojson = self.provider._to_geojson({"elements": []})
@@ -586,3 +662,28 @@ class TestPolygonAreaSqm:
             ]
 
         assert self.provider._polygon_area_sqm(square_at(60.0)) < self.provider._polygon_area_sqm(square_at(0.0))
+
+
+class TestBuildAddress:
+    def setup_method(self):
+        self.provider = OverpassProvider()
+
+    def test_addr_full_takes_priority(self):
+        tags = {"addr:full": "Via Roma 42, Naples", "addr:street": "Other St", "addr:housenumber": "1"}
+        assert self.provider._build_address(tags) == "Via Roma 42, Naples"
+
+    def test_street_and_number_and_city(self):
+        tags = {"addr:street": "Via Roma", "addr:housenumber": "42", "addr:city": "Naples"}
+        assert self.provider._build_address(tags) == "Via Roma 42, Naples"
+
+    def test_street_without_number(self):
+        tags = {"addr:street": "Via Roma", "addr:city": "Naples"}
+        assert self.provider._build_address(tags) == "Via Roma, Naples"
+
+    def test_city_alone(self):
+        tags = {"addr:city": "Naples"}
+        assert self.provider._build_address(tags) == "Naples"
+
+    def test_no_address_tags_returns_none(self):
+        assert self.provider._build_address({}) is None
+        assert self.provider._build_address({"name": "Cafe"}) is None

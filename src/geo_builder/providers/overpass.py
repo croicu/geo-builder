@@ -177,20 +177,13 @@ out {out_mode};
 
             tags = element.get("tags", {})
 
-            name = tags.get("name")
             cuisine = tags.get("cuisine")
             address = self._build_address(tags)
-            phone = tags.get("contact:phone") or tags.get("phone")
             website = tags.get("contact:website") or tags.get("website")
             opening_hours = tags.get("opening_hours")
-            has_details = bool(cuisine or address or phone or website or opening_hours)
+            has_details = bool(cuisine or address or website or opening_hours)
 
-            properties: dict = {
-                "id": element.get("id"),
-                "name": name,
-                "amenity": tags.get("amenity"),
-                "weight": 1.0,
-            }
+            properties: dict = {"weight": 1.0}
 
             area_sqm: float | None = None
             if surface and element.get("type") == "way":
@@ -201,20 +194,25 @@ out {out_mode};
                         properties["area_sqm"] = round(area_sqm, 1)
                         properties["radius_m"] = round(math.sqrt(area_sqm / math.pi), 1)
 
-            properties = {key: value for key, value in properties.items() if value is not None}
-
-            if cuisine:
-                properties["cuisine"] = cuisine
-            if address:
-                properties["address"] = address
-            if phone:
-                properties["phone"] = phone
-            if website:
-                properties["website"] = website
-            if opening_hours:
-                properties["opening_hours"] = opening_hours
             if has_details:
+                element_id = element.get("id")
+                name = tags.get("name")
+                amenity = tags.get("amenity")
+                if element_id is not None:
+                    properties["id"] = element_id
                 properties["hasDetails"] = True
+                if name is not None:
+                    properties["name"] = name
+                if amenity is not None:
+                    properties["amenity"] = amenity
+                if cuisine:
+                    properties["cuisine"] = cuisine
+                if address:
+                    properties["address"] = address
+                if website:
+                    properties["website"] = website
+                if opening_hours:
+                    properties["opening_hours"] = opening_hours
 
             features.append(
                 Feature(
@@ -268,27 +266,29 @@ out {out_mode};
         return area_deg2 * meters_per_deg**2 * math.cos(math.radians(center_lat))
 
     def _build_address(self, tags: dict) -> str | None:
+        full = tags.get("addr:full")
+        if full:
+            return full
+
         street = tags.get("addr:street")
         number = tags.get("addr:housenumber")
         city = tags.get("addr:city")
 
-        if street or number or city:
-            street_parts: list[str] = []
-            if street:
-                street_parts.append(street)
-            if number:
-                street_parts.append(number)
-            street_line = " ".join(street_parts)
+        parts: list[str] = []
+        street_parts: list[str] = []
+        if street:
+            street_parts.append(street)
+        if number:
+            street_parts.append(number)
+        if street_parts:
+            parts.append(" ".join(street_parts))
+        if city:
+            parts.append(city)
 
-            parts: list[str] = []
-            if street_line:
-                parts.append(street_line)
-            if city:
-                parts.append(city)
-            if parts:
-                return ", ".join(parts)
+        if parts:
+            return ", ".join(parts)
 
-        return tags.get("addr:full") or None
+        return None
 
     def _create_merge_key(self, task: AcquisitionTask) -> str:
         parts: list[str] = [task.provider]

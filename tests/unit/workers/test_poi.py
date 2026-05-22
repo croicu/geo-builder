@@ -67,52 +67,52 @@ class TestPoiWorker:
         area = make_area([layer])
         run([area])
         layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi-heat" not in layer_ids
+        assert "poi" not in layer_ids
 
     def test_stub_added_when_details_present(self):
         layer = make_layer("restaurants", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
         layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi-heat" in layer_ids
+        assert "poi" in layer_ids
 
     def test_stub_has_correct_type(self):
         layer = make_layer("restaurants", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
-        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi-heat"]
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi"]
         assert len(poi_layers) == 1
-        assert poi_layers[0].type == "poi-heat"
+        assert poi_layers[0].type == "poi"
 
     def test_stub_has_no_geojson(self):
         layer = make_layer("restaurants", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
-        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi-heat"]
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi"]
         assert poi_layers[0].geojson is None
         assert poi_layers[0].url is None
 
     def test_existing_stub_removed_when_no_details(self):
         stub = Layer(
-            id="poi-heat",
+            id="poi",
             name="POI Details",
-            type="poi-heat",
+            type="poi",
             visible=True,
             style={"opacity": 0.7},
-            mergeKey="poi-heat",
+            mergeKey="poi",
         )
         layer = make_layer("restaurants", [make_feature(has_details=False)])
         area = make_area([layer, stub])
         run([area])
         layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi-heat" not in layer_ids
+        assert "poi" not in layer_ids
 
     def test_stub_not_duplicated_on_repeated_run(self):
         layer = make_layer("restaurants", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
         run([area])
-        poi_layers = [gl for gl in area.layers if gl.layer.id == "poi-heat"]
+        poi_layers = [gl for gl in area.layers if gl.layer.id == "poi"]
         assert len(poi_layers) == 1
 
     def test_details_in_any_layer_triggers_stub(self):
@@ -121,7 +121,7 @@ class TestPoiWorker:
         area = make_area([layer_a, layer_b])
         run([area])
         layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi-heat" in layer_ids
+        assert "poi" in layer_ids
 
     def test_no_catalog_returns_non_fatal(self):
         area = make_area([])
