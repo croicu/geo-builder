@@ -3,8 +3,8 @@ from ..diagnostics import Logger
 from ..entities import GeoArea, GeoLayer
 from ..protocols import Layer, PoiStyle
 
-_POI_HEAT_ID = "poi-heat"
-_POI_HEAT_MERGE_KEY = "poi-heat"
+_POI_HEAT_ID = "poi"
+_POI_HEAT_MERGE_KEY = "poi"
 
 
 class PoiWorker(Worker):
@@ -28,7 +28,7 @@ class PoiWorker(Worker):
             if had_details:
                 stub_count += 1
 
-        Logger.info(f"PoiWorker: completed. poi-heat stub added to {stub_count}/{len(catalog.areas)} area(s).")
+        Logger.info(f"PoiWorker: completed. poi stub added to {stub_count}/{len(catalog.areas)} area(s).")
         return WorkerResult()
 
     def _process_area(self, area: GeoArea, style: PoiStyle) -> bool:
@@ -63,7 +63,7 @@ class PoiWorker(Worker):
         return Layer(
             id=_POI_HEAT_ID,
             name=style.name,
-            type="poi-heat",
+            type="poi",
             visible=True,
             style=layer_style,
             mergeKey=_POI_HEAT_MERGE_KEY,

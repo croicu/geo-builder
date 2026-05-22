@@ -82,7 +82,7 @@ Review/search URLs (Foursquare, Google Maps, Yelp) are **not** baked into the Ge
 `PoiWorker` runs after aggregation and deduping. For each area it:
 
 1. Scans all layers for features with `hasDetails: true`.
-2. If any are found, inserts a **stub** `Layer` with `type: "poi-heat"` into the area's layer list. The stub has no `url` and no `geojson`; it is manifest-only metadata.
+2. If any are found, inserts a **stub** `Layer` with `type: "poi"` into the area's layer list. The stub has no `url` and no `geojson`; it is manifest-only metadata.
 3. If none are found (or the area was updated and details disappeared), removes any existing stub.
 
 The stub's presence in the manifest is the signal to the browser that POI data exists and the layer should appear in the layer selection widget. Style properties (name, color, radius, opacity) are driven by the `style` block in the `poi` task definition in tasks.json and stored as `PoiStyle` in `protocols.py`.
