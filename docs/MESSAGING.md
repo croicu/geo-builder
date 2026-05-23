@@ -210,6 +210,11 @@ interface PutAreaJsonOutput {
   error: number;
   errorDescription: string | null;
 }
+
+// __geo_area_changed__ (event: Python → JS)
+interface AreaChangedData {
+  area: AreaSummary;
+}
 ```
 
 ---
@@ -632,3 +637,23 @@ gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ e
 - The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
 - The browser is responsible for reloading any `.geojson` files whose layers changed — the builder does not push a re-render event.
 - Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
+
+---
+
+## AreaChanged (`__geo_area_changed__`)
+
+Fired by the builder after an area's manifest has been saved and its pipeline has been re-run successfully. The browser should reload the area's manifest and layers from their URLs.
+
+**TypeScript:**
+```typescript
+const AreaChanged: EventDef<AreaChangedData, void> = { id: "__geo_area_changed__" };
+
+gateway.subscribe(AreaChanged, ({ area }) => {
+  // reload manifest and layers for area.id
+});
+```
+
+**Notes:**
+- Fired asynchronously after `put_area_json` returns — subscribe separately, do not rely on receiving it before or after the `put_area_json` response.
+- `area` contains the updated `AreaSummary` (same shape as in `catalog.json`). The browser can use this to refresh its in-memory area record without re-fetching `catalog.json`.
+- The pipeline has already completed and all output files have been written by the time this event fires.

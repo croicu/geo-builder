@@ -375,3 +375,29 @@ class TestGeoAreaApplyManifest:
 
         with pytest.raises(CatalogError):
             area.apply_manifest("not a dict", out_dir)  # type: ignore[arg-type]
+
+    def test_on_changed_callback_fires_after_save(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+        fired: list[str] = []
+
+        def on_changed(changed: GeoArea) -> None:
+            fired.append(changed.id)
+
+        area.subscribe_changed(on_changed)
+        area.apply_manifest({"version": 1, "tasks": [], "layers": []}, out_dir)
+
+        assert fired == ["rome"]
+
+    def test_on_changed_callback_not_fired_on_error(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+        fired: list[str] = []
+
+        def on_changed(changed: GeoArea) -> None:
+            fired.append(changed.id)
+
+        area.subscribe_changed(on_changed)
+
+        with pytest.raises(CatalogError):
+            area.apply_manifest("not a dict", out_dir)  # type: ignore[arg-type]
+
+        assert fired == []

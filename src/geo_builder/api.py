@@ -92,6 +92,17 @@ class AddAreaOutput:
 ADD_AREA_ID = "__geo_add_area__"
 
 
+# --- AreaChanged ---
+
+
+@dataclass
+class AreaChangedData:
+    area: AreaSummary
+
+
+AREA_CHANGED_ID = "__geo_area_changed__"
+
+
 # --- GetAreaJson ---
 
 

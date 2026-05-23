@@ -93,6 +93,7 @@ def _normalize_bbox(bbox: list[float]) -> list[float]:
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     from ..api import (
         ADD_AREA_ID,
+        AREA_CHANGED_ID,
         ERR_AREA_NOT_FOUND,
         ERR_IO,
         ERR_MANIFEST_INVALID,
@@ -103,6 +104,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
+        AreaChangedData,
         AreaSummary,
         GetAreaJsonInput,
         GetAreaJsonOutput,
@@ -113,11 +115,55 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     )
     from ..builder import Builder
     from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
-    from ..entities import GeoLayer
+    from ..entities import GeoArea, GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
     from ..protocols import Manifest, PipelineStep
     from ..settings import Settings
+
+    api.define_event(AREA_CHANGED_ID, AreaChangedData)
+
+    def on_area_changed(changed_area: GeoArea) -> None:
+        if in_dir is not None:
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError:
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        for a in fresh_catalog.areas:
+            if a.id == changed_area.id:
+                a.layers.clear()
+                break
+
+        result = Builder(fresh_catalog).run()
+        save_catalog(result, out_dir, debug=debug)
+
+        catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
+
+        updated_area = None
+        for a in result.areas:
+            if a.id == changed_area.id:
+                updated_area = a
+                break
+
+        if updated_area is not None:
+            area_summary = AreaSummary(
+                id=updated_area.id,
+                name=updated_area.name,
+                bbox=updated_area.bbox,
+                minRadiusPx=updated_area.minRadiusPx,
+                maxRadiusPx=updated_area.maxRadiusPx,
+                liveMapRadiusPx=updated_area.liveMapRadiusPx,
+                manifestUrl=updated_area.manifestUrl,
+            )
+            api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+
+    for area in catalog.areas:
+        area.subscribe_changed(on_area_changed)
 
     api.define_method(SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput)
 
@@ -191,6 +237,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             save_catalog(result, in_dir, debug=debug)
 
         catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
 
         new_area = None
         for a in result.areas:
@@ -251,8 +299,9 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         if area is None:
             return PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
 
+        save_dir = in_dir if in_dir is not None else out_dir
         try:
-            area.apply_manifest(data.manifest, out_dir)
+            area.apply_manifest(data.manifest, save_dir)
         except GeoError as exc:
             return PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc))
         except OSError as exc:

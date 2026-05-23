@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -204,6 +205,10 @@ class GeoArea:
         self._summary = summary
         self.layers: list[GeoLayer] = layers if layers is not None else []
         self.detail = detail
+        self._on_changed: Callable[[GeoArea], None] | None = None
+
+    def subscribe_changed(self, fn: Callable[[GeoArea], None]) -> None:
+        self._on_changed = fn
 
     @classmethod
     def load(cls, manifest_path: Path, area_payload: dict) -> GeoArea:
@@ -264,6 +269,9 @@ class GeoArea:
 
         self.layers = new_layers
         self.detail = new_detail
+
+        if self._on_changed is not None:
+            self._on_changed(self)
 
     @property
     def summary(self) -> Area:  # TODO: protocol exposed — revisit
