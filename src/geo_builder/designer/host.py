@@ -123,22 +123,19 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
     api.define_event(AREA_CHANGED_ID, AreaChangedData)
 
-    def on_area_changed(changed_area: GeoArea) -> None:
-        if in_dir is not None:
-            try:
-                fresh_catalog = load_catalog(in_dir, debug=debug)
-            except GeoError:
-                fresh_catalog = catalog
-        else:
-            fresh_catalog = catalog
-
+    def _rebuild_area(area_id: str, fresh_catalog: GeoCatalog) -> None:
+        """Run the pipeline for area_id, update catalog, and fire AreaChanged on success."""
         for a in fresh_catalog.areas:
-            if a.id == changed_area.id:
+            if a.id == area_id:
                 a.layers.clear()
                 break
 
-        result = Builder(fresh_catalog).run()
-        save_catalog(result, out_dir, debug=debug)
+        try:
+            result = Builder(fresh_catalog).run()
+            save_catalog(result, out_dir, debug=debug)
+        except Exception as exc:
+            Logger.error(f"pipeline failed for area '{area_id}': {exc}")
+            return
 
         catalog.areas[:] = result.areas
         for a in catalog.areas:
@@ -146,7 +143,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         updated_area = None
         for a in result.areas:
-            if a.id == changed_area.id:
+            if a.id == area_id:
                 updated_area = a
                 break
 
@@ -160,7 +157,20 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 liveMapRadiusPx=updated_area.liveMapRadiusPx,
                 manifestUrl=updated_area.manifestUrl,
             )
+            Logger.info(f"AreaChanged: firing for area '{area_id}'.")
             api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+
+    def on_area_changed(changed_area: GeoArea) -> None:
+        if in_dir is not None:
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError as exc:
+                Logger.warning(f"AreaChanged: failed to reload catalog: {exc}; using in-memory catalog.")
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        _rebuild_area(changed_area.id, fresh_catalog)
 
     for area in catalog.areas:
         area.subscribe_changed(on_area_changed)
@@ -183,19 +193,13 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             save_catalog_meta(catalog, in_dir, debug=debug)
             try:
                 fresh_catalog = load_catalog(in_dir, debug=debug)
-            except GeoError:
+            except GeoError as exc:
+                Logger.warning(f"SetAreaBbox: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
         else:
             fresh_catalog = catalog
 
-        for a in fresh_catalog.areas:
-            if a.id == data.areaId:
-                a.layers.clear()
-                break
-
-        result = Builder(fresh_catalog).run()
-        save_catalog(result, out_dir, debug=debug)
-
+        _rebuild_area(data.areaId, fresh_catalog)
         return SetAreaBboxOutput(error=OK)
 
     api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
