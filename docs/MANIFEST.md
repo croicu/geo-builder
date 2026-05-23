@@ -59,7 +59,7 @@ If the Overpass query yields no enrichable POIs, the builder omits the manifest 
   "type": "poi",
   "url": null,
   "visible": true,
-  "style": { "opacity": 0.7, "type": "circle" },
+  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
   "mergeKey": "poi"
 }
 ```

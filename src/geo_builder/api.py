@@ -10,6 +10,8 @@ from dataclasses import dataclass
 OK = 0
 ERR_AREA_NOT_FOUND = 1
 ERR_TEMPLATE_NOT_FOUND = 2
+ERR_MANIFEST_INVALID = 3
+ERR_IO = 4
 
 
 # --- Ready (connection handshake) ---
@@ -88,3 +90,39 @@ class AddAreaOutput:
 
 
 ADD_AREA_ID = "__geo_add_area__"
+
+
+# --- GetAreaJson ---
+
+
+@dataclass
+class GetAreaJsonInput:
+    areaId: str
+
+
+@dataclass
+class GetAreaJsonOutput:
+    error: int
+    errorDescription: str | None = None
+    manifest: dict | None = None  # manifest.json-shaped payload; null when error != OK
+
+
+GET_AREA_JSON_ID = "__geo_get_area_json__"
+
+
+# --- PutAreaJson ---
+
+
+@dataclass
+class PutAreaJsonInput:
+    areaId: str
+    manifest: dict  # manifest.json-shaped payload
+
+
+@dataclass
+class PutAreaJsonOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+PUT_AREA_JSON_ID = "__geo_put_area_json__"

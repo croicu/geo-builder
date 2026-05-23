@@ -94,12 +94,20 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     from ..api import (
         ADD_AREA_ID,
         ERR_AREA_NOT_FOUND,
+        ERR_IO,
+        ERR_MANIFEST_INVALID,
         ERR_TEMPLATE_NOT_FOUND,
+        GET_AREA_JSON_ID,
         OK,
+        PUT_AREA_JSON_ID,
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
         AreaSummary,
+        GetAreaJsonInput,
+        GetAreaJsonOutput,
+        PutAreaJsonInput,
+        PutAreaJsonOutput,
         SetAreaBboxInput,
         SetAreaBboxOutput,
     )
@@ -214,6 +222,45 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         return AddAreaOutput(error=OK, area=area_summary)
 
     api.register(ADD_AREA_ID, on_add_area)
+
+    api.define_method(GET_AREA_JSON_ID, GetAreaJsonInput, GetAreaJsonOutput)
+
+    def on_get_area_json(data: GetAreaJsonInput) -> GetAreaJsonOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return GetAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+
+        return GetAreaJsonOutput(error=OK, manifest=area.to_manifest_dict())
+
+    api.register(GET_AREA_JSON_ID, on_get_area_json)
+
+    api.define_method(PUT_AREA_JSON_ID, PutAreaJsonInput, PutAreaJsonOutput)
+
+    def on_put_area_json(data: PutAreaJsonInput) -> PutAreaJsonOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+
+        try:
+            area.apply_manifest(data.manifest, out_dir)
+        except GeoError as exc:
+            return PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc))
+        except OSError as exc:
+            return PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc))
+
+        return PutAreaJsonOutput(error=OK)
+
+    api.register(PUT_AREA_JSON_ID, on_put_area_json)
 
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:

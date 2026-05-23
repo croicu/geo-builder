@@ -141,9 +141,11 @@ Every `@dataclass` in `src/geo_builder/api.py` becomes a TypeScript interface in
 Error codes:
 
 ```typescript
-const OK                   = 0;
-const ERR_AREA_NOT_FOUND   = 1;
+const OK                     = 0;
+const ERR_AREA_NOT_FOUND     = 1;
 const ERR_TEMPLATE_NOT_FOUND = 2;
+const ERR_MANIFEST_INVALID   = 3;
+const ERR_IO                 = 4;
 ```
 
 Current shared types:
@@ -187,6 +189,24 @@ interface SetAreaBboxInput {
   bbox: [number, number, number, number];  // [west, south, east, north]
 }
 interface SetAreaBboxOutput {
+  error: number;
+  errorDescription: string | null;
+}
+
+// __geo_get_area_json__ (method: JS → Python)
+interface GetAreaJsonInput  { areaId: string; }
+interface GetAreaJsonOutput {
+  error: number;
+  errorDescription: string | null;
+  manifest: ManifestJson | null;  // null when error !== OK
+}
+
+// __geo_put_area_json__ (method: JS → Python)
+interface PutAreaJsonInput {
+  areaId: string;
+  manifest: ManifestJson;  // manifest.json-shaped payload (see Static Artifacts)
+}
+interface PutAreaJsonOutput {
   error: number;
   errorDescription: string | null;
 }
@@ -283,16 +303,6 @@ Entry point. Tells the browser where the catalog file lives.
         "surface": false
       },
       "mergeKey": "overpass:amenity=restaurant,cafe"
-    },
-    // Optional — present only when at least one enriched POI exists in the area:
-    {
-      "id": "poi",
-      "name": "POI",
-      "type": "poi",
-      "url": null,
-      "visible": true,
-      "style": { "opacity": 0.7, "type": "circle" },
-      "mergeKey": "poi"
     }
   ]
 }
@@ -303,16 +313,49 @@ Entry point. Tells the browser where the catalog file lives.
 | Field | Type | Description |
 |---|---|---|
 | `type` | `"heatmap" \| "circle" \| "poi"` | Render mode |
-| `url` | `string \| null` | GeoJSON URL, relative to the manifest. `null` for virtual layers (e.g. `poi`). |
+| `url` | `string \| null` | GeoJSON URL, or `null` for virtual layers |
 | `visible` | `boolean` | Default visibility |
+| `mergeKey` | `string` | Optional grouping key (required on `poi` layers) |
+| `style.type` | `string` | Optional render hint (e.g. `"circle"`) |
 | `style.opacity` | `number` | Layer opacity (0–1) |
 | `style.radiusScale` | `number` | Multiplier applied to the base render radius |
-| `style.color` | `string` | Hex color override (e.g. `"#ff0000"`) |
+| `style.color` | `string` | Primary fill/gradient color (e.g. `"#ff0000"`) |
+| `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
+| `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
 
 All `style` fields are optional; absent fields fall back to layer defaults.
 
-**`poi` layer** — a virtual layer with `url: null`. The browser derives it at runtime by scanning all loaded features in the area for `hasDetails: true` and rendering them as interactive circle markers on top of the existing heat. The `poi` entry is absent from the manifest when the area contains no enriched POIs — its presence is the signal to show the POI widget.
+#### `poi` layer
+
+A virtual layer with `url: null`. The browser derives its content at render time by scanning all other loaded layers for features with `hasDetails: true`. The manifest entry is only emitted when at least one enriched POI exists.
+
+```jsonc
+{
+  "id": "poi",
+  "name": "POI",
+  "type": "poi",
+  "url": null,
+  "visible": true,
+  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
+  "mergeKey": "poi"
+}
+```
+
+#### Enriched feature properties (`hasDetails: true`)
+
+Features in any heatmap layer may carry POI detail fields. All detail fields are optional except `hasDetails`.
+
+| Property | Type | Description |
+|---|---|---|
+| `weight` | `number` | Heat contribution (default `1.0`) |
+| `hasDetails` | `boolean` | `true` = tappable POI marker in the `poi` layer |
+| `id` | `number` | OSM node ID |
+| `name` | `string` | Venue name |
+| `amenity` | `string` | OSM amenity tag (e.g. `"restaurant"`, `"cafe"`) |
+| `cuisine` | `string` | Semicolon-separated cuisine tags (e.g. `"italian;pizza"`) |
+| `opening_hours` | `string` | OSM opening hours string |
+| `website` | `string` | Venue website URL |
 
 ### `.geojson`
 
@@ -322,51 +365,19 @@ Standard GeoJSON `FeatureCollection`. Each feature is a point:
 {
   "type": "FeatureCollection",
   "features": [
-    // Regular point — heatmap weight only:
     {
       "type": "Feature",
-      "properties": { "weight": 1.0 },
-      "geometry": { "type": "Point", "coordinates": [14.27, 40.85] }
-    },
-    // Enriched point — has POI detail fields:
-    {
-      "type": "Feature",
-      "properties": {
-        "id": 293835813,
-        "weight": 1.0,
-        "hasDetails": true,
-        "name": "Bar Ristorante Gaetano",
-        "amenity": "restaurant",
-        "cuisine": "italian;pizza",
-        "address": "Via Roma 42, Naples",
-        "website": "https://example.com",
-        "opening_hours": "Mo-Su 12:00-23:00"
-      },
-      "geometry": { "type": "Point", "coordinates": [14.27, 40.85] }
+      "properties": { "name": "Trattoria da Mario", "amenity": "restaurant" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [14.27, 40.85]
+      }
     }
   ]
 }
 ```
 
 `coordinates` are `[longitude, latitude]` — GeoJSON convention.
-
-**Feature properties:**
-
-| Field | Present on | Description |
-|---|---|---|
-| `weight` | all features | Heatmap intensity (0–1). Surface layers normalise by max area; all others use `1.0`. |
-| `hasDetails` | enriched only | `true` when the feature has at least one detail field. Absent on regular points. |
-| `id` | enriched only | OSM element ID. |
-| `name` | enriched only | POI name, if available. |
-| `amenity` | enriched only | OSM `amenity` tag value, if present. |
-| `cuisine` | enriched only | OSM `cuisine` tag value, if present. |
-| `address` | enriched only | Assembled from `addr:full` → `addr:street + addr:housenumber + addr:city` → `addr:city` alone. Absent when no address tags are present. |
-| `website` | enriched only | From `contact:website` or `website` tag. |
-| `opening_hours` | enriched only | OSM `opening_hours` value. |
-| `area_sqm` | circle surface ways | Polygon area in m². |
-| `radius_m` | circle surface ways | Equivalent circle radius in m. |
-
-A feature is enriched when at least one of `cuisine`, `address`, `website`, or `opening_hours` is present. The browser must tolerate extra properties on any feature — future versions may add fields without a version bump.
 
 ---
 
@@ -565,3 +576,59 @@ class AddAreaOutput:
 - `template` defaults to `"acquisition"` — the key of the acquisition entry in `tasks.json`. `tasks.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
 - On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
+
+---
+
+## GetAreaJson (`__geo_get_area_json__`)
+
+Returns the raw `manifest.json` for an area as a JSON object. Initiated by the browser when it needs to display or edit the area's pipeline configuration.
+
+**TypeScript:**
+```typescript
+const GetAreaJson: MethodDef<GetAreaJsonInput, GetAreaJsonOutput> = { id: "__geo_get_area_json__" };
+
+gateway.invoke(GetAreaJson, { areaId: "paris" }, ({ error, manifest }) => {
+  if (error !== OK) return;
+  // manifest is the full manifest.json-shaped object (tasks + layers)
+});
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Manifest returned successfully |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+
+---
+
+## PutAreaJson (`__geo_put_area_json__`)
+
+Replaces the manifest of an area with a browser-supplied payload. The builder validates the payload, saves it to disk, and updates the in-memory area. Layers may be added or removed; `geojson` for any existing `url`-bearing layer must already exist on disk — the builder does not re-fetch data.
+
+**TypeScript:**
+```typescript
+const PutAreaJson: MethodDef<PutAreaJsonInput, PutAreaJsonOutput> = { id: "__geo_put_area_json__" };
+
+gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ error, errorDescription }) => {
+  if (error !== OK) {
+    console.error(errorDescription);
+    return;
+  }
+  // manifest saved; reload affected layers from their .geojson URLs
+});
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Manifest saved and in-memory area updated |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+| `3` | `ERR_MANIFEST_INVALID` | Payload is not a valid manifest (bad structure, missing geojson file for a `url`-bearing layer) |
+| `4` | `ERR_IO` | I/O error writing to disk |
+
+**Notes:**
+- The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
+- The browser is responsible for reloading any `.geojson` files whose layers changed — the builder does not push a re-render event.
+- Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
