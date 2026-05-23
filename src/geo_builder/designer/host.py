@@ -441,6 +441,13 @@ def launch(
             Logger.info(f"Pulling from {origin} into {in_dir}")
             in_dir.mkdir(parents=True, exist_ok=True)
             _pull(origin, in_dir)
+            from ..errors import GeoError
+            from ..persistence import load_catalog
+
+            try:
+                resolved_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError as exc:
+                Logger.warning(f"launch: failed to load catalog after pull: {exc}")
 
         threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")
