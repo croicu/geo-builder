@@ -56,6 +56,19 @@ The executor uses a stack (`append` / `pop`) to process tasks depth-first.
 - Concatenate features
 - Replace source layers with one merged layer
 
+## Designer Handler Pattern
+
+Every return statement in a `host.py` handler function must be wrapped in `MethodResult(...)` — for both error and success (`OK`) cases. `MethodResult` is the single exit path for all handlers; it logs a warning for any non-OK result and is a no-op for OK.
+
+```python
+# correct
+return MethodResult(SetAreaBboxOutput(error=OK))
+return MethodResult(SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription="..."))
+
+# wrong — bare return bypasses the exit-path convention
+return SetAreaBboxOutput(error=OK)
+```
+
 ## Interactive Session — Threading Model
 
 All reads and writes to the model (catalog, areas, layers) must happen on the `run_dispatcher` thread — the thread that runs `Gateway.run()`.
