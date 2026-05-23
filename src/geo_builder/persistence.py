@@ -4,12 +4,11 @@ import csv
 import json
 import os
 import shutil
-from dataclasses import asdict
 from pathlib import Path
 
-from .entities import GeoArea, GeoCatalog, GeoLayer
+from .entities import GeoArea, GeoCatalog
 from .errors import CatalogError
-from .protocols import Area, AreaStyle, Feature, GeoJson, Geometry, JsonValue, Layer, Manifest, PipelineStep
+from .protocols import Feature, GeoJson, Geometry, JsonValue
 
 
 def read_json(path: Path) -> JsonValue:
@@ -63,7 +62,7 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
     for area_payload in areas_payload:
         if isinstance(area_payload, dict):
             manifest_path = child_path(catalog_path.parent, str(area_payload["manifestUrl"]))
-            areas.append(load_area(manifest_path, area_payload))
+            areas.append(GeoArea.load(manifest_path, area_payload))
 
     return GeoCatalog(
         version=str(payload["version"]),
@@ -74,6 +73,8 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
 
 
 def save_catalog(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
+    from dataclasses import asdict
+
     output_dir = Path(output_dir)
     catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
@@ -95,12 +96,14 @@ def save_catalog(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = 
 
     catalog_base = output_dir / catalog_dir
     for geo_area in geo_catalog.areas:
-        save_area(geo_area, catalog_base)
+        geo_area.save(catalog_base)
         save_area_csv(geo_area, catalog_base)
 
 
 def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
     """Write head + catalog.json only; does not touch area directories."""
+    from dataclasses import asdict
+
     output_dir = Path(output_dir)
     catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
@@ -118,155 +121,6 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
 
     save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
     save_json(output_dir / catalog_dir / _CATALOG_FILENAME, catalog_payload)
-
-
-def load_area(manifest_path: Path, payload: dict[str, JsonValue]) -> GeoArea:
-    manifest_payload = read_json(manifest_path)
-
-    if not isinstance(manifest_payload, dict):
-        raise CatalogError(f"{manifest_path} must contain an object.")
-
-    geo_layers = _load_manifest_layers(manifest_path, manifest_payload)
-    pipeline_steps = _load_pipeline_steps(manifest_payload.get("tasks", []))
-    manifest_version = int(manifest_payload.get("version", 1))
-
-    bbox = payload.get("bbox")
-    if not isinstance(bbox, list) or len(bbox) != 4:
-        raise CatalogError("area bbox must be an array of four numbers.")
-
-    summary = Area(
-        id=str(payload["id"]),
-        name=str(payload["name"]),
-        bbox=[float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
-        minRadiusPx=int(payload["minRadiusPx"]),
-        maxRadiusPx=int(payload["maxRadiusPx"]),
-        liveMapRadiusPx=int(payload["liveMapRadiusPx"]),
-        manifestUrl=str(payload["manifestUrl"]),
-    )
-
-    detail = Manifest(version=manifest_version, tasks=pipeline_steps)
-    return GeoArea(summary=summary, layers=geo_layers, detail=detail)
-
-
-def _load_pipeline_steps(data: object) -> list[PipelineStep]:
-    steps: list[PipelineStep] = []
-    if not isinstance(data, list):
-        return steps
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        step_type = str(item.get("type", ""))
-        if step_type == "acquisition":
-            filters: dict[str, AreaStyle] = {}
-            for key, style_data in dict(item.get("filters", {})).items():
-                if not isinstance(style_data, dict):
-                    continue
-                values: list[str] = []
-                for v in style_data.get("values", []):
-                    values.append(str(v))
-                filters[str(key)] = AreaStyle(
-                    values=values,
-                    name=str(style_data["name"]) if style_data.get("name") is not None else None,
-                    color=str(style_data["color"]) if style_data.get("color") is not None else None,
-                    scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
-                    surface=bool(style_data.get("surface", False)),
-                    type=str(style_data.get("type", "heatmap")),
-                )
-            steps.append(PipelineStep(type="acquisition", provider=str(item.get("provider", "")), filters=filters))
-        elif step_type in ("aggregation", "deduping", "poi"):
-            steps.append(PipelineStep(type=step_type))
-    return steps
-
-
-def save_area(geo_area: GeoArea, output_dir: Path) -> None:
-    manifest_path = child_path(output_dir, geo_area.manifestUrl)
-    manifest_version = geo_area.detail.version if geo_area.detail is not None else 1
-
-    tasks_payload = []
-    if geo_area.detail is not None:
-        for step in geo_area.detail.tasks:
-            if step.type == "acquisition":
-                step_data: dict[str, object] = {"type": "acquisition"}
-                if step.provider is not None:
-                    step_data["provider"] = step.provider
-                if step.filters is not None:
-                    step_data["filters"] = {k: asdict(v) for k, v in step.filters.items()}
-                tasks_payload.append(step_data)
-            else:
-                tasks_payload.append({"type": step.type})
-
-    layers_payload = []
-    for geo_layer in geo_area.layers:
-        layer_data = asdict(geo_layer.layer)
-        del layer_data["geojson"]
-        layers_payload.append(layer_data)
-
-    save_json(manifest_path, {"version": manifest_version, "tasks": tasks_payload, "layers": layers_payload})
-
-    for geo_layer in geo_area.layers:
-        if geo_layer.layer.url is not None:
-            save_layer(geo_layer.layer, manifest_path.parent)
-
-
-def _load_manifest_layers(manifest_path: Path, payload: dict[str, JsonValue]) -> list[GeoLayer]:
-    layers_payload = payload.get("layers", [])
-
-    if not isinstance(layers_payload, list):
-        raise CatalogError("manifest layers must be an array.")
-
-    manifest_dir = manifest_path.parent
-    geo_layers = []
-    for layer_payload in layers_payload:
-        if not isinstance(layer_payload, dict):
-            continue
-        url = layer_payload.get("url")
-        if url is None:
-            geo_layers.append(GeoLayer(_load_stub_layer(layer_payload)))
-        else:
-            geojson_path = child_path(manifest_dir, str(url))
-            geo_layers.append(GeoLayer(load_layer(geojson_path, layer_payload)))
-
-    return geo_layers
-
-
-def _load_stub_layer(payload: dict[str, JsonValue]) -> Layer:
-    style = payload.get("style", {})
-    if not isinstance(style, dict):
-        style = {}
-    return Layer(
-        id=str(payload["id"]),
-        name=str(payload["name"]),
-        type=str(payload["type"]),
-        visible=bool(payload["visible"]),
-        style=style,
-        mergeKey=str(payload["mergeKey"]),
-    )
-
-
-def load_layer(geojson_path: Path, payload: dict[str, JsonValue]) -> Layer:
-    geojson_payload = read_json(geojson_path)
-
-    if not isinstance(geojson_payload, dict):
-        raise CatalogError(f"{geojson_path} must contain an object.")
-
-    style = payload.get("style", {})
-    if not isinstance(style, dict):
-        raise CatalogError("layer style must be an object.")
-
-    return Layer(
-        id=str(payload["id"]),
-        name=str(payload["name"]),
-        type=str(payload["type"]),
-        url=str(payload["url"]),
-        visible=bool(payload["visible"]),
-        style=style,
-        mergeKey=str(payload["mergeKey"]),
-        geojson=load_geojson(geojson_payload),
-    )
-
-
-def save_layer(layer: Layer, manifest_dir: Path) -> None:
-    save_json(child_path(manifest_dir, layer.url), asdict(layer.geojson))
 
 
 def load_geojson(payload: dict[str, JsonValue]) -> GeoJson:

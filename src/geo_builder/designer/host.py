@@ -93,23 +93,87 @@ def _normalize_bbox(bbox: list[float]) -> list[float]:
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     from ..api import (
         ADD_AREA_ID,
+        AREA_CHANGED_ID,
         ERR_AREA_NOT_FOUND,
+        ERR_IO,
+        ERR_MANIFEST_INVALID,
         ERR_TEMPLATE_NOT_FOUND,
+        GET_AREA_JSON_ID,
         OK,
+        PUT_AREA_JSON_ID,
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
+        AreaChangedData,
         AreaSummary,
+        GetAreaJsonInput,
+        GetAreaJsonOutput,
+        PutAreaJsonInput,
+        PutAreaJsonOutput,
         SetAreaBboxInput,
         SetAreaBboxOutput,
     )
     from ..builder import Builder
     from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
-    from ..entities import GeoLayer
+    from ..entities import GeoArea, GeoLayer
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
     from ..protocols import Manifest, PipelineStep
     from ..settings import Settings
+
+    api.define_event(AREA_CHANGED_ID, AreaChangedData)
+
+    def _rebuild_area(area_id: str, fresh_catalog: GeoCatalog) -> None:
+        """Run the pipeline for area_id, update catalog, and fire AreaChanged on success."""
+        for a in fresh_catalog.areas:
+            if a.id == area_id:
+                a.layers.clear()
+                break
+
+        try:
+            result = Builder(fresh_catalog).run()
+            save_catalog(result, out_dir, debug=debug)
+        except Exception as exc:
+            Logger.error(f"pipeline failed for area '{area_id}': {exc}")
+            return
+
+        catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
+
+        updated_area = None
+        for a in result.areas:
+            if a.id == area_id:
+                updated_area = a
+                break
+
+        if updated_area is not None:
+            area_summary = AreaSummary(
+                id=updated_area.id,
+                name=updated_area.name,
+                bbox=updated_area.bbox,
+                minRadiusPx=updated_area.minRadiusPx,
+                maxRadiusPx=updated_area.maxRadiusPx,
+                liveMapRadiusPx=updated_area.liveMapRadiusPx,
+                manifestUrl=updated_area.manifestUrl,
+            )
+            Logger.info(f"AreaChanged: firing for area '{area_id}'.")
+            api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+
+    def on_area_changed(changed_area: GeoArea) -> None:
+        if in_dir is not None:
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError as exc:
+                Logger.warning(f"AreaChanged: failed to reload catalog: {exc}; using in-memory catalog.")
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        _rebuild_area(changed_area.id, fresh_catalog)
+
+    for area in catalog.areas:
+        area.subscribe_changed(on_area_changed)
 
     api.define_method(SET_AREA_BBOX_ID, SetAreaBboxInput, SetAreaBboxOutput)
 
@@ -129,19 +193,13 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             save_catalog_meta(catalog, in_dir, debug=debug)
             try:
                 fresh_catalog = load_catalog(in_dir, debug=debug)
-            except GeoError:
+            except GeoError as exc:
+                Logger.warning(f"SetAreaBbox: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
         else:
             fresh_catalog = catalog
 
-        for a in fresh_catalog.areas:
-            if a.id == data.areaId:
-                a.layers.clear()
-                break
-
-        result = Builder(fresh_catalog).run()
-        save_catalog(result, out_dir, debug=debug)
-
+        _rebuild_area(data.areaId, fresh_catalog)
         return SetAreaBboxOutput(error=OK)
 
     api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
@@ -183,6 +241,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             save_catalog(result, in_dir, debug=debug)
 
         catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
 
         new_area = None
         for a in result.areas:
@@ -214,6 +274,46 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         return AddAreaOutput(error=OK, area=area_summary)
 
     api.register(ADD_AREA_ID, on_add_area)
+
+    api.define_method(GET_AREA_JSON_ID, GetAreaJsonInput, GetAreaJsonOutput)
+
+    def on_get_area_json(data: GetAreaJsonInput) -> GetAreaJsonOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return GetAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+
+        return GetAreaJsonOutput(error=OK, manifest=area.to_manifest_dict())
+
+    api.register(GET_AREA_JSON_ID, on_get_area_json)
+
+    api.define_method(PUT_AREA_JSON_ID, PutAreaJsonInput, PutAreaJsonOutput)
+
+    def on_put_area_json(data: PutAreaJsonInput) -> PutAreaJsonOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+
+        save_dir = in_dir if in_dir is not None else out_dir
+        try:
+            area.apply_manifest(data.manifest, save_dir)
+        except GeoError as exc:
+            return PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc))
+        except OSError as exc:
+            return PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc))
+
+        return PutAreaJsonOutput(error=OK)
+
+    api.register(PUT_AREA_JSON_ID, on_put_area_json)
 
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
