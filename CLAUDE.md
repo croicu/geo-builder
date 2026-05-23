@@ -130,6 +130,10 @@ Future:
 - FlickrProvider
 - NominatimProvider
 
+## Designer
+
+See `docs/IMPLEMENTATION.md` for designer-specific implementation rules (handler pattern, threading model).
+
 ## Key Architecture Notes
 
 **Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`).

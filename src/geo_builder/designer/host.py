@@ -19,6 +19,13 @@ _HEAD_FILE = "catalog.head.json"
 _STARTUP_HTML = Path(__file__).parent / "startup.html"
 _STARTUP_JS = Path(__file__).parent / "startup.js"
 
+
+def MethodResult(output):
+    if output.error != 0:
+        Logger.warning(f"{type(output).__name__}: error {output.error} — {output.errorDescription}")
+    return output
+
+
 _core = None
 _form = None
 api: Gateway | None = None
@@ -185,7 +192,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 break
 
         if area is None:
-            return SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+            return MethodResult(SetAreaBboxOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
 
         area.bbox = _normalize_bbox(list(data.bbox))
 
@@ -200,7 +207,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             fresh_catalog = catalog
 
         _rebuild_area(data.areaId, fresh_catalog)
-        return SetAreaBboxOutput(error=OK)
+        return MethodResult(SetAreaBboxOutput(error=OK))
 
     api.register(SET_AREA_BBOX_ID, on_set_area_bbox)
 
@@ -210,9 +217,11 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         settings = Settings.current()
         template = settings.templates.get(data.template)
         if template is None:
-            return AddAreaOutput(
-                error=ERR_TEMPLATE_NOT_FOUND,
-                errorDescription=f"Template '{data.template}' not found in tasks file",
+            return MethodResult(
+                AddAreaOutput(
+                    error=ERR_TEMPLATE_NOT_FOUND,
+                    errorDescription=f"Template '{data.template}' not found in tasks file",
+                )
             )
 
         area_id = GeoLayer.id_from_merge_key(data.areaName)
@@ -230,7 +239,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         if in_dir is not None:
             try:
                 fresh_catalog = load_catalog(in_dir, debug=debug)
-            except GeoError:
+            except GeoError as exc:
+                Logger.warning(f"AddArea: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
         else:
             fresh_catalog = catalog
@@ -271,7 +281,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 manifestUrl=new_area.manifestUrl,
             )
 
-        return AddAreaOutput(error=OK, area=area_summary)
+        return MethodResult(AddAreaOutput(error=OK, area=area_summary))
 
     api.register(ADD_AREA_ID, on_add_area)
 
@@ -285,9 +295,9 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 break
 
         if area is None:
-            return GetAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+            return MethodResult(GetAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
 
-        return GetAreaJsonOutput(error=OK, manifest=area.to_manifest_dict())
+        return MethodResult(GetAreaJsonOutput(error=OK, manifest=area.to_manifest_dict()))
 
     api.register(GET_AREA_JSON_ID, on_get_area_json)
 
@@ -301,17 +311,18 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 break
 
         if area is None:
-            return PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found")
+            return MethodResult(PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
 
-        save_dir = in_dir if in_dir is not None else out_dir
+        catalog_subdir = "debug" if debug else "release"
+        save_dir = (in_dir if in_dir is not None else out_dir) / catalog_subdir
         try:
             area.apply_manifest(data.manifest, save_dir)
         except GeoError as exc:
-            return PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc))
+            return MethodResult(PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc)))
         except OSError as exc:
-            return PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc))
+            return MethodResult(PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc)))
 
-        return PutAreaJsonOutput(error=OK)
+        return MethodResult(PutAreaJsonOutput(error=OK))
 
     api.register(PUT_AREA_JSON_ID, on_put_area_json)
 
@@ -430,6 +441,13 @@ def launch(
             Logger.info(f"Pulling from {origin} into {in_dir}")
             in_dir.mkdir(parents=True, exist_ok=True)
             _pull(origin, in_dir)
+            from ..errors import GeoError
+            from ..persistence import load_catalog
+
+            try:
+                resolved_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError as exc:
+                Logger.warning(f"launch: failed to load catalog after pull: {exc}")
 
         threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")
