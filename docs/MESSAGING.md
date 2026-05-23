@@ -283,6 +283,16 @@ Entry point. Tells the browser where the catalog file lives.
         "surface": false
       },
       "mergeKey": "overpass:amenity=restaurant,cafe"
+    },
+    // Optional — present only when at least one enriched POI exists in the area:
+    {
+      "id": "poi",
+      "name": "POI",
+      "type": "poi",
+      "url": null,
+      "visible": true,
+      "style": { "opacity": 0.7, "type": "circle" },
+      "mergeKey": "poi"
     }
   ]
 }
@@ -292,7 +302,8 @@ Entry point. Tells the browser where the catalog file lives.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `"heatmap" \| "circle"` | Render mode |
+| `type` | `"heatmap" \| "circle" \| "poi"` | Render mode |
+| `url` | `string \| null` | GeoJSON URL, relative to the manifest. `null` for virtual layers (e.g. `poi`). |
 | `visible` | `boolean` | Default visibility |
 | `style.opacity` | `number` | Layer opacity (0–1) |
 | `style.radiusScale` | `number` | Multiplier applied to the base render radius |
@@ -300,6 +311,8 @@ Entry point. Tells the browser where the catalog file lives.
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
 
 All `style` fields are optional; absent fields fall back to layer defaults.
+
+**`poi` layer** — a virtual layer with `url: null`. The browser derives it at runtime by scanning all loaded features in the area for `hasDetails: true` and rendering them as interactive circle markers on top of the existing heat. The `poi` entry is absent from the manifest when the area contains no enriched POIs — its presence is the signal to show the POI widget.
 
 ### `.geojson`
 
@@ -309,19 +322,51 @@ Standard GeoJSON `FeatureCollection`. Each feature is a point:
 {
   "type": "FeatureCollection",
   "features": [
+    // Regular point — heatmap weight only:
     {
       "type": "Feature",
-      "properties": { "name": "Trattoria da Mario", "amenity": "restaurant" },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [14.27, 40.85]
-      }
+      "properties": { "weight": 1.0 },
+      "geometry": { "type": "Point", "coordinates": [14.27, 40.85] }
+    },
+    // Enriched point — has POI detail fields:
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 293835813,
+        "weight": 1.0,
+        "hasDetails": true,
+        "name": "Bar Ristorante Gaetano",
+        "amenity": "restaurant",
+        "cuisine": "italian;pizza",
+        "address": "Via Roma 42, Naples",
+        "website": "https://example.com",
+        "opening_hours": "Mo-Su 12:00-23:00"
+      },
+      "geometry": { "type": "Point", "coordinates": [14.27, 40.85] }
     }
   ]
 }
 ```
 
 `coordinates` are `[longitude, latitude]` — GeoJSON convention.
+
+**Feature properties:**
+
+| Field | Present on | Description |
+|---|---|---|
+| `weight` | all features | Heatmap intensity (0–1). Surface layers normalise by max area; all others use `1.0`. |
+| `hasDetails` | enriched only | `true` when the feature has at least one detail field. Absent on regular points. |
+| `id` | enriched only | OSM element ID. |
+| `name` | enriched only | POI name, if available. |
+| `amenity` | enriched only | OSM `amenity` tag value, if present. |
+| `cuisine` | enriched only | OSM `cuisine` tag value, if present. |
+| `address` | enriched only | Assembled from `addr:full` → `addr:street + addr:housenumber + addr:city` → `addr:city` alone. Absent when no address tags are present. |
+| `website` | enriched only | From `contact:website` or `website` tag. |
+| `opening_hours` | enriched only | OSM `opening_hours` value. |
+| `area_sqm` | circle surface ways | Polygon area in m². |
+| `radius_m` | circle surface ways | Equivalent circle radius in m. |
+
+A feature is enriched when at least one of `cuisine`, `address`, `website`, or `opening_hours` is present. The browser must tolerate extra properties on any feature — future versions may add fields without a version bump.
 
 ---
 
