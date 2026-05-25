@@ -270,9 +270,6 @@ class GeoArea:
         self.layers = new_layers
         self.detail = new_detail
 
-        if self._on_changed is not None:
-            self._on_changed(self)
-
     @property
     def summary(self) -> Area:  # TODO: protocol exposed — revisit
         return self._summary

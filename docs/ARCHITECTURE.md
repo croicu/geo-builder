@@ -3,7 +3,7 @@
 ## High-Level Architecture
 
 ```text
-build.json
+settings.json
     → Settings.load()
     → Builder.run()
     → Workers
@@ -53,7 +53,7 @@ catalog.json
 
 ## Tasks File Format
 
-Entries in the tasks file (e.g. `tasks.json`) are keyed by an arbitrary name and distinguished by the presence of `bbox`:
+Entries in the tasks file (e.g. `template.json`) are keyed by an arbitrary name and distinguished by the presence of `bbox`:
 
 **Concrete task** (`"type": "acquisition"` with `bbox`) — parsed into an `AcquisitionTask` and added to `settings.tasks`. Drives a full fresh build when passed to `Builder.run()`.
 
@@ -125,7 +125,7 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 `settings.py` — `Settings` singleton, DI root for tests:
 
-- `Settings.load(path)` — parses `build.json`, instantiates tasks, stores the singleton
+- `Settings.load(path)` — parses `settings.json`, instantiates tasks, stores the singleton
 - `Settings.current()` — returns the active instance (raises if not loaded)
 - Fields: `debug: bool`, `tasks: list[Task]`, `templates: dict[str, Acquisition]`, `providers: dict[str, dict]`
 - Tests set up the singleton directly via `Settings._instance = Settings(...)`

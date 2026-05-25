@@ -123,6 +123,22 @@ class TestPoiWorker:
         layer_ids = [gl.layer.id for gl in area.layers]
         assert "poi" in layer_ids
 
+    def test_existing_stub_style_preserved_on_rebuild(self):
+        existing_stub = Layer(
+            id="poi",
+            name="POI",
+            type="poi",
+            visible=True,
+            style={"opacity": 0.5, "color": "#aabbcc"},
+            mergeKey="poi",
+        )
+        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        area = make_area([layer, existing_stub])
+        run([area])
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].style == {"opacity": 0.5, "color": "#aabbcc"}
+
     def test_no_catalog_returns_non_fatal(self):
         area = make_area([])
         executor = StubExecutor(area=area, catalog=None)

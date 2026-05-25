@@ -11,7 +11,7 @@ geo-builder <tasks_path> [--in <dir>] [--out <dir>] [--edit]
 | `tasks_path` | required | Tasks JSON file. Always required. |
 | `--in <dir>` | `./in` | Working directory for service artifacts. Auto-created if absent. |
 | `--out <dir>` | `./out` | Output directory for built artifacts. |
-| `--edit` | off | Open the designer WebView instead of running a build (requires `designUrl` in `build.json`). |
+| `--edit` | off | Open the designer WebView instead of running a build (requires `designUrl` in `settings.json`). |
 
 **Build mode** (no `--edit`) — runs the processing pipeline and writes artifacts to `--out`. Output is never written when errors are present. `--in` seeds the catalog for incremental builds; a missing or empty `--in` starts from scratch.
 
@@ -21,13 +21,18 @@ geo-builder <tasks_path> [--in <dir>] [--out <dir>] [--edit]
 
 Configuration is split across two files:
 
-**`build.json`** — stable settings, auto-loaded from `./build.json` if it exists. Contains `settings` and `providers`.
+**`settings.json`** — stable settings, auto-loaded from `./settings.json` if it exists. Contains `settings` and `providers`.
 
 ```json
 {
   "settings": {
     "debug": false,
-    "logging": "error"
+    "logging": "error",
+    "designUrl": "http://localhost:5173/?design=1",
+    "map": {
+      "center": "47.726,-122.106",
+      "zoom": 10
+    }
   },
   "providers": {
     "overpass": {
@@ -37,7 +42,27 @@ Configuration is split across two files:
 }
 ```
 
-**Tasks file** (e.g. `tasks.json`) — passed as the CLI positional argument. Contains a named dictionary of tasks processed in declaration order.
+At designer launch, `settings.py` appends query parameters to `designUrl` in this order:
+- `debug=1` — when `debug` is `true`
+- `center=<value>` — from `map.center` if present
+- `zoom=<value>` — from `map.zoom` if present
+
+**`settings.local.json`** — local overrides, gitignored. Loaded after `settings.json`; any key present here wins. Used to persist window geometry across designer sessions.
+
+```json
+{
+  "settings": {
+    "window": {
+      "left": 100,
+      "top": 50,
+      "width": 1400,
+      "height": 900
+    }
+  }
+}
+```
+
+**Tasks file** (e.g. `template.json`) — passed as the CLI positional argument. Contains a named dictionary of tasks processed in declaration order.
 
 ```json
 {

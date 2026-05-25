@@ -67,9 +67,16 @@ class Builder:
         return self.catalog
 
     def _tasks_from_catalog(self) -> list[Task]:
+        from .settings import Settings
+
         result: list[Task] = []
         for area in self.catalog.areas:
-            if area.acquisition is not None and len(area.layers) == 0:
+            has_data_layers = False
+            for geo_layer in area.layers:
+                if geo_layer.layer.type != "poi" and geo_layer.layer.geojson is not None:
+                    has_data_layers = True
+                    break
+            if area.acquisition is not None and not has_data_layers:
                 bbox = area.bbox
                 result.append(
                     AcquisitionTask(
@@ -83,7 +90,12 @@ class Builder:
         if result:
             result.append(AggregationTask())
             result.append(DedupingTask())
-            result.append(PoiTask())
+            poi_task = PoiTask()
+            for task in Settings.current().tasks:
+                if isinstance(task, PoiTask):
+                    poi_task = task
+                    break
+            result.append(poi_task)
         return result
 
     def push_task(self, task: JsonObject) -> None:

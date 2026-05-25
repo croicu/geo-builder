@@ -41,12 +41,12 @@ Never read, glob, or search inside `./in/` or `./out/`. They contain large volum
 pip install -e ".[dev]"
 
 # Build
-geo-builder tasks.json                        # fresh build to ./out
-geo-builder tasks.json --in ./in --out ./out  # incremental build
+geo-builder template.json                        # fresh build to ./out
+geo-builder template.json --in ./in --out ./out  # incremental build
 
-# Designer (requires designUrl in build.json)
-geo-builder tasks.json --edit                        # pull on first run, then open WebView
-geo-builder tasks.json --in ./in --out ./out --edit  # same with explicit paths
+# Designer (requires designUrl in settings.json)
+geo-builder template.json --edit                        # pull on first run, then open WebView
+geo-builder template.json --in ./in --out ./out --edit  # same with explicit paths
 
 # Lint
 ruff check src/ tests/

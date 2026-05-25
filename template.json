@@ -3,9 +3,7 @@
     "type": "acquisition",
     "provider": "overpass",
     "filters": {
-      "leisure":  { "name": "Parks", "values": ["park", "garden"], "type": "circle", "color": "#007f00", "surface": true },
-      "amenity":  { "name": "Restaurants", "values": ["sustenance", "entertainment"] },
-      "historic": { "name": "Places", "values": ["monuments", "memorials"], "scale": 3.0, "color": "#ffff00" }
+      "leisure":  { "name": "Parks", "values": ["park"], "type": "circle", "color": "#007f00", "surface": true }
     }
   },
   "aggregate": {
@@ -19,7 +17,7 @@
     "style": {
       "name": "POI",
       "type": "circle",
-      "color": "#3b82f6",
+      "color": "#3f3f3f",
       "opacity": 0.9,
       "radius": 8,
       "surface": false

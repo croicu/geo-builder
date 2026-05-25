@@ -34,14 +34,20 @@ class PoiWorker(Worker):
     def _process_area(self, area: GeoArea, style: PoiStyle) -> bool:
         has_details = self._area_has_details(area)
 
+        existing_poi: GeoLayer | None = None
         filtered = []
         for geo_layer in area.layers:
-            if geo_layer.layer.id != _POI_HEAT_ID:
+            if geo_layer.layer.id == _POI_HEAT_ID:
+                existing_poi = geo_layer
+            else:
                 filtered.append(geo_layer)
         area.layers = filtered
 
         if has_details:
-            area.layers.append(GeoLayer(self._create_stub(style)))
+            if existing_poi is not None:
+                area.layers.append(existing_poi)
+            else:
+                area.layers.append(GeoLayer(self._create_stub(style)))
 
         return has_details
 

@@ -559,7 +559,7 @@ gateway.invoke(AddArea, { areaName: "Rome", bbox: [12.30, 41.80, 12.60, 42.00] }
 class AddAreaInput:
     areaName: str
     bbox: list[float]     # [west, south, east, north]
-    template: str = "acquisition"  # key of the acquisition entry in tasks.json
+    template: str = "acquisition"  # key of the acquisition entry in template.json
 
 @dataclass
 class AddAreaOutput:
@@ -574,11 +574,11 @@ class AddAreaOutput:
 | Code | Constant | Meaning |
 |------|----------|---------|
 | `0` | `OK` | Area built and saved successfully |
-| `2` | `ERR_TEMPLATE_NOT_FOUND` | No template with the given name in tasks.json |
+| `2` | `ERR_TEMPLATE_NOT_FOUND` | No template with the given name in template.json |
 
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
-- `template` defaults to `"acquisition"` — the key of the acquisition entry in `tasks.json`. `tasks.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
+- `template` defaults to `"acquisition"` — the key of the acquisition entry in `template.json`. `template.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
 - On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
 
@@ -635,14 +635,14 @@ gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ e
 
 **Notes:**
 - The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
-- The browser is responsible for reloading any `.geojson` files whose layers changed — the builder does not push a re-render event.
+- On success the builder re-runs the pipeline (re-acquisition with the updated manifest) and fires `AreaChanged`. Style changes in `tasks[].filters` are picked up by the re-run and written to `out_dir`.
 - Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
 
 ---
 
 ## AreaChanged (`__geo_area_changed__`)
 
-Fired by the builder after an area's manifest has been saved and its pipeline has been re-run successfully. The browser should reload the area's manifest and layers from their URLs.
+Fired by the builder after an area's pipeline has been re-run successfully. The browser should reload the area's manifest and layers from their URLs.
 
 **TypeScript:**
 ```typescript
@@ -654,6 +654,6 @@ gateway.subscribe(AreaChanged, ({ area }) => {
 ```
 
 **Notes:**
-- Fired asynchronously after `put_area_json` returns — subscribe separately, do not rely on receiving it before or after the `put_area_json` response.
+- Fired asynchronously after the triggering method returns — subscribe separately, do not rely on receiving it before or after the method response.
 - `area` contains the updated `AreaSummary` (same shape as in `catalog.json`). The browser can use this to refresh its in-memory area record without re-fetching `catalog.json`.
-- The pipeline has already completed and all output files have been written by the time this event fires.
+- All output files (manifest + geojson) have been written by the time this event fires.

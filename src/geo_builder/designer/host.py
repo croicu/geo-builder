@@ -134,7 +134,11 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         """Run the pipeline for area_id, update catalog, and fire AreaChanged on success."""
         for a in fresh_catalog.areas:
             if a.id == area_id:
-                a.layers.clear()
+                poi_layers = []
+                for geo_layer in a.layers:
+                    if geo_layer.layer.type == "poi":
+                        poi_layers.append(geo_layer)
+                a.layers = poi_layers
                 break
 
         try:
@@ -234,7 +238,12 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
             filters=template.filters,
         )
-        tasks = [acquisition_task, AggregationTask(), DedupingTask(), PoiTask()]
+        poi_task = PoiTask()
+        for task in settings.tasks:
+            if isinstance(task, PoiTask):
+                poi_task = task
+                break
+        tasks = [acquisition_task, AggregationTask(), DedupingTask(), poi_task]
 
         if in_dir is not None:
             try:
@@ -322,6 +331,16 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         except OSError as exc:
             return MethodResult(PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc)))
 
+        if in_dir is not None:
+            try:
+                fresh_catalog = load_catalog(in_dir, debug=debug)
+            except GeoError as exc:
+                Logger.warning(f"PutAreaJson: failed to reload catalog: {exc}; using in-memory catalog.")
+                fresh_catalog = catalog
+        else:
+            fresh_catalog = catalog
+
+        _rebuild_area(data.areaId, fresh_catalog)
         return MethodResult(PutAreaJsonOutput(error=OK))
 
     api.register(PUT_AREA_JSON_ID, on_put_area_json)
@@ -344,6 +363,17 @@ def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: P
                 Logger.warning("Setup: could not locate WebView2 control.")
                 return
             _form = form
+            from System.Drawing import Point, Size  # type: ignore[import]
+
+            from ..settings import Settings
+
+            _s = Settings.current()
+            if _s.window_width is not None and _s.window_height is not None:
+                _form.Size = Size(_s.window_width, _s.window_height)
+            if _s.window_left is not None and _s.window_top is not None:
+                _form.Location = Point(_s.window_left, _s.window_top)
+            _form.Show()
+
             _core = wv2.CoreWebView2
             _core.Settings.UserAgent = "GeoBrowser/1.0 (https://github.com/croicu/geo-browser)"
 
@@ -366,6 +396,20 @@ def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: P
             )
 
             from Microsoft.Web.WebView2.Core import CoreWebView2WebResourceContext  # type: ignore[import]
+
+            def on_form_closing(sender, _) -> None:  # noqa: ANN001
+                from System.Windows.Forms import FormWindowState  # type: ignore[import]
+
+                from ..settings import Settings
+
+                try:
+                    if sender.WindowState == FormWindowState.Normal:
+                        Settings.save_local(sender.Left, sender.Top, sender.Width, sender.Height)
+                        Logger.info(f"Window geometry saved: left={sender.Left} top={sender.Top} width={sender.Width} height={sender.Height}")
+                except Exception as exc:
+                    Logger.warning(f"Failed to save window geometry: {exc}")
+
+            _form.FormClosing += on_form_closing
 
             _core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All)
             _core.NavigationCompleted += _on_navigation_completed
@@ -405,9 +449,9 @@ def launch(
         app_url = f"{url}{sep}break=1"
         template = _STARTUP_HTML.read_text(encoding="utf-8")
         html = template.replace("GEO_TARGET_URL", json.dumps(app_url))
-        window = webview.create_window("Geo Designer", html=html)
+        window = webview.create_window("Geo Designer", html=html, hidden=True)
     else:
-        window = webview.create_window("Geo Designer", url)
+        window = webview.create_window("Geo Designer", url, hidden=True)
 
     setup_done = False
 
