@@ -158,7 +158,7 @@ interface ReadyData {}
 interface AddAreaInput {
   areaName: string;
   bbox: [number, number, number, number];  // [west, south, east, north]
-  template?: string;  // default "acquisition"
+  template?: string;  // reserved for future multi-template support; currently unused
 }
 interface AreaSummary {
   id: string;
@@ -276,30 +276,12 @@ Entry point. Tells the browser where the catalog file lives.
 ```jsonc
 {
   "version": 1,
-  "tasks": [
-    {
-      "type": "acquisition",
-      "provider": "overpass",
-      "filters": {
-        "amenity": {
-          "values": ["restaurant", "cafe"],
-          "name": "Restaurants",
-          "type": "heatmap",
-          "color": null,
-          "scale": null,
-          "surface": false
-        }
-      }
-    },
-    { "type": "deduping" },
-    { "type": "aggregation" }
-  ],
   "layers": [
     {
-      "id": "overpass_amenity_restaurant_cafe",
-      "name": "Overpass (heatmap)",
+      "id": "1",
+      "name": "Restaurants",
       "type": "heatmap",
-      "url": "./layers/overpass_amenity_restaurant_cafe.geojson",
+      "url": "./layers/1.geojson",
       "visible": true,
       "style": {
         "opacity": 0.7,
@@ -307,43 +289,56 @@ Entry point. Tells the browser where the catalog file lives.
         "color": "#ff0000",
         "surface": false
       },
-      "mergeKey": "overpass:amenity=restaurant,cafe"
+      "acquisition": { "provider": "overpass", "filter": "amenity", "values": ["restaurant", "cafe"] }
+    },
+    {
+      "id": "__poi__",
+      "name": "POI",
+      "type": "__poi__",
+      "url": null,
+      "visible": true,
+      "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
     }
-  ]
+  ],
+  "aggregation": {},
+  "deduping": {}
 }
 ```
 
-`tasks` records the acquisition config that produced this area's layers. The browser treats it as read-only metadata — it is the source of truth for incremental rebuilds on the Python side.
+`aggregation` and `deduping` are area-scoped pipeline steps. Both are empty objects today; reserved for future configuration. `layers[]` is the single source of truth for style, visibility, and acquisition config.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `"heatmap" \| "circle" \| "poi"` | Render mode |
+| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"` for the builtin virtual layer |
+| `type` | `"heatmap" \| "circle" \| "__poi__"` | Render mode |
 | `url` | `string \| null` | GeoJSON URL, or `null` for virtual layers |
 | `visible` | `boolean` | Default visibility |
-| `mergeKey` | `string` | Optional grouping key (required on `poi` layers) |
-| `style.type` | `string` | Optional render hint (e.g. `"circle"`) |
+| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`). Present on data layers |
+| `acquisition.provider` | `string` | Provider name (e.g. `"overpass"`) |
+| `acquisition.filter` | `string` | OSM tag key (e.g. `"amenity"`) |
+| `acquisition.values` | `string[]` | Accepted tag values (e.g. `["restaurant", "cafe"]`) |
 | `style.opacity` | `number` | Layer opacity (0–1) |
 | `style.radiusScale` | `number` | Multiplier applied to the base render radius |
 | `style.color` | `string` | Primary fill/gradient color (e.g. `"#ff0000"`) |
 | `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
 | `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
+| `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value |
 
 All `style` fields are optional; absent fields fall back to layer defaults.
 
-#### `poi` layer
+#### `__poi__` layer
 
-A virtual layer with `url: null`. The browser derives its content at render time by scanning all other loaded layers for features with `hasDetails: true`. The manifest entry is only emitted when at least one enriched POI exists.
+A reserved builtin virtual layer with `url: null`. The browser derives its content at render time by scanning all other loaded layers for features with `hasDetails: true`. The entry is always present in the manifest after the first build. `visible` encodes data availability: `true` = enriched POIs found, show the layer; `false` = no data, no UX presence (entry retained to preserve style across rebuilds).
 
 ```jsonc
 {
-  "id": "poi",
+  "id": "__poi__",
   "name": "POI",
-  "type": "poi",
+  "type": "__poi__",
   "url": null,
   "visible": true,
-  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
-  "mergeKey": "poi"
+  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
 }
 ```
 
@@ -578,7 +573,7 @@ class AddAreaOutput:
 
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
-- `template` defaults to `"acquisition"` — the key of the acquisition entry in `template.json`. `template.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
+- `template` is reserved for future multi-template support and is currently unused. `template.json` is a flat manifest-shaped document; the builder uses all data layers in it to create `AcquisitionTask`s for the new area.
 - On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
 
@@ -594,7 +589,7 @@ const GetAreaJson: MethodDef<GetAreaJsonInput, GetAreaJsonOutput> = { id: "__geo
 
 gateway.invoke(GetAreaJson, { areaId: "paris" }, ({ error, manifest }) => {
   if (error !== OK) return;
-  // manifest is the full manifest.json-shaped object (tasks + layers)
+  // manifest is the full manifest.json-shaped object (layers + aggregation + deduping)
 });
 ```
 
@@ -635,7 +630,7 @@ gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ e
 
 **Notes:**
 - The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
-- On success the builder re-runs the pipeline (re-acquisition with the updated manifest) and fires `AreaChanged`. Style changes in `tasks[].filters` are picked up by the re-run and written to `out_dir`.
+- On success the builder re-runs the pipeline (re-acquisition with the updated manifest) and fires `AreaChanged`. Style changes in `layers[]` are picked up by the re-run and written to `out_dir`.
 - Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
 
 ---

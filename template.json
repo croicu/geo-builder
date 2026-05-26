@@ -1,26 +1,55 @@
 {
-  "acquisition": {
-    "type": "acquisition",
-    "provider": "overpass",
-    "filters": {
-      "leisure":  { "name": "Parks", "values": ["park"], "type": "circle", "color": "#007f00", "surface": true }
-    }
-  },
-  "aggregate": {
-    "type": "aggregation"
-  },
-  "dedupe": {
-    "type": "deduping"
-  },
-  "poi": {
-    "type": "poi",
-    "style": {
-      "name": "POI",
+  "layers": [
+    {
       "type": "circle",
-      "color": "#3f3f3f",
-      "opacity": 0.9,
-      "radius": 8,
-      "surface": false
+      "visible": true,
+      "style": {
+        "opacity": 0.3,
+        "color": "#007f00",
+        "surface": true
+      },
+      "acquisition": {
+        "provider": "overpass",
+        "filter": "leisure",
+        "values": ["park"]
+      }
+    },
+    {
+      "type": "heatmap",
+      "visible": true,
+      "style": {},
+      "acquisition": {
+        "provider": "overpass",
+        "filter": "amenity",
+        "values": ["sustenance", "entertainment"]
+      }
+    },
+    {
+      "type": "heatmap",
+      "visible": true,
+      "style": {
+        "scale": 3.0, 
+        "color": "#ffff00"  
+      },
+      "acquisition": {
+        "provider": "overpass",
+        "filter": "historic",
+        "values": ["monuments", "memorials"]
+      }
+    },
+    {
+      "id": "__poi__",
+      "name": "POI",
+      "type": "__poi__",
+      "visible": true,
+      "style": {
+        "opacity": 0.9,
+        "color": "#7f0000",
+        "radius": 8,
+        "minZoom": 18
+      }
     }
-  }
+  ],
+  "aggregation": {},
+  "deduping": {}
 }

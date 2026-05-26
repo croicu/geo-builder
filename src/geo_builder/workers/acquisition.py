@@ -1,9 +1,8 @@
-from ..contracts import Executor, Worker, WorkerResult
+from ..contracts import AcquisitionTask, Executor, Worker, WorkerResult
 from ..diagnostics import Logger
+from ..entities import GeoArea, GeoLayer
 from ..errors import ProviderError
-from ..protocols import Acquisition
 from ..providers.factory import ProviderFactory
-from ..tasks import AcquisitionTask
 
 
 class AcquisitionWorker(Worker):
@@ -28,22 +27,11 @@ class AcquisitionWorker(Worker):
 
         if len(task.filters) > 1:
             area = executor.add_area(task)
-            if area.acquisition is None:
-                area.acquisition = Acquisition(
-                    provider=task.provider,
-                    filters=task.filters,
-                )
             Logger.info(f"AcquisitionWorker [{task.areaId}] splitting {len(task.filters)} filters into per-key tasks")
             executor.push_tasks(self._split_by_key(task))
             return self._result()
 
         area = executor.add_area(task)
-        if area.acquisition is None:
-            area.acquisition = Acquisition(
-                provider=task.provider,
-                filters=task.filters,
-            )
-
         provider = self._provider_factory.create(task.provider)
 
         try:
@@ -59,14 +47,28 @@ class AcquisitionWorker(Worker):
             executor.push_tasks(child_tasks)
             return self._result()
 
-        executor.add_layer(area, layer)
+        # Single-filter task: set acquisition dict and assign stable layer id.
+        filter_key = next(iter(task.filters))
+        filter_values = sorted(task.filters[filter_key].values)
+        acquisition = {"provider": task.provider, "filter": filter_key, "values": filter_values}
+        layer.acquisition = acquisition
 
-        if len(task.filters) == 1:
-            key = next(iter(task.filters))
-            color = task.filters[key].color
+        existing = self._find_existing_layer(area, acquisition)
+        if existing is not None:
+            layer.id = existing.layer.id
+            layer.style = dict(existing.layer.style)
+            layer.name = existing.layer.name
+            layer.type = existing.layer.type
+            layer.visible = existing.layer.visible
+        else:
+            layer.id = self._next_id(area)
+            color = task.filters[filter_key].color
             if color:
                 layer.style["color"] = color
 
+        layer.url = f"./layers/{layer.id}.geojson"
+
+        executor.add_layer(area, layer)
         return self._result()
 
     def _result(self, fatal: bool = False, error: str | None = None) -> WorkerResult:
@@ -74,6 +76,23 @@ class AcquisitionWorker(Worker):
 
         Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} Completed. Error: {error}")
         return WorkerResult(fatal, error)
+
+    def _find_existing_layer(self, area: GeoArea, acquisition: dict) -> GeoLayer | None:
+        for geo_layer in area.layers:
+            if geo_layer.layer.acquisition == acquisition:
+                return geo_layer
+        return None
+
+    def _next_id(self, area: GeoArea) -> str:
+        max_id = 0
+        for geo_layer in area.layers:
+            try:
+                n = int(geo_layer.layer.id)
+                if n > max_id:
+                    max_id = n
+            except (ValueError, TypeError):
+                pass
+        return str(max_id + 1)
 
     def _split_by_key(self, task: AcquisitionTask) -> list[AcquisitionTask]:
         result: list[AcquisitionTask] = []

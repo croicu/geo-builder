@@ -7,7 +7,7 @@ import pytest
 
 from geo_builder.entities import GeoArea, GeoLayer
 from geo_builder.errors import CatalogError
-from geo_builder.protocols import Area, AreaStyle, Feature, GeoJson, Geometry, Layer
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 
 
 def _make_area_payload(manifest_url: str = "./areas/rome/manifest.json") -> dict:
@@ -24,13 +24,13 @@ def _make_area_payload(manifest_url: str = "./areas/rome/manifest.json") -> dict
 
 def _make_layer() -> Layer:
     return Layer(
-        id="overpass_amenity_cafe",
+        id="1",
         name="Cafe",
         type="heatmap",
-        url="./layers/overpass_amenity_cafe.geojson",
+        url="./layers/1.geojson",
         visible=True,
         style={"color": "#ff0000"},
-        mergeKey="overpass:amenity=cafe",
+        acquisition={"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
         geojson=GeoJson(
             type="FeatureCollection",
             features=[
@@ -87,7 +87,7 @@ class TestGeoAreaLoad:
         loaded = GeoArea.load(manifest_path, _make_area_payload())
 
         assert len(loaded.layers) == 1
-        assert loaded.layers[0].layer.id == "overpass_amenity_cafe"
+        assert loaded.layers[0].layer.id == "1"
 
     def test_loads_layer_geojson(self, tmp_path):
         manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
@@ -105,33 +105,26 @@ class TestGeoAreaLoad:
 
         assert coords == pytest.approx([12.48, 41.90])
 
-    def test_loads_pipeline_steps(self, tmp_path):
-        area = _make_geo_area()
-        area.acquisition = None
+    def test_loads_layer_acquisition(self, tmp_path):
+        manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
+
+        loaded = GeoArea.load(manifest_path, _make_area_payload())
+
+        acq = loaded.layers[0].layer.acquisition
+        assert acq is not None
+        assert acq["provider"] == "overpass"
+        assert acq["filter"] == "amenity"
+        assert acq["values"] == ["cafe"]
+
+    def test_loads_manifest_aggregation_deduping(self, tmp_path):
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(
             json.dumps(
                 {
                     "version": 1,
-                    "tasks": [
-                        {
-                            "type": "acquisition",
-                            "provider": "overpass",
-                            "filters": {
-                                "amenity": {
-                                    "values": ["cafe"],
-                                    "name": "Cafes",
-                                    "color": None,
-                                    "scale": None,
-                                    "surface": False,
-                                    "type": "heatmap",
-                                }
-                            },
-                        },
-                        {"type": "aggregation"},
-                        {"type": "deduping"},
-                    ],
                     "layers": [],
+                    "aggregation": {"foo": "bar"},
+                    "deduping": {"baz": 1},
                 }
             )
         )
@@ -139,9 +132,8 @@ class TestGeoAreaLoad:
         loaded = GeoArea.load(manifest_path, _make_area_payload())
 
         assert loaded.detail is not None
-        assert len(loaded.detail.tasks) == 3
-        assert loaded.detail.tasks[0].type == "acquisition"
-        assert loaded.detail.tasks[0].provider == "overpass"
+        assert loaded.detail.aggregation == {"foo": "bar"}
+        assert loaded.detail.deduping == {"baz": 1}
 
     def test_missing_manifest_raises(self, tmp_path):
         with pytest.raises(CatalogError):
@@ -161,17 +153,17 @@ class TestGeoAreaLoad:
             json.dumps(
                 {
                     "version": 1,
-                    "tasks": [],
                     "layers": [
                         {
-                            "id": "poi",
+                            "id": "__poi__",
                             "name": "POI",
-                            "type": "poi",
+                            "type": "__poi__",
                             "visible": True,
                             "style": {},
-                            "mergeKey": "poi",
                         }
                     ],
+                    "aggregation": {},
+                    "deduping": {},
                 }
             )
         )
@@ -192,7 +184,7 @@ class TestGeoAreaSave:
     def test_layer_geojson_written(self, tmp_path):
         manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
 
-        assert (manifest_path.parent / "layers" / "overpass_amenity_cafe.geojson").exists()
+        assert (manifest_path.parent / "layers" / "1.geojson").exists()
 
     def test_manifest_excludes_geojson(self, tmp_path):
         manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
@@ -200,6 +192,34 @@ class TestGeoAreaSave:
         payload = json.loads(manifest_path.read_text())
 
         assert "geojson" not in payload["layers"][0]
+
+    def test_manifest_includes_acquisition(self, tmp_path):
+        manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
+
+        payload = json.loads(manifest_path.read_text())
+        acq = payload["layers"][0].get("acquisition")
+
+        assert acq is not None
+        assert acq["provider"] == "overpass"
+        assert acq["filter"] == "amenity"
+
+    def test_manifest_omits_acquisition_for_poi_stub(self, tmp_path):
+        summary = Area(
+            id="rome",
+            name="Rome",
+            bbox=[12.40, 41.85, 12.55, 41.95],
+            minRadiusPx=32,
+            maxRadiusPx=512,
+            liveMapRadiusPx=640,
+            manifestUrl="./areas/rome/manifest.json",
+        )
+        stub = Layer(id="__poi__", name="POI", type="__poi__", visible=True, style={})
+        area = GeoArea(summary=summary, layers=[GeoLayer(stub)])
+
+        area.save(tmp_path)
+
+        payload = json.loads(_manifest_path(tmp_path).read_text())
+        assert "acquisition" not in payload["layers"][0]
 
     def test_stub_layer_not_saved_as_geojson(self, tmp_path):
         summary = Area(
@@ -211,14 +231,7 @@ class TestGeoAreaSave:
             liveMapRadiusPx=640,
             manifestUrl="./areas/rome/manifest.json",
         )
-        stub = Layer(
-            id="poi",
-            name="POI",
-            type="poi",
-            visible=True,
-            style={},
-            mergeKey="poi",
-        )
+        stub = Layer(id="__poi__", name="POI", type="__poi__", visible=True, style={})
         area = GeoArea(summary=summary, layers=[GeoLayer(stub)])
 
         area.save(tmp_path)
@@ -232,6 +245,16 @@ class TestGeoAreaSave:
 
         assert loaded.layers[0].layer.style == {"color": "#ff0000"}
 
+    def test_manifest_has_aggregation_deduping(self, tmp_path):
+        manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
+
+        payload = json.loads(manifest_path.read_text())
+
+        assert "aggregation" in payload
+        assert "deduping" in payload
+        assert isinstance(payload["aggregation"], dict)
+        assert isinstance(payload["deduping"], dict)
+
 
 class TestGeoAreaToManifestDict:
     def test_contains_version(self):
@@ -240,12 +263,18 @@ class TestGeoAreaToManifestDict:
 
         assert result["version"] == 1
 
-    def test_contains_tasks_list(self):
+    def test_contains_aggregation_deduping(self):
         area = _make_geo_area()
         result = area.to_manifest_dict()
 
-        assert "tasks" in result
-        assert isinstance(result["tasks"], list)
+        assert "aggregation" in result
+        assert "deduping" in result
+
+    def test_no_tasks_key(self):
+        area = _make_geo_area()
+        result = area.to_manifest_dict()
+
+        assert "tasks" not in result
 
     def test_contains_layers_list(self):
         area = _make_geo_area()
@@ -260,22 +289,13 @@ class TestGeoAreaToManifestDict:
 
         assert "geojson" not in result["layers"][0]
 
-    def test_acquisition_task_serialized(self):
-        from geo_builder.protocols import Acquisition
-
+    def test_layer_includes_acquisition(self):
         area = _make_geo_area()
-        area.acquisition = Acquisition(
-            provider="overpass",
-            filters={"amenity": AreaStyle(values=["cafe"], name="Cafes")},
-        )
-
         result = area.to_manifest_dict()
-        tasks = result["tasks"]
 
-        assert any(t["type"] == "acquisition" for t in tasks)
-        acq = next(t for t in tasks if t["type"] == "acquisition")
+        acq = result["layers"][0].get("acquisition")
+        assert acq is not None
         assert acq["provider"] == "overpass"
-        assert "amenity" in acq["filters"]
 
 
 class TestGeoAreaApplyManifest:
@@ -289,26 +309,26 @@ class TestGeoAreaApplyManifest:
 
         new_manifest = {
             "version": 1,
-            "tasks": [],
             "layers": [
                 {
-                    "id": "poi",
+                    "id": "__poi__",
                     "name": "POI",
-                    "type": "poi",
+                    "type": "__poi__",
                     "visible": True,
                     "style": {},
-                    "mergeKey": "poi",
                 }
             ],
+            "aggregation": {},
+            "deduping": {},
         }
         area.apply_manifest(new_manifest, out_dir)
 
         assert len(area.layers) == 1
-        assert area.layers[0].layer.id == "poi"
+        assert area.layers[0].layer.id == "__poi__"
 
     def test_manifest_written_to_disk(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
-        new_manifest = {"version": 2, "tasks": [], "layers": []}
+        new_manifest = {"version": 2, "layers": [], "aggregation": {}, "deduping": {}}
 
         area.apply_manifest(new_manifest, out_dir)
 
@@ -321,18 +341,19 @@ class TestGeoAreaApplyManifest:
 
         bad_manifest = {
             "version": 1,
-            "tasks": [],
             "layers": [
                 {
-                    "id": "overpass_amenity_restaurant",
+                    "id": "2",
                     "name": "Restaurant",
                     "type": "heatmap",
-                    "url": "./layers/overpass_amenity_restaurant.geojson",
+                    "url": "./layers/2.geojson",
                     "visible": True,
                     "style": {},
-                    "mergeKey": "overpass:amenity=restaurant",
+                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
                 }
             ],
+            "aggregation": {},
+            "deduping": {},
         }
 
         with pytest.raises(CatalogError):
@@ -340,35 +361,21 @@ class TestGeoAreaApplyManifest:
 
         assert len(area.layers) == len(original_layers)
 
-    def test_replaces_pipeline_steps(self, tmp_path):
+    def test_replaces_detail_aggregation_deduping(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
 
         new_manifest = {
             "version": 1,
-            "tasks": [
-                {
-                    "type": "acquisition",
-                    "provider": "overpass",
-                    "filters": {
-                        "amenity": {
-                            "values": ["bar"],
-                            "name": None,
-                            "color": None,
-                            "scale": None,
-                            "surface": False,
-                            "type": "heatmap",
-                        }
-                    },
-                }
-            ],
             "layers": [],
+            "aggregation": {"merge": True},
+            "deduping": {"threshold": 10},
         }
 
         area.apply_manifest(new_manifest, out_dir)
 
         assert area.detail is not None
-        assert area.detail.tasks[0].type == "acquisition"
-        assert area.detail.tasks[0].filters["amenity"].values == ["bar"]
+        assert area.detail.aggregation == {"merge": True}
+        assert area.detail.deduping == {"threshold": 10}
 
     def test_non_dict_manifest_raises(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())

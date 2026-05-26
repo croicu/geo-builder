@@ -11,6 +11,16 @@ Build a simple, deterministic Python application that creates static geographic 
 - Before implementing any feature or non-trivial change, ask clarifying questions until the intent is unambiguous.
 - If anything is unclear or could be interpreted multiple ways, ask — do not assume and implement.
 
+### Task workflow
+
+For any non-trivial feature or change, follow these stages:
+
+1. **Brainstorm** — create a `Current Task` entry in `CLAUDE.md` with `Status: Brainstorm`. Create `tasks/<task-name>.md` with the problem statement. Update `tasks/<task-name>.md` with conclusions as the design discussion progresses.
+2. **Implementation** — advance status to `Implementation`. Add an implementation plan to `tasks/<task-name>.md`. Write the code.
+3. **Testing** — advance status to `Testing`. Verify correctness; update task file with test results and any open issues.
+4. **Ready to Submit** — advance status to `Ready to Submit`. Run lint + tests; confirm docs are up to date.
+5. **Done** — advance status to `Done` after merge/close.
+
 ## Before committing
 
 Run these before every commit:
@@ -94,6 +104,12 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Explicit over brief** — if two implementations are equivalent, choose the one that is easier to read and debug, even if it is longer.
 - **No list/dict/set comprehensions** — use explicit `for` loops. Comprehensions obscure control flow and make multi-step logic harder to follow.
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
+
+## Current Task
+- **File**: [Manifest Refactoring](tasks/manifest_refactoring.md)
+- **Status**: Done
+- **GitHub Issue**: N/A
+- **Key Context**: Remove `tasks[]` from `manifest.json`; style and acquisition config now live only in `layers[]`. `mergeKey` removed (runtime-only). `__poi__` is the reserved builtin layer type. `template.json` is flat.
 
 ## Processing Pipeline
 

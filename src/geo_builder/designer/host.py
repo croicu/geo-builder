@@ -26,6 +26,15 @@ def MethodResult(output):
     return output
 
 
+def _apply_template_style(geo_layer, tlayer: dict) -> None:
+    """Merge template style fields over the layer's style so the template takes precedence."""
+    template_style = tlayer.get("style", {})
+    if not isinstance(template_style, dict):
+        return
+    for k, v in template_style.items():
+        geo_layer.layer.style[k] = v
+
+
 _core = None
 _form = None
 api: Gateway | None = None
@@ -98,6 +107,8 @@ def _normalize_bbox(bbox: list[float]) -> list[float]:
 
 
 def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
+    import re
+
     from ..api import (
         ADD_AREA_ID,
         AREA_CHANGED_ID,
@@ -122,10 +133,10 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     )
     from ..builder import Builder
     from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
-    from ..entities import GeoArea, GeoLayer
+    from ..entities import GeoArea
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
-    from ..protocols import Manifest, PipelineStep
+    from ..protocols import AreaStyle, PoiStyle
     from ..settings import Settings
 
     api.define_event(AREA_CHANGED_ID, AreaChangedData)
@@ -134,11 +145,9 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         """Run the pipeline for area_id, update catalog, and fire AreaChanged on success."""
         for a in fresh_catalog.areas:
             if a.id == area_id:
-                poi_layers = []
                 for geo_layer in a.layers:
-                    if geo_layer.layer.type == "poi":
-                        poi_layers.append(geo_layer)
-                a.layers = poi_layers
+                    if geo_layer.layer.type != "__poi__":
+                        geo_layer.layer.geojson = None
                 break
 
         try:
@@ -219,31 +228,58 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
     def on_add_area(data: AddAreaInput) -> AddAreaOutput:
         settings = Settings.current()
-        template = settings.templates.get(data.template)
+        template = settings.template
         if template is None:
             return MethodResult(
                 AddAreaOutput(
                     error=ERR_TEMPLATE_NOT_FOUND,
-                    errorDescription=f"Template '{data.template}' not found in tasks file",
+                    errorDescription="No template loaded — tasks file missing or empty",
                 )
             )
 
-        area_id = GeoLayer.id_from_merge_key(data.areaName)
+        area_id = re.sub(r"[^a-z0-9]+", "_", data.areaName.lower()).strip("_")
         bbox = _normalize_bbox(list(data.bbox))  # [west, south, east, north]
 
-        acquisition_task = AcquisitionTask(
-            areaId=area_id,
-            areaName=data.areaName,
-            provider=template.provider,
-            bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
-            filters=template.filters,
-        )
-        poi_task = PoiTask()
-        for task in settings.tasks:
-            if isinstance(task, PoiTask):
-                poi_task = task
+        tasks = []
+        for tlayer in template.get("layers", []):
+            acq = tlayer.get("acquisition")
+            if acq is None:
+                continue
+            filter_key = str(acq.get("filter", ""))
+            values = [str(v) for v in acq.get("values", [])]
+            provider = str(acq.get("provider", "overpass"))
+            layer_style = tlayer.get("style", {})
+            area_style = AreaStyle(
+                values=values,
+                name=str(tlayer["name"]) if tlayer.get("name") else None,
+                color=str(layer_style["color"]) if layer_style.get("color") is not None else None,
+                surface=bool(layer_style.get("surface", False)),
+                type=str(tlayer.get("type", "heatmap")),
+            )
+            tasks.append(
+                AcquisitionTask(
+                    areaId=area_id,
+                    areaName=data.areaName,
+                    provider=provider,
+                    bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
+                    filters={filter_key: area_style},
+                )
+            )
+        tasks.append(AggregationTask())
+        tasks.append(DedupingTask())
+
+        poi_style = PoiStyle()
+        for tlayer in template.get("layers", []):
+            if tlayer.get("id") == "__poi__":
+                s = tlayer.get("style", {})
+                poi_style = PoiStyle(
+                    name=str(tlayer.get("name", "POI")),
+                    color=str(s["color"]) if s.get("color") is not None else None,
+                    opacity=float(s.get("opacity", 0.7)),
+                    radius=float(s["radius"]) if s.get("radius") is not None else None,
+                )
                 break
-        tasks = [acquisition_task, AggregationTask(), DedupingTask(), poi_task]
+        tasks.append(PoiTask(style=poi_style))
 
         if in_dir is not None:
             try:
@@ -255,6 +291,25 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             fresh_catalog = catalog
 
         result = Builder(fresh_catalog).run(tasks=tasks)
+
+        template_layers = template.get("layers", [])
+        for a in result.areas:
+            if a.id == area_id:
+                for geo_layer in a.layers:
+                    for tlayer in template_layers:
+                        if not isinstance(tlayer, dict):
+                            continue
+                        layer_id = tlayer.get("id")
+                        if geo_layer.layer.id == "__poi__" and layer_id == "__poi__":
+                            geo_layer.seed_raw(tlayer)
+                            _apply_template_style(geo_layer, tlayer)
+                            break
+                        if geo_layer.layer.acquisition is not None and tlayer.get("acquisition") == geo_layer.layer.acquisition:
+                            geo_layer.seed_raw(tlayer)
+                            _apply_template_style(geo_layer, tlayer)
+                            break
+                break
+
         save_catalog(result, out_dir, debug=debug)
         if in_dir is not None:
             save_catalog(result, in_dir, debug=debug)
@@ -268,15 +323,6 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             if a.id == area_id:
                 new_area = a
                 break
-
-        if new_area is not None:
-            if new_area.detail is None:
-                new_area.detail = Manifest(version=1)
-            acq_steps = [s for s in new_area.detail.tasks if s.type == "acquisition"]
-            new_area.detail.tasks = acq_steps + [
-                PipelineStep(type="aggregation"),
-                PipelineStep(type="deduping"),
-            ]
 
         area_summary = None
         if new_area is not None:

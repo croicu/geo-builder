@@ -48,19 +48,19 @@ Regular point (no details):
 
 ### Conditional manifest entry
 
-The `poi` layer has `url: null` — it is a virtual layer derived at runtime from the existing layers. The builder adds a `poi` manifest entry only when at least one enriched POI was found. The presence of the entry is the signal to the browser that POI data exists.
+The `__poi__` layer has `url: null` — it is a reserved builtin virtual layer derived at runtime from the existing layers. The `__poi__` entry is always present in the manifest after the first build. `visible` encodes whether real data exists:
 
-If the Overpass query yields no enrichable POIs, the builder omits the manifest entry entirely. The browser sees no `poi` layer and shows nothing — no empty widget, no error.
+- `visible: true` — enriched POIs were found; the browser shows the layer.
+- `visible: false` — no enriched POIs; the browser shows nothing, but the entry is retained to preserve style across rebuilds.
 
 ```json
 {
-  "id": "poi",
+  "id": "__poi__",
   "name": "POI",
-  "type": "poi",
+  "type": "__poi__",
   "url": null,
   "visible": true,
-  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
-  "mergeKey": "poi"
+  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
 }
 ```
 
@@ -68,13 +68,13 @@ If the Overpass query yields no enrichable POIs, the builder omits the manifest 
 
 ### Layer type
 
-`poi` is a virtual layer type with no associated GeoJSON URL. When the browser encounters it in the manifest, it:
+`__poi__` is a reserved builtin virtual layer type with no associated GeoJSON URL. When the browser encounters it in the manifest, it:
 
 1. Waits for the other layers in the area to finish loading.
 2. Scans all loaded features across those layers for `hasDetails: true`.
 3. Renders those features as interactive circle markers on top of the existing heat.
 
-The heatmap layer already renders all points as heat — including the enriched ones. The `poi` layer adds only the interactive marker pass on top. No data is fetched twice, no file is duplicated.
+The heatmap layer already renders all points as heat — including the enriched ones. The `__poi__` layer adds only the interactive marker pass on top. No data is fetched twice, no file is duplicated.
 
 ### Interaction
 
@@ -91,7 +91,7 @@ const fsqUrl    = `https://foursquare.com/search?query=${encodeURIComponent(name
 
 ### Protocol change
 
-`protocols.ts` `Layer` type needs to accommodate a URL-less `poi` entry. The feature properties shape (`hasDetails`, `name`, `cuisine`, etc.) lives in the existing layer's GeoJSON — no new payload type needed, but the browser's GeoJSON parsing must tolerate and forward these extra fields. Agree the shape between geo-builder and geo-browser before the builder emits it.
+`protocols.ts` `Layer` type needs to accommodate a URL-less `__poi__` entry. The feature properties shape (`hasDetails`, `name`, `cuisine`, etc.) lives in the existing layer's GeoJSON — no new payload type needed, but the browser's GeoJSON parsing must tolerate and forward these extra fields. Agree the shape between geo-builder and geo-browser before the builder emits it.
 
 ## Decisions log
 

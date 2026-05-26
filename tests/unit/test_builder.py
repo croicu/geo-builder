@@ -21,7 +21,7 @@ def make_area() -> GeoArea:
     return GeoArea(summary=summary)
 
 
-def make_layer(merge_key: str, feature_count: int) -> Layer:
+def make_layer(layer_id: str, feature_count: int) -> Layer:
     features = []
     for i in range(feature_count):
         features.append(
@@ -32,13 +32,13 @@ def make_layer(merge_key: str, feature_count: int) -> Layer:
             )
         )
     return Layer(
-        id="overpass",
+        id=layer_id,
         name="Overpass",
         type="heatmap",
-        url="./layers/overpass.geojson",
+        url=f"./layers/{layer_id}.geojson",
         visible=True,
         style={},
-        mergeKey=merge_key,
+        acquisition={"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
         geojson=GeoJson(type="FeatureCollection", features=features),
     )
 
@@ -75,7 +75,7 @@ class StubWorkerFactory:
 
 @pytest.fixture(autouse=True)
 def settings():
-    Settings._instance = Settings(debug=False, tasks=[], providers={})
+    Settings._instance = Settings(debug=False, providers={})
     yield
     Settings._instance = None
 
@@ -118,9 +118,8 @@ class TestRun:
         workers = [StubWorker(), StubWorker()]
         builder = Builder()
         builder._worker_factory = StubWorkerFactory(workers)
-        Settings._instance = Settings(debug=False, tasks=[TASK, TASK], providers={})
 
-        builder.run()
+        builder.run(tasks=[TASK, TASK])
 
         assert all(w.executed for w in workers)
 
@@ -128,9 +127,8 @@ class TestRun:
         workers = [StubWorker(result=WorkerResult(fatal=True, error="boom")), StubWorker()]
         builder = Builder()
         builder._worker_factory = StubWorkerFactory(workers)
-        Settings._instance = Settings(debug=False, tasks=[TASK, TASK], providers={})
 
-        builder.run()
+        builder.run(tasks=[TASK, TASK])
 
         assert workers[0].executed
         assert not workers[1].executed
@@ -138,35 +136,32 @@ class TestRun:
     def test_fatal_error_message_recorded(self):
         builder = Builder()
         builder._worker_factory = StubWorkerFactory([StubWorker(result=WorkerResult(fatal=True, error="boom"))])
-        Settings._instance = Settings(debug=False, tasks=[TASK], providers={})
 
-        builder.run()
+        builder.run(tasks=[TASK])
 
         assert builder.errors == ["boom"]
 
     def test_geo_error_caught_in_non_debug_mode(self):
         builder = Builder()
         builder._worker_factory = StubWorkerFactory([StubWorker(raises=GeoError("oops"))])
-        Settings._instance = Settings(debug=False, tasks=[TASK], providers={})
 
-        builder.run()
+        builder.run(tasks=[TASK])
 
         assert builder.errors == ["oops"]
 
     def test_geo_error_propagates_in_debug_mode(self):
         builder = Builder()
         builder._worker_factory = StubWorkerFactory([StubWorker(raises=GeoError("oops"))])
-        Settings._instance = Settings(debug=True, tasks=[TASK], providers={})
+        Settings._instance = Settings(debug=True, providers={})
 
         with pytest.raises(GeoError):
-            builder.run()
+            builder.run(tasks=[TASK])
 
     def test_returns_geo_catalog(self):
         builder = Builder()
         builder._worker_factory = StubWorkerFactory([])
-        Settings._instance = Settings(debug=False, tasks=[], providers={})
 
-        result = builder.run()
+        result = builder.run(tasks=[])
 
         assert result is builder.catalog
 
@@ -175,28 +170,28 @@ class TestBuilderAddLayer:
     def test_first_layer_is_appended(self):
         builder = Builder()
         area = make_area()
-        layer = make_layer("overpass:amenity=restaurant", 3)
+        layer = make_layer("1", 3)
 
         builder.add_layer(area, layer)
 
         assert len(area.layers) == 1
 
-    def test_same_merge_key_merges_features(self):
+    def test_same_id_merges_features(self):
         builder = Builder()
         area = make_area()
 
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 3))
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 2))
+        builder.add_layer(area, make_layer("1", 3))
+        builder.add_layer(area, make_layer("1", 2))
 
         assert len(area.layers) == 1
         assert len(area.layers[0].layer.geojson.features) == 5
 
-    def test_different_merge_key_appends_new_layer(self):
+    def test_different_id_appends_new_layer(self):
         builder = Builder()
         area = make_area()
 
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 3))
-        builder.add_layer(area, make_layer("overpass:amenity=cafe", 2))
+        builder.add_layer(area, make_layer("1", 3))
+        builder.add_layer(area, make_layer("2", 2))
 
         assert len(area.layers) == 2
 
@@ -204,7 +199,7 @@ class TestBuilderAddLayer:
         builder = Builder()
         area = make_area()
 
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+        builder.add_layer(area, make_layer("1", 1))
 
         assert area.layers[0].layer.style["color"] == "#0000ff"
 
@@ -212,8 +207,8 @@ class TestBuilderAddLayer:
         builder = Builder()
         area = make_area()
 
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
-        builder.add_layer(area, make_layer("overpass:amenity=cafe", 1))
+        builder.add_layer(area, make_layer("1", 1))
+        builder.add_layer(area, make_layer("2", 1))
 
         assert area.layers[0].layer.style["color"] != area.layers[1].layer.style["color"]
 
@@ -221,8 +216,8 @@ class TestBuilderAddLayer:
         builder = Builder()
         area = make_area()
 
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+        builder.add_layer(area, make_layer("1", 1))
         color_before = area.layers[0].layer.style["color"]
-        builder.add_layer(area, make_layer("overpass:amenity=restaurant", 1))
+        builder.add_layer(area, make_layer("1", 1))
 
         assert area.layers[0].layer.style["color"] == color_before

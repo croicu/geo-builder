@@ -29,13 +29,13 @@ def make_feature(lon: float, lat: float, properties: dict | None = None) -> Feat
 
 def make_layer(features: list[Feature]) -> Layer:
     return Layer(
-        id="stub_amenity_restaurant",
+        id="1",
         name="Restaurant",
         type="heatmap",
-        url="./layers/stub_amenity_restaurant.geojson",
+        url="./layers/1.geojson",
         visible=True,
         style={},
-        mergeKey="stub:amenity=restaurant",
+        acquisition={"provider": "stub", "filter": "amenity", "values": ["restaurant"]},
         geojson=GeoJson(type="FeatureCollection", features=features),
     )
 

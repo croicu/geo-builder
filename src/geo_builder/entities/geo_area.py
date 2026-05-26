@@ -7,15 +7,12 @@ from pathlib import Path
 
 from ..errors import CatalogError
 from ..protocols import (
-    Acquisition,
     Area,
-    AreaStyle,
     Feature,
     GeoJson,
     Geometry,
     Layer,
     Manifest,
-    PipelineStep,
 )
 from .geo_layer import GeoLayer
 
@@ -84,13 +81,16 @@ def _load_stub_layer(payload: dict) -> Layer:
     style = payload.get("style", {})
     if not isinstance(style, dict):
         style = {}
+    acquisition = payload.get("acquisition")
+    if acquisition is not None and not isinstance(acquisition, dict):
+        acquisition = None
     return Layer(
         id=str(payload["id"]),
         name=str(payload["name"]),
         type=str(payload["type"]),
         visible=bool(payload["visible"]),
         style=style,
-        mergeKey=str(payload["mergeKey"]),
+        acquisition=acquisition,
     )
 
 
@@ -101,6 +101,9 @@ def _load_layer(geojson_path: Path, payload: dict) -> Layer:
     style = payload.get("style", {})
     if not isinstance(style, dict):
         raise CatalogError("layer style must be an object.")
+    acquisition = payload.get("acquisition")
+    if acquisition is not None and not isinstance(acquisition, dict):
+        acquisition = None
     return Layer(
         id=str(payload["id"]),
         name=str(payload["name"]),
@@ -108,9 +111,13 @@ def _load_layer(geojson_path: Path, payload: dict) -> Layer:
         url=str(payload["url"]),
         visible=bool(payload["visible"]),
         style=style,
-        mergeKey=str(payload["mergeKey"]),
+        acquisition=acquisition,
         geojson=_load_geojson(geojson_payload),
     )
+
+
+_KNOWN_MANIFEST_KEYS = {"version", "layers", "aggregation", "deduping"}
+_KNOWN_LAYER_KEYS = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson"}
 
 
 def _load_manifest_layers(manifest_path: Path, payload: dict) -> list[GeoLayer]:
@@ -124,75 +131,46 @@ def _load_manifest_layers(manifest_path: Path, payload: dict) -> list[GeoLayer]:
             continue
         url = layer_payload.get("url")
         if url is None:
-            geo_layers.append(GeoLayer(_load_stub_layer(layer_payload)))
+            geo_layers.append(GeoLayer(_load_stub_layer(layer_payload), raw=layer_payload))
         else:
             geojson_path = _child_path(manifest_dir, str(url))
-            geo_layers.append(GeoLayer(_load_layer(geojson_path, layer_payload)))
+            geo_layers.append(GeoLayer(_load_layer(geojson_path, layer_payload), raw=layer_payload))
     return geo_layers
 
 
-def _load_pipeline_steps(data: object) -> list[PipelineStep]:
-    steps: list[PipelineStep] = []
-    if not isinstance(data, list):
-        return steps
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        step_type = str(item.get("type", ""))
-        if step_type == "acquisition":
-            filters: dict[str, AreaStyle] = {}
-            for key, style_data in dict(item.get("filters", {})).items():
-                if not isinstance(style_data, dict):
-                    continue
-                values: list[str] = []
-                for v in style_data.get("values", []):
-                    values.append(str(v))
-                filters[str(key)] = AreaStyle(
-                    values=values,
-                    name=str(style_data["name"]) if style_data.get("name") is not None else None,
-                    color=str(style_data["color"]) if style_data.get("color") is not None else None,
-                    scale=float(style_data["scale"]) if style_data.get("scale") is not None else None,
-                    surface=bool(style_data.get("surface", False)),
-                    type=str(style_data.get("type", "heatmap")),
-                )
-            steps.append(
-                PipelineStep(
-                    type="acquisition",
-                    provider=str(item.get("provider", "")),
-                    filters=filters,
-                )
-            )
-        elif step_type in ("aggregation", "deduping", "poi"):
-            steps.append(PipelineStep(type=step_type))
-    return steps
-
-
-def _build_manifest_dict(detail: Manifest | None, layers: list[GeoLayer]) -> dict:
+def _build_manifest_dict(detail: Manifest | None, layers: list[GeoLayer], extras: dict | None = None) -> dict:
     manifest_version = detail.version if detail is not None else 1
-
-    tasks_payload: list[dict] = []
-    if detail is not None:
-        for step in detail.tasks:
-            if step.type == "acquisition":
-                step_data: dict = {"type": "acquisition"}
-                if step.provider is not None:
-                    step_data["provider"] = step.provider
-                if step.filters is not None:
-                    filters_payload: dict = {}
-                    for k, v in step.filters.items():
-                        filters_payload[k] = asdict(v)
-                    step_data["filters"] = filters_payload
-                tasks_payload.append(step_data)
-            else:
-                tasks_payload.append({"type": step.type})
+    aggregation = detail.aggregation if detail is not None else {}
+    deduping = detail.deduping if detail is not None else {}
 
     layers_payload: list[dict] = []
     for geo_layer in layers:
-        layer_data = asdict(geo_layer.layer)
-        del layer_data["geojson"]
-        layers_payload.append(layer_data)
+        layer = geo_layer.layer
+        # Start from raw payload so unknown fields are preserved, then overwrite known fields.
+        entry: dict = {}
+        for k, v in geo_layer.raw.items():
+            if k not in _KNOWN_LAYER_KEYS:
+                entry[k] = v
+        entry["id"] = layer.id
+        entry["name"] = layer.name
+        entry["type"] = layer.type
+        entry["visible"] = layer.visible
+        entry["style"] = dict(layer.style)
+        if layer.url is not None:
+            entry["url"] = layer.url
+        if layer.acquisition is not None:
+            entry["acquisition"] = layer.acquisition
+        layers_payload.append(entry)
 
-    return {"version": manifest_version, "tasks": tasks_payload, "layers": layers_payload}
+    result: dict = {}
+    if extras:
+        for k, v in extras.items():
+            result[k] = v
+    result["version"] = manifest_version
+    result["layers"] = layers_payload
+    result["aggregation"] = aggregation
+    result["deduping"] = deduping
+    return result
 
 
 class GeoArea:
@@ -205,6 +183,7 @@ class GeoArea:
         self._summary = summary
         self.layers: list[GeoLayer] = layers if layers is not None else []
         self.detail = detail
+        self._manifest_extras: dict = {}
         self._on_changed: Callable[[GeoArea], None] | None = None
 
     def subscribe_changed(self, fn: Callable[[GeoArea], None]) -> None:
@@ -217,8 +196,14 @@ class GeoArea:
             raise CatalogError(f"{manifest_path} must contain an object.")
 
         geo_layers = _load_manifest_layers(manifest_path, manifest_payload)
-        pipeline_steps = _load_pipeline_steps(manifest_payload.get("tasks", []))
         manifest_version = int(manifest_payload.get("version", 1))
+
+        aggregation = manifest_payload.get("aggregation", {})
+        if not isinstance(aggregation, dict):
+            aggregation = {}
+        deduping = manifest_payload.get("deduping", {})
+        if not isinstance(deduping, dict):
+            deduping = {}
 
         bbox = area_payload.get("bbox")
         if not isinstance(bbox, list) or len(bbox) != 4:
@@ -234,8 +219,12 @@ class GeoArea:
             manifestUrl=str(area_payload["manifestUrl"]),
         )
 
-        detail = Manifest(version=manifest_version, tasks=pipeline_steps)
-        return cls(summary=summary, layers=geo_layers, detail=detail)
+        detail = Manifest(version=manifest_version, aggregation=aggregation, deduping=deduping)
+        area = cls(summary=summary, layers=geo_layers, detail=detail)
+        for k, v in manifest_payload.items():
+            if k not in _KNOWN_MANIFEST_KEYS:
+                area._manifest_extras[k] = v
+        return area
 
     def save(self, output_dir: Path) -> None:
         manifest_path = _child_path(output_dir, self.manifestUrl)
@@ -248,10 +237,10 @@ class GeoArea:
                 )
 
     def to_manifest_dict(self) -> dict:
-        return _build_manifest_dict(self.detail, self.layers)
+        return _build_manifest_dict(self.detail, self.layers, self._manifest_extras)
 
     def apply_manifest(self, payload: dict, output_dir: Path) -> None:
-        """Replace this area's layers and pipeline steps from a manifest-shaped dict.
+        """Replace this area's layers from a manifest-shaped dict.
 
         Saves to disk before updating self — if the save fails self is unchanged.
         Raises CatalogError on invalid payload or missing geojson files, OSError on I/O failure.
@@ -262,13 +251,25 @@ class GeoArea:
         manifest_path = _child_path(output_dir, self.manifestUrl)
 
         new_layers = _load_manifest_layers(manifest_path, payload)
-        new_steps = _load_pipeline_steps(payload.get("tasks", []))
-        new_detail = Manifest(version=int(payload.get("version", 1)), tasks=new_steps)
 
-        _save_json(manifest_path, _build_manifest_dict(new_detail, new_layers))
+        aggregation = payload.get("aggregation", {})
+        if not isinstance(aggregation, dict):
+            aggregation = {}
+        deduping = payload.get("deduping", {})
+        if not isinstance(deduping, dict):
+            deduping = {}
+        new_detail = Manifest(version=int(payload.get("version", 1)), aggregation=aggregation, deduping=deduping)
+
+        new_extras: dict = {}
+        for k, v in payload.items():
+            if k not in _KNOWN_MANIFEST_KEYS:
+                new_extras[k] = v
+
+        _save_json(manifest_path, _build_manifest_dict(new_detail, new_layers, new_extras))
 
         self.layers = new_layers
         self.detail = new_detail
+        self._manifest_extras = new_extras
 
     @property
     def summary(self) -> Area:  # TODO: protocol exposed — revisit
@@ -305,22 +306,3 @@ class GeoArea:
     @property
     def liveMapRadiusPx(self) -> int:
         return self._summary.liveMapRadiusPx
-
-    @property
-    def acquisition(self) -> Acquisition | None:
-        if self.detail is None:
-            return None
-        for step in self.detail.tasks:
-            if step.type == "acquisition" and step.provider is not None and step.filters is not None:
-                return Acquisition(provider=step.provider, filters=step.filters)
-        return None
-
-    @acquisition.setter
-    def acquisition(self, value: Acquisition | None) -> None:
-        if self.detail is None:
-            self.detail = Manifest(version=1)
-        other_steps = [s for s in self.detail.tasks if s.type != "acquisition"]
-        if value is not None:
-            self.detail.tasks = [PipelineStep(type="acquisition", provider=value.provider, filters=value.filters)] + other_steps
-        else:
-            self.detail.tasks = other_steps

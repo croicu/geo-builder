@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from .contracts import Task
 from .diagnostics import TelemetryLevel
 from .errors import TaskError
-from .protocols import Acquisition
-from .tasks import Tasks
 
 _SETTINGS_PATH = Path("./settings.json")
 _LOCAL_PATH = Path("./settings.local.json")
@@ -18,9 +15,8 @@ _LOCAL_PATH = Path("./settings.local.json")
 @dataclass
 class Settings:
     debug: bool
-    tasks: list[Task]
     providers: dict[str, dict[str, object]]
-    templates: dict[str, Acquisition] = field(default_factory=dict)
+    template: dict | None = None
     break_on_load: bool = False
     dev_tools: bool = False
     design_url: str | None = None
@@ -111,23 +107,20 @@ class Settings:
                 window_width = int(raw_width) if raw_width is not None else None
                 window_height = int(raw_height) if raw_height is not None else None
 
-        tasks: list[Task] = []
-        templates: dict[str, Acquisition] = {}
+        template: dict | None = None
         if tasks_path is not None:
             with Path(tasks_path).open("r", encoding="utf-8") as f:
-                tasks_payload = json.load(f)
-            if not isinstance(tasks_payload, dict):
-                raise TaskError("Tasks file must contain a JSON object.")
-            tasks = Tasks.from_payload(tasks_payload)
-            templates = Tasks.templates_from_payload(tasks_payload)
+                template_payload = json.load(f)
+            if not isinstance(template_payload, dict):
+                raise TaskError("Template file must contain a JSON object.")
+            template = template_payload
 
         cls._instance = cls(
             debug=debug,
             break_on_load=break_on_load,
             dev_tools=dev_tools,
             design_url=design_url,
-            tasks=tasks,
-            templates=templates,
+            template=template,
             providers=providers,
             logging=log_level,
             window_left=window_left,

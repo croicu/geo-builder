@@ -10,7 +10,7 @@ from .colors import layer_color
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import GeoError
-from .protocols import Area, JsonObject, Layer
+from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle
 from .workers.factory import WorkerFactory
 
 
@@ -32,8 +32,7 @@ class Builder:
         if tasks is not None:
             self._stack = list(reversed(tasks))
         else:
-            catalog_tasks = self._tasks_from_catalog()
-            self._stack = list(reversed(catalog_tasks if catalog_tasks else settings.tasks))
+            self._stack = list(reversed(self._tasks_from_catalog()))
 
         if debug:
             build_dir = Path("./build")
@@ -73,30 +72,53 @@ class Builder:
         for area in self.catalog.areas:
             has_data_layers = False
             for geo_layer in area.layers:
-                if geo_layer.layer.type != "poi" and geo_layer.layer.geojson is not None:
+                if geo_layer.layer.type not in ("__poi__",) and geo_layer.layer.geojson is not None:
                     has_data_layers = True
                     break
-            if area.acquisition is not None and not has_data_layers:
-                bbox = area.bbox
-                result.append(
-                    AcquisitionTask(
-                        areaId=area.id,
-                        areaName=area.name,
-                        provider=area.acquisition.provider,
-                        bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
-                        filters=area.acquisition.filters,
+            if not has_data_layers:
+                for geo_layer in area.layers:
+                    acq = geo_layer.layer.acquisition
+                    if acq is None:
+                        continue
+                    layer = geo_layer.layer
+                    style = AreaStyle(
+                        values=[str(v) for v in acq["values"]],
+                        name=layer.name or None,
+                        surface=bool(layer.style.get("surface", False)),
+                        scale=float(layer.style["radiusScale"]) if "radiusScale" in layer.style else None,
+                        type=layer.type,
                     )
-                )
+                    bbox = area.bbox
+                    result.append(
+                        AcquisitionTask(
+                            areaId=area.id,
+                            areaName=area.name,
+                            provider=str(acq["provider"]),
+                            bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
+                            filters={str(acq["filter"]): style},
+                        )
+                    )
         if result:
             result.append(AggregationTask())
             result.append(DedupingTask())
-            poi_task = PoiTask()
-            for task in Settings.current().tasks:
-                if isinstance(task, PoiTask):
-                    poi_task = task
-                    break
-            result.append(poi_task)
+            poi_style = self._poi_style_from_template(Settings.current())
+            result.append(PoiTask(style=poi_style))
         return result
+
+    def _poi_style_from_template(self, settings) -> PoiStyle:
+        template = settings.template
+        if template is None:
+            return PoiStyle()
+        for tlayer in template.get("layers", []):
+            if tlayer.get("id") == "__poi__":
+                s = tlayer.get("style", {})
+                return PoiStyle(
+                    name=str(tlayer.get("name", "POI")),
+                    color=str(s["color"]) if s.get("color") is not None else None,
+                    opacity=float(s.get("opacity", 0.7)),
+                    radius=float(s["radius"]) if s.get("radius") is not None else None,
+                )
+        return PoiStyle()
 
     def push_task(self, task: JsonObject) -> None:
         self._stack.append(task)
@@ -129,11 +151,17 @@ class Builder:
 
     def add_layer(self, area: GeoArea, layer: Layer) -> None:
         for existing in area.layers:
-            if existing.layer.mergeKey == layer.mergeKey:
-                if existing.layer.geojson is not None and layer.geojson is not None:
-                    existing.layer.geojson.features.extend(layer.geojson.features)
+            if existing.layer.id == layer.id:
+                if layer.geojson is not None:
+                    if existing.layer.geojson is None:
+                        existing.layer.geojson = layer.geojson
+                        existing.layer.url = layer.url
+                        existing.layer.acquisition = layer.acquisition
+                    else:
+                        existing.layer.geojson.features.extend(layer.geojson.features)
                 return
-        layer.style["color"] = layer_color(len(area.layers))
+        if "color" not in layer.style:
+            layer.style["color"] = layer_color(len(area.layers))
         area.layers.append(GeoLayer(layer))
 
     def _layer_snapshot(self) -> dict[tuple[str, str], int]:

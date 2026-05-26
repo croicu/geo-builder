@@ -3,8 +3,8 @@ from ..diagnostics import Logger
 from ..entities import GeoArea, GeoLayer
 from ..protocols import Layer, PoiStyle
 
-_POI_HEAT_ID = "poi"
-_POI_HEAT_MERGE_KEY = "poi"
+_POI_ID = "__poi__"
+_POI_TYPE = "__poi__"
 
 
 class PoiWorker(Worker):
@@ -37,17 +37,19 @@ class PoiWorker(Worker):
         existing_poi: GeoLayer | None = None
         filtered = []
         for geo_layer in area.layers:
-            if geo_layer.layer.id == _POI_HEAT_ID:
+            if geo_layer.layer.id == _POI_ID:
                 existing_poi = geo_layer
             else:
                 filtered.append(geo_layer)
         area.layers = filtered
 
-        if has_details:
-            if existing_poi is not None:
-                area.layers.append(existing_poi)
-            else:
-                area.layers.append(GeoLayer(self._create_stub(style)))
+        if existing_poi is not None:
+            existing_poi.layer.visible = has_details
+            area.layers.append(existing_poi)
+        else:
+            stub = self._create_stub(style)
+            stub.visible = has_details
+            area.layers.append(GeoLayer(stub))
 
         return has_details
 
@@ -67,10 +69,9 @@ class PoiWorker(Worker):
         if style.radius is not None:
             layer_style["radius"] = style.radius
         return Layer(
-            id=_POI_HEAT_ID,
+            id=_POI_ID,
             name=style.name,
-            type="poi",
+            type=_POI_TYPE,
             visible=True,
             style=layer_style,
-            mergeKey=_POI_HEAT_MERGE_KEY,
         )
