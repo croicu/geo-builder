@@ -152,7 +152,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         try:
             result = Builder(fresh_catalog).run()
-            save_catalog(result, out_dir, debug=debug)
+            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
         except Exception as exc:
             Logger.error(f"pipeline failed for area '{area_id}': {exc}")
             return
@@ -310,9 +310,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                             break
                 break
 
-        save_catalog(result, out_dir, debug=debug)
-        if in_dir is not None:
-            save_catalog(result, in_dir, debug=debug)
+        save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
 
         catalog.areas[:] = result.areas
         for a in catalog.areas:

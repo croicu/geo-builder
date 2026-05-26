@@ -106,10 +106,10 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
 
 ## Current Task
-- **File**: [Manifest Refactoring](tasks/manifest_refactoring.md)
-- **Status**: Done
+- **File**: [Catalog Head Defaults & Path Mirroring](tasks/catalog_head_defaults.md)
+- **Status**: Ready to Submit
 - **GitHub Issue**: N/A
-- **Key Context**: Remove `tasks[]` from `manifest.json`; style and acquisition config now live only in `layers[]`. `mergeKey` removed (runtime-only). `__poi__` is the reserved builtin layer type. `template.json` is flat.
+- **Key Context**: `pull.py` writes default head files on 404; `load_catalog` falls back to defaults if head file absent; `save_catalog` mirrors `in_dir` path structure instead of hard-coding `./release/` or `./debug/` subdirs; defaults are flat (`./catalog.json`, `./catalog.debug.json`).
 
 ## Processing Pipeline
 

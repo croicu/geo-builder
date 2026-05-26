@@ -168,34 +168,34 @@ class TestSaveCatalog:
 
         payload = json.loads((tmp_path / "catalog.head.json").read_text())
 
-        assert payload["catalogUrl"] == "./release/catalog.json"
+        assert payload["catalogUrl"] == "./catalog.json"
 
     def test_catalog_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "catalog.json").exists()
+        assert (tmp_path / "catalog.json").exists()
 
     def test_manifest_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "manifest.json").exists()
+        assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
 
     def test_layer_geojson_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "layers" / "1.geojson").exists()
+        assert (tmp_path / "areas" / "napoli" / "layers" / "1.geojson").exists()
 
     def test_catalog_json_excludes_manifest_field(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "release" / "catalog.json").read_text())
+        payload = json.loads((tmp_path / "catalog.json").read_text())
 
         assert "manifest" not in payload["areas"][0]
 
     def test_manifest_json_excludes_geojson(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "release" / "areas" / "napoli" / "manifest.json").read_text())
+        payload = json.loads((tmp_path / "areas" / "napoli" / "manifest.json").read_text())
 
         assert "geojson" not in payload["layers"][0]
 
@@ -402,7 +402,7 @@ class TestSaveAreaCsv:
     def test_csv_written_by_save_catalog(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "napoli.csv").exists()
+        assert (tmp_path / "areas" / "napoli" / "napoli.csv").exists()
 
 
 class TestLoadCatalogErrors:

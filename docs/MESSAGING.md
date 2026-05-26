@@ -241,11 +241,13 @@ Entry point. Tells the browser where the catalog file lives.
 ```jsonc
 {
   "version": 1,
-  "catalogUrl": "./release/catalog.json"
+  "catalogUrl": "./catalog.json"
 }
 ```
 
-`catalog.head.debug.json` is an alternate entry point written when `settings.debug: true` — same shape, points to a different `catalogUrl`.
+The `catalogUrl` is a relative URL resolved against the head file's location. The default points to `./catalog.json` (flat layout alongside the head file). Services may use a different layout; geo-builder mirrors whatever `catalogUrl` the service declares.
+
+`catalog.head.debug.json` is an alternate entry point for debug builds — same shape, default `catalogUrl` is `"./catalog.debug.json"`.
 
 ### `catalog.json`
 
@@ -323,7 +325,7 @@ Entry point. Tells the browser where the catalog file lives.
 | `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
 | `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
-| `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value |
+| `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value; absent = always shown |
 
 All `style` fields are optional; absent fields fall back to layer defaults.
 

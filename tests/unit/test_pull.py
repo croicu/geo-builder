@@ -160,6 +160,43 @@ class TestDeduplication:
 # ─── Error handling ─────────────────────────────────────────────────────────────
 
 
+class TestDefaultHead:
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_missing_release_head_writes_default(self, mock_get, tmp_path):
+        mock_get.side_effect = Exception("404")
+        pull("http://svc", tmp_path)
+        assert (tmp_path / "catalog.head.json").exists()
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_missing_debug_head_writes_default(self, mock_get, tmp_path):
+        mock_get.side_effect = Exception("404")
+        pull("http://svc", tmp_path)
+        assert (tmp_path / "catalog.head.debug.json").exists()
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_default_release_head_catalog_url(self, mock_get, tmp_path):
+        mock_get.side_effect = Exception("404")
+        pull("http://svc", tmp_path)
+        payload = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert payload["catalogUrl"] == "./catalog.json"
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_default_debug_head_catalog_url(self, mock_get, tmp_path):
+        mock_get.side_effect = Exception("404")
+        pull("http://svc", tmp_path)
+        payload = json.loads((tmp_path / "catalog.head.debug.json").read_text())
+        assert payload["catalogUrl"] == "./catalog.debug.json"
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_existing_head_not_overwritten_on_404(self, mock_get, tmp_path):
+        custom = {"version": 1, "catalogUrl": "./custom/catalog.json"}
+        (tmp_path / "catalog.head.json").write_text(json.dumps(custom))
+        mock_get.side_effect = Exception("404")
+        pull("http://svc", tmp_path)
+        payload = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert payload["catalogUrl"] == "./custom/catalog.json"
+
+
 class TestErrorHandling:
     @patch("geo_builder.designer.pull.requests.get")
     def test_missing_head_does_not_crash(self, mock_get, tmp_path):

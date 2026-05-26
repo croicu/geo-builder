@@ -135,7 +135,7 @@ def main() -> int:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug)
+        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug, in_dir=arguments.in_directory)
         return 0
     except GeoError as error:
         if settings.debug:

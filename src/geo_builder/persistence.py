@@ -27,25 +27,36 @@ def save_json(path: Path, payload: JsonValue) -> None:
 
 _CATALOG_HEAD = "catalog.head.json"
 _CATALOG_HEAD_DEBUG = "catalog.head.debug.json"
-_CATALOG_FILENAME = "catalog.json"
+_DEFAULT_CATALOG_URL = "./catalog.json"
+_DEFAULT_CATALOG_URL_DEBUG = "./catalog.debug.json"
 
 
 def child_path(parent: Path, relative_path: str) -> Path:
     return parent / relative_path.removeprefix("./")
 
 
+def _default_catalog_url(debug: bool) -> str:
+    return _DEFAULT_CATALOG_URL_DEBUG if debug else _DEFAULT_CATALOG_URL
+
+
+def _resolve_catalog_url(directory: Path, debug: bool) -> str:
+    head_name = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
+    head_path = directory / head_name
+    if not head_path.exists():
+        return _default_catalog_url(debug)
+    payload = read_json(head_path)
+    if not isinstance(payload, dict):
+        raise CatalogError(f"{head_name} must contain an object.")
+    url = str(payload.get("catalogUrl", ""))
+    if not url:
+        raise CatalogError(f"{head_name} must contain a catalogUrl.")
+    return url
+
+
 def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
     input_dir = Path(input_dir)
 
-    catalog_head_path = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
-    head_payload = read_json(input_dir / catalog_head_path)
-
-    if not isinstance(head_payload, dict):
-        raise CatalogError(f"{_CATALOG_HEAD} must contain an object.")
-
-    catalog_url = str(head_payload.get("catalogUrl", ""))
-    if not catalog_url:
-        raise CatalogError(f"{_CATALOG_HEAD} must contain a catalogUrl.")
+    catalog_url = _resolve_catalog_url(input_dir, debug)
 
     catalog_path = child_path(input_dir, catalog_url)
     payload = read_json(catalog_path)
@@ -72,13 +83,18 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
     )
 
 
-def save_catalog(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
+def save_catalog(
+    geo_catalog: GeoCatalog,
+    output_dir: str | Path,
+    debug: bool = False,
+    in_dir: str | Path | None = None,
+) -> None:
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
-    catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
+    source_dir = Path(in_dir) if in_dir is not None else None
+    catalog_url = _resolve_catalog_url(source_dir, debug) if source_dir is not None else _default_catalog_url(debug)
 
     areas_payload = []
     for geo_area in geo_catalog.areas:
@@ -92,9 +108,10 @@ def save_catalog(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = 
 
     _clean_dir(output_dir)
     save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
-    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, catalog_payload)
+    catalog_path = child_path(output_dir, catalog_url)
+    save_json(catalog_path, catalog_payload)
 
-    catalog_base = output_dir / catalog_dir
+    catalog_base = catalog_path.parent
     for geo_area in geo_catalog.areas:
         geo_area.save(catalog_base)
         save_area_csv(geo_area, catalog_base)
@@ -105,9 +122,8 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    catalog_dir = "debug" if debug else "release"
     head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
-    catalog_url = f"./{catalog_dir}/{_CATALOG_FILENAME}"
+    catalog_url = _resolve_catalog_url(output_dir, debug)
 
     areas_payload = []
     for geo_area in geo_catalog.areas:
@@ -120,7 +136,8 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
     }
 
     save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
-    save_json(output_dir / catalog_dir / _CATALOG_FILENAME, catalog_payload)
+    catalog_path = child_path(output_dir, catalog_url)
+    save_json(catalog_path, catalog_payload)
 
 
 def load_geojson(payload: dict[str, JsonValue]) -> GeoJson:
