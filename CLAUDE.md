@@ -104,6 +104,7 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Explicit over brief** — if two implementations are equivalent, choose the one that is easier to read and debug, even if it is longer.
 - **No list/dict/set comprehensions** — use explicit `for` loops. Comprehensions obscure control flow and make multi-step logic harder to follow.
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
+- **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## Current Task
 - **File**: [Catalog Head Defaults & Path Mirroring](tasks/catalog_head_defaults.md)

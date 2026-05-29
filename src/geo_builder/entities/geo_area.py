@@ -173,6 +173,25 @@ def _build_manifest_dict(detail: Manifest | None, layers: list[GeoLayer], extras
     return result
 
 
+def _acquisition_changed(old_layers: list[GeoLayer], new_layers: list[GeoLayer]) -> bool:
+    """Return True if the new layer set requires a rebuild.
+
+    A rebuild is needed when layers are added or removed, when layer IDs change,
+    or when any layer's acquisition block differs from the existing one.
+    """
+    if len(old_layers) != len(new_layers):
+        return True
+    old_by_id: dict[str, dict | None] = {}
+    for gl in old_layers:
+        old_by_id[gl.layer.id] = gl.layer.acquisition
+    for gl in new_layers:
+        if gl.layer.id not in old_by_id:
+            return True
+        if gl.layer.acquisition != old_by_id[gl.layer.id]:
+            return True
+    return False
+
+
 class GeoArea:
     def __init__(
         self,
@@ -239,9 +258,11 @@ class GeoArea:
     def to_manifest_dict(self) -> dict:
         return _build_manifest_dict(self.detail, self.layers, self._manifest_extras)
 
-    def apply_manifest(self, payload: dict, output_dir: Path) -> None:
+    def apply_manifest(self, payload: dict, output_dir: Path) -> bool:
         """Replace this area's layers from a manifest-shaped dict.
 
+        Returns True if acquisition data changed (a rebuild is required), False if only
+        non-acquisition fields (style, visibility, name, …) changed.
         Saves to disk before updating self — if the save fails self is unchanged.
         Raises CatalogError on invalid payload or missing geojson files, OSError on I/O failure.
         """
@@ -265,11 +286,15 @@ class GeoArea:
             if k not in _KNOWN_MANIFEST_KEYS:
                 new_extras[k] = v
 
+        needs_rebuild = _acquisition_changed(self.layers, new_layers)
+
         _save_json(manifest_path, _build_manifest_dict(new_detail, new_layers, new_extras))
 
         self.layers = new_layers
         self.detail = new_detail
         self._manifest_extras = new_extras
+
+        return needs_rebuild
 
     @property
     def summary(self) -> Area:  # TODO: protocol exposed — revisit

@@ -366,14 +366,35 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         if area is None:
             return MethodResult(PutAreaJsonOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
 
-        catalog_subdir = "debug" if debug else "release"
-        save_dir = (in_dir if in_dir is not None else out_dir) / catalog_subdir
+        save_dir = in_dir if in_dir is not None else out_dir
         try:
-            area.apply_manifest(data.manifest, save_dir)
+            needs_rebuild = area.apply_manifest(data.manifest, save_dir)
         except GeoError as exc:
             return MethodResult(PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc)))
         except OSError as exc:
             return MethodResult(PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc)))
+
+        if not needs_rebuild:
+            Logger.info(f"PutAreaJson: no acquisition change for '{data.areaId}'; copying manifest.")
+            if in_dir is not None:
+                from ..persistence import child_path
+
+                manifest_out = child_path(out_dir, area.manifestUrl)
+                manifest_out.parent.mkdir(parents=True, exist_ok=True)
+                with open(manifest_out, "w", encoding="utf-8") as f:
+                    json.dump(area.to_manifest_dict(), f, indent=2)
+            area_summary = AreaSummary(
+                id=area.id,
+                name=area.name,
+                bbox=area.bbox,
+                minRadiusPx=area.minRadiusPx,
+                maxRadiusPx=area.maxRadiusPx,
+                liveMapRadiusPx=area.liveMapRadiusPx,
+                manifestUrl=area.manifestUrl,
+            )
+            Logger.info(f"AreaChanged: firing for area '{data.areaId}'.")
+            api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+            return MethodResult(PutAreaJsonOutput(error=OK))
 
         if in_dir is not None:
             try:

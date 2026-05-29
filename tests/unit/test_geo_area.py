@@ -382,3 +382,105 @@ class TestGeoAreaApplyManifest:
 
         with pytest.raises(CatalogError):
             area.apply_manifest("not a dict", out_dir)  # type: ignore[arg-type]
+
+    def test_returns_true_when_acquisition_values_change(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+
+        new_manifest = {
+            "version": 1,
+            "layers": [
+                {
+                    "id": "1",
+                    "name": "Cafe",
+                    "type": "heatmap",
+                    "url": "./layers/1.geojson",
+                    "visible": True,
+                    "style": {},
+                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
+                }
+            ],
+            "aggregation": {},
+            "deduping": {},
+        }
+
+        assert area.apply_manifest(new_manifest, out_dir) is True
+
+    def test_returns_true_when_layer_added(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+
+        new_manifest = {
+            "version": 1,
+            "layers": [
+                {
+                    "id": "1",
+                    "name": "Cafe",
+                    "type": "heatmap",
+                    "url": "./layers/1.geojson",
+                    "visible": True,
+                    "style": {},
+                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                },
+                {
+                    "id": "__poi__",
+                    "name": "POI",
+                    "type": "__poi__",
+                    "visible": True,
+                    "style": {},
+                },
+            ],
+            "aggregation": {},
+            "deduping": {},
+        }
+
+        assert area.apply_manifest(new_manifest, out_dir) is True
+
+    def test_returns_true_when_layer_removed(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+
+        new_manifest = {"version": 1, "layers": [], "aggregation": {}, "deduping": {}}
+
+        assert area.apply_manifest(new_manifest, out_dir) is True
+
+    def test_returns_false_when_only_style_changes(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+
+        new_manifest = {
+            "version": 1,
+            "layers": [
+                {
+                    "id": "1",
+                    "name": "Cafe",
+                    "type": "heatmap",
+                    "url": "./layers/1.geojson",
+                    "visible": False,
+                    "style": {"color": "#0000ff", "opacity": 0.5},
+                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                }
+            ],
+            "aggregation": {},
+            "deduping": {},
+        }
+
+        assert area.apply_manifest(new_manifest, out_dir) is False
+
+    def test_returns_false_when_only_name_changes(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
+
+        new_manifest = {
+            "version": 1,
+            "layers": [
+                {
+                    "id": "1",
+                    "name": "Renamed Layer",
+                    "type": "heatmap",
+                    "url": "./layers/1.geojson",
+                    "visible": True,
+                    "style": {},
+                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                }
+            ],
+            "aggregation": {},
+            "deduping": {},
+        }
+
+        assert area.apply_manifest(new_manifest, out_dir) is False
