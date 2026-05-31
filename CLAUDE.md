@@ -11,6 +11,16 @@ Build a simple, deterministic Python application that creates static geographic 
 - Before implementing any feature or non-trivial change, ask clarifying questions until the intent is unambiguous.
 - If anything is unclear or could be interpreted multiple ways, ask — do not assume and implement.
 
+### Task workflow
+
+For any non-trivial feature or change, follow these stages:
+
+1. **Brainstorm** — create a `Current Task` entry in `CLAUDE.md` with `Status: Brainstorm`. Create `tasks/<task-name>.md` with the problem statement. Update `tasks/<task-name>.md` with conclusions as the design discussion progresses.
+2. **Implementation** — advance status to `Implementation`. Add an implementation plan to `tasks/<task-name>.md`. Write the code.
+3. **Testing** — advance status to `Testing`. Verify correctness; update task file with test results and any open issues.
+4. **Ready to Submit** — advance status to `Ready to Submit`. Run lint + tests; confirm docs are up to date.
+5. **Done** — advance status to `Done` after merge/close.
+
 ## Before committing
 
 Run these before every commit:
@@ -41,12 +51,12 @@ Never read, glob, or search inside `./in/` or `./out/`. They contain large volum
 pip install -e ".[dev]"
 
 # Build
-geo-builder tasks.json                        # fresh build to ./out
-geo-builder tasks.json --in ./in --out ./out  # incremental build
+geo-builder template.json                        # fresh build to ./out
+geo-builder template.json --in ./in --out ./out  # incremental build
 
-# Designer (requires designUrl in build.json)
-geo-builder tasks.json --edit                        # pull on first run, then open WebView
-geo-builder tasks.json --in ./in --out ./out --edit  # same with explicit paths
+# Designer (requires designUrl in settings.json)
+geo-builder template.json --edit                        # pull on first run, then open WebView
+geo-builder template.json --in ./in --out ./out --edit  # same with explicit paths
 
 # Lint
 ruff check src/ tests/
@@ -69,6 +79,7 @@ pytest tests/test_foo.py::test_bar   # single test
 8. Prefer explicit, readable Python over clever abstractions.
 9. Tests must run offline.
 10. Static artifacts are immutable and deterministic.
+11. The browser is the authority for UI state — there is no notion of "current area" (or any other selection/focus state) in the builder. Any API that requires UI context (e.g. which area is active) must receive it explicitly from the browser as a parameter.
 
 ## Logging
 
@@ -94,6 +105,25 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Explicit over brief** — if two implementations are equivalent, choose the one that is easier to read and debug, even if it is longer.
 - **No list/dict/set comprehensions** — use explicit `for` loops. Comprehensions obscure control flow and make multi-step logic harder to follow.
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
+- **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
+
+## New Task
+- **File**: [Default Layers](tasks/default_layers.md)
+- **Status**: Brainstorm
+- **GitHub Issue**: N/A
+- **Key Context**: Rationalize the default layers created when a new area is being created (template.json)
+
+## Completed Tasks
+
+- **File**: [User Layer](tasks/user_layer.md)
+- **Status**: Done
+- **GitHub Issue**: N/A
+- **Key Context**: `__user__` layer stub injected at area creation and on startup for pulled areas; `GetUserPoints`/`AddUserPoint` APIs; `AddUserPointInput.__post_init__` coerces nested dict from gateway dispatch; 325 tests pass.
+
+- **File**: [Catalog Head Defaults & Path Mirroring](tasks/catalog_head_defaults.md)
+- **Status**: Done
+- **GitHub Issue**: N/A
+- **Key Context**: `pull.py` writes default head files on 404; `load_catalog` falls back to defaults if head file absent; `save_catalog` mirrors `in_dir` path structure instead of hard-coding `./release/` or `./debug/` subdirs; defaults are flat (`./catalog.json`, `./catalog.debug.json`).
 
 ## Processing Pipeline
 

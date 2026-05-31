@@ -27,3 +27,6 @@ __pycache__/
 # Local testing folders
 in/
 out/
+
+# Local settings override (window geometry, personal overrides)
+settings.local.json

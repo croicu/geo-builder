@@ -17,18 +17,18 @@ from geo_builder.persistence import (
     save_catalog,
     save_json,
 )
-from geo_builder.protocols import Acquisition, Area, AreaStyle, Feature, GeoJson, Geometry, Layer
+from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 
 
 def make_layer() -> Layer:
     return Layer(
-        id="overpass_amenity_restaurant",
+        id="1",
         name="Restaurant",
         type="heatmap",
-        url="./layers/overpass_amenity_restaurant.geojson",
+        url="./layers/1.geojson",
         visible=True,
         style={"color": "#00ff00"},
-        mergeKey="overpass:amenity=restaurant",
+        acquisition={"provider": "overpass", "filters": {"amenity": ["restaurant"]}},
         geojson=GeoJson(type="FeatureCollection", features=[make_feature()]),
     )
 
@@ -168,34 +168,34 @@ class TestSaveCatalog:
 
         payload = json.loads((tmp_path / "catalog.head.json").read_text())
 
-        assert payload["catalogUrl"] == "./release/catalog.json"
+        assert payload["catalogUrl"] == "./catalog.json"
 
     def test_catalog_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "catalog.json").exists()
+        assert (tmp_path / "catalog.json").exists()
 
     def test_manifest_json_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "manifest.json").exists()
+        assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
 
     def test_layer_geojson_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "layers" / "overpass_amenity_restaurant.geojson").exists()
+        assert (tmp_path / "areas" / "napoli" / "layers" / "1.geojson").exists()
 
     def test_catalog_json_excludes_manifest_field(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "release" / "catalog.json").read_text())
+        payload = json.loads((tmp_path / "catalog.json").read_text())
 
         assert "manifest" not in payload["areas"][0]
 
     def test_manifest_json_excludes_geojson(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        payload = json.loads((tmp_path / "release" / "areas" / "napoli" / "manifest.json").read_text())
+        payload = json.loads((tmp_path / "areas" / "napoli" / "manifest.json").read_text())
 
         assert "geojson" not in payload["layers"][0]
 
@@ -230,8 +230,8 @@ class TestRoundTrip:
         save_catalog(make_catalog(), tmp_path)
         geo_layer = load_catalog(tmp_path).areas[0].layers[0]
 
-        assert geo_layer.layer.id == "overpass_amenity_restaurant"
-        assert geo_layer.layer.mergeKey == "overpass:amenity=restaurant"
+        assert geo_layer.layer.id == "1"
+        assert geo_layer.layer.acquisition == {"provider": "overpass", "filters": {"amenity": ["restaurant"]}}
         assert geo_layer.layer.style == {"color": "#00ff00"}
 
     def test_feature_coordinates(self, tmp_path):
@@ -286,7 +286,7 @@ class TestSaveAreaCsv:
         csv_path = self._save(make_area(), tmp_path)
         row = self._read_csv(csv_path)[0]
 
-        assert row["layer_id"] == "overpass_amenity_restaurant"
+        assert row["layer_id"] == "1"
 
     def test_property_columns(self, tmp_path):
         csv_path = self._save(make_area(), tmp_path)
@@ -303,7 +303,6 @@ class TestSaveAreaCsv:
             url="./layers/a.geojson",
             visible=True,
             style={},
-            mergeKey="k:a",
             geojson=GeoJson(
                 type="FeatureCollection",
                 features=[
@@ -318,7 +317,6 @@ class TestSaveAreaCsv:
             url="./layers/b.geojson",
             visible=True,
             style={},
-            mergeKey="k:b",
             geojson=GeoJson(
                 type="FeatureCollection",
                 features=[
@@ -350,7 +348,6 @@ class TestSaveAreaCsv:
             url="./layers/a.geojson",
             visible=True,
             style={},
-            mergeKey="k:a",
             geojson=GeoJson(
                 type="FeatureCollection",
                 features=[
@@ -366,7 +363,6 @@ class TestSaveAreaCsv:
             url="./layers/b.geojson",
             visible=True,
             style={},
-            mergeKey="k:b",
             geojson=GeoJson(
                 type="FeatureCollection",
                 features=[
@@ -406,79 +402,7 @@ class TestSaveAreaCsv:
     def test_csv_written_by_save_catalog(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "release" / "areas" / "napoli" / "napoli.csv").exists()
-
-
-class TestAcquisitionRoundTrip:
-    def test_acquisition_survives_round_trip(self, tmp_path):
-        area_summary = Area(
-            id="napoli",
-            name="Napoli",
-            bbox=[14.20, 40.80, 14.33, 40.90],
-            minRadiusPx=32,
-            maxRadiusPx=512,
-            liveMapRadiusPx=640,
-            manifestUrl="./areas/napoli/manifest.json",
-        )
-        area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
-        area.acquisition = Acquisition(
-            provider="overpass",
-            filters={
-                "amenity": AreaStyle(values=["restaurant", "cafe"], name="Food"),
-            },
-        )
-        catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
-
-        save_catalog(catalog, tmp_path)
-        loaded_area = load_catalog(tmp_path).areas[0]
-
-        assert loaded_area.acquisition is not None
-        assert loaded_area.acquisition.provider == "overpass"
-        assert "amenity" in loaded_area.acquisition.filters
-        assert loaded_area.acquisition.filters["amenity"].name == "Food"
-        assert loaded_area.acquisition.filters["amenity"].values == ["restaurant", "cafe"]
-
-    def test_area_without_acquisition_loads_as_none(self, tmp_path):
-        save_catalog(make_catalog(), tmp_path)
-        loaded_area = load_catalog(tmp_path).areas[0]
-
-        assert loaded_area.acquisition is None
-
-    def test_acquisition_all_style_fields_survive_round_trip(self, tmp_path):
-        area_summary = Area(
-            id="napoli",
-            name="Napoli",
-            bbox=[14.20, 40.80, 14.33, 40.90],
-            minRadiusPx=32,
-            maxRadiusPx=512,
-            liveMapRadiusPx=640,
-            manifestUrl="./areas/napoli/manifest.json",
-        )
-        area = GeoArea(summary=area_summary, layers=[GeoLayer(make_layer())])
-        area.acquisition = Acquisition(
-            provider="overpass",
-            filters={
-                "leisure": AreaStyle(
-                    values=["park"],
-                    name="Parks",
-                    color="#007f00",
-                    scale=2.0,
-                    surface=True,
-                    type="circle",
-                ),
-            },
-        )
-        catalog = GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[area])
-
-        save_catalog(catalog, tmp_path)
-        style = load_catalog(tmp_path).areas[0].acquisition.filters["leisure"]
-
-        assert style.values == ["park"]
-        assert style.name == "Parks"
-        assert style.color == "#007f00"
-        assert style.scale == pytest.approx(2.0)
-        assert style.surface is True
-        assert style.type == "circle"
+        assert (tmp_path / "areas" / "napoli" / "napoli.csv").exists()
 
 
 class TestLoadCatalogErrors:

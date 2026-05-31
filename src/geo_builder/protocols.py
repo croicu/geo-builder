@@ -28,9 +28,12 @@ class PoiStyle:
 
 
 @dataclass
-class Acquisition:
-    provider: str
-    filters: dict[str, AreaStyle] = field(default_factory=dict)
+class UserStyle:
+    name: str = "My Trip"
+    color: str = "#9E9E9E"
+    opacity: float = 0.9
+    radius: float = 10.0
+    min_zoom: float = 14.0
 
 
 @dataclass
@@ -45,16 +48,10 @@ class Area:
 
 
 @dataclass
-class PipelineStep:
-    type: str
-    provider: str | None = None
-    filters: dict[str, AreaStyle] | None = None
-
-
-@dataclass
 class Manifest:
     version: int
-    tasks: list[PipelineStep] = field(default_factory=list)
+    aggregation: dict = field(default_factory=dict)
+    deduping: dict = field(default_factory=dict)
     layers: list[Layer] = field(default_factory=list)
 
 
@@ -65,8 +62,8 @@ class Layer:
     type: str
     visible: bool
     style: dict[str, JsonValue]
-    mergeKey: str
     url: str | None = None
+    acquisition: dict | None = None
     geojson: GeoJson | None = None
 
 

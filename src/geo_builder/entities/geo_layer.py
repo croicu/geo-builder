@@ -1,18 +1,28 @@
 from __future__ import annotations
 
-import re
-
 from ..protocols import Layer
 
 
 class GeoLayer:
-    def __init__(self, layer: Layer) -> None:
+    def __init__(self, layer: Layer, raw: dict | None = None) -> None:
         self._layer = layer
+        self._raw: dict = dict(raw) if raw is not None else {}
 
     @property
     def layer(self) -> Layer:  # TODO: protocol exposed — revisit
         return self._layer
 
-    @staticmethod
-    def id_from_merge_key(merge_key: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "_", merge_key.lower()).strip("_")
+    @property
+    def raw(self) -> dict:
+        """Raw JSON payload this layer was loaded from; empty for programmatically-created layers."""
+        return self._raw
+
+    def seed_raw(self, payload: dict) -> None:
+        """Copy unknown fields from payload into this layer's raw store.
+
+        Known layer fields are skipped — they are always written from the Layer dataclass on save.
+        """
+        _known = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson"}
+        for k, v in payload.items():
+            if k not in _known:
+                self._raw[k] = v

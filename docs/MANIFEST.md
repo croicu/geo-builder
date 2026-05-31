@@ -1,29 +1,173 @@
-# POI Layer — Plan of Record
+# Manifest Schema
 
-## Goal
+`manifest.json` lives at `{out_dir}/areas/{areaId}/manifest.json` and describes a single geographic area and its layers.
 
-Surface point-of-interest details (name, hours, cuisine, etc.) for relevant map points without any runtime API calls, so the feature works fully offline.
+## Top level
 
-## Build-time (geo-builder)
+```json
+{
+  "version": 1,
+  "layers": [...],
+  "aggregation": {},
+  "deduping": {}
+}
+```
 
-- Query Overpass API for all POIs in the area.
-- For each POI, extract: `name`, `amenity`, `cuisine`, `address`, `website`, `opening_hours`.
-- `address` is assembled from Overpass address tags in order of preference: `addr:full` → `addr:housenumber` + `addr:street` + `addr:city` → `addr:city` alone. Omit if none are present.
-- Bake `hasDetails: true` plus the detail fields into the **existing heatmap layer GeoJSON** alongside the regular weight-only points.
-- Regular (non-enriched) points carry only `weight`; enriched points carry `weight` + details.
+| Field | Type | Description |
+|---|---|---|
+| `version` | `number` | Schema version. Currently always `1`. |
+| `layers` | `Layer[]` | Ordered list of layers. |
+| `aggregation` | `object` | Reserved. Always `{}`. |
+| `deduping` | `object` | Reserved. Always `{}`. |
 
-### GeoJSON shape (embedded in existing layer)
+---
 
-Enriched feature:
+## Layer types
+
+### Data layer (`type: "heatmap"` or `type: "circle"`)
+
+```json
+{
+  "id": "1",
+  "name": "Parks",
+  "type": "circle",
+  "visible": true,
+  "style": {
+    "color": "#007f00",
+    "opacity": 0.3,
+    "radiusScale": 1,
+    "surface": true
+  },
+  "url": "./layers/1.geojson",
+  "acquisition": {
+    "provider": "overpass",
+    "filters": {
+      "leisure": ["park"]
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique layer id within the area. Numeric string (e.g. `"1"`). |
+| `name` | `string` | Display name. |
+| `type` | `"heatmap"` \| `"circle"` | Render mode. |
+| `visible` | `boolean` | Whether the layer is shown on load. |
+| `style` | `DataStyle` | See below. |
+| `url` | `string` | Relative path to the `.geojson` file. |
+| `acquisition` | `Acquisition` | See below. |
+
+#### DataStyle
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `color` | `string` | — | CSS hex color. |
+| `opacity` | `number` | `0.7` | Layer opacity, 0–1. |
+| `radiusScale` | `number` | `1` | Scales the rendered point radius / heat weight. |
+| `surface` | `boolean` | `false` | `circle` only. When `true`, renders polygons as filled surfaces rather than centroid circles. |
+
+#### Acquisition
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `string` | Provider id (e.g. `"overpass"`). |
+| `filters` | `{ [key: string]: string[] }` | Map of OSM tag key → allowed values. Multiple keys are ANDed; multiple values per key are ORed. Use `["*"]` to match any value. |
+
+---
+
+### POI layer (`type: "__poi__"`, `id: "__poi__"`)
+
+Virtual layer — `url` is absent. The browser derives POI markers at runtime from `hasDetails: true` features embedded in the data layers.
+
+```json
+{
+  "id": "__poi__",
+  "name": "POI",
+  "type": "__poi__",
+  "visible": true,
+  "style": {
+    "color": "#7f0000",
+    "opacity": 0.9,
+    "radius": 8,
+    "minZoom": 18
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `color` | `string` | `"#7f0000"` | Marker color. |
+| `opacity` | `number` | `0.9` | Marker opacity. |
+| `radius` | `number` | `8` | Marker radius in pixels. |
+| `minZoom` | `number` | `18` | Zoom level below which markers are hidden. |
+
+`visible: true` means enriched POIs exist in the data layers. `visible: false` means none were found but the entry is retained to preserve style across rebuilds.
+
+---
+
+### User layer (`type: "__user__"`, `id: "__user__"`)
+
+Virtual layer — `url` is absent. Points are loaded via the `GetUserPoints` API, not HTTP. Stored in `{in_dir}/areas/{areaId}/user.geojson`.
+
+```json
+{
+  "id": "__user__",
+  "name": "My Trip",
+  "type": "__user__",
+  "visible": true,
+  "style": {
+    "color": "#5f5f5f",
+    "opacity": 0.7,
+    "radius": 40,
+    "minZoom": 12
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `color` | `string` | `"#9E9E9E"` | Marker color. |
+| `opacity` | `number` | `0.9` | Marker opacity. |
+| `radius` | `number` | `10` | Marker radius in pixels. |
+| `minZoom` | `number` | `14` | Zoom level below which markers are hidden. |
+
+#### User point GeoJSON shape
+
+```json
+{
+  "type": "Feature",
+  "geometry": { "type": "Point", "coordinates": [14.42, 50.08] },
+  "properties": {
+    "timestamp": "2026-05-29T14:00:00Z",
+    "pressure": 0.6,
+    "name": null
+  }
+}
+```
+
+`coordinates` are `[longitude, latitude]` (GeoJSON convention).
+
+| Property | Type | Description |
+|---|---|---|
+| `timestamp` | `string` | ISO 8601 UTC timestamp of when the point was added. |
+| `pressure` | `number` | Touch force at add time, 0.0–1.0. Browser decides visual encoding. |
+| `name` | `string \| null` | Optional label. `null` = unnamed. |
+
+---
+
+## POI enrichment in data layer GeoJSON
+
+Enriched features (those with detail data baked in at build time) carry additional properties alongside the standard `weight`:
 
 ```json
 {
   "type": "Feature",
   "properties": {
-    "id": 293835813,
     "weight": 1.0,
     "hasDetails": true,
-    "name": "Bar Ristorante Gaetano",
+    "id": 293835813,
+    "name": "Bar Gaetano",
     "amenity": "restaurant",
     "cuisine": "italian;pizza",
     "address": "Via Roma 42, Naples",
@@ -34,73 +178,4 @@ Enriched feature:
 }
 ```
 
-Regular point (no details):
-
-```json
-{
-  "type": "Feature",
-  "properties": { "weight": 1.0 },
-  "geometry": { "type": "Point", "coordinates": [14.267789, 40.853179] }
-}
-```
-
-**Not** baked: review/search links (Google Maps, Yelp, Foursquare). Computed at render time from `name`, `address`, and coordinates to avoid GeoJSON bloat and insulate against URL schema changes.
-
-### Conditional manifest entry
-
-The `poi` layer has `url: null` — it is a virtual layer derived at runtime from the existing layers. The builder adds a `poi` manifest entry only when at least one enriched POI was found. The presence of the entry is the signal to the browser that POI data exists.
-
-If the Overpass query yields no enrichable POIs, the builder omits the manifest entry entirely. The browser sees no `poi` layer and shows nothing — no empty widget, no error.
-
-```json
-{
-  "id": "poi",
-  "name": "POI",
-  "type": "poi",
-  "url": null,
-  "visible": true,
-  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
-  "mergeKey": "poi"
-}
-```
-
-## Runtime (geo-browser)
-
-### Layer type
-
-`poi` is a virtual layer type with no associated GeoJSON URL. When the browser encounters it in the manifest, it:
-
-1. Waits for the other layers in the area to finish loading.
-2. Scans all loaded features across those layers for `hasDetails: true`.
-3. Renders those features as interactive circle markers on top of the existing heat.
-
-The heatmap layer already renders all points as heat — including the enriched ones. The `poi` layer adds only the interactive marker pass on top. No data is fetched twice, no file is duplicated.
-
-### Interaction
-
-- Only `hasDetails` markers are tappable.
-- Tap → popup showing: name, amenity, cuisine, address, website, opening hours.
-- Popup includes search links computed lazily when the popup opens (not at layer render time):
-
-```typescript
-const googleUrl = `https://www.google.com/maps/search/${encodeURIComponent(name)}/@${lat},${lng},15z`;
-const yelpUrl   = `https://www.yelp.com/search?find_desc=${encodeURIComponent(name)}&find_loc=${encodeURIComponent(address)}`;
-const fsqUrl    = `https://foursquare.com/search?query=${encodeURIComponent(name)}&near=${lat},${lng}`;
-// Yelp link is omitted when address is not present — raw coordinates are not reliable for find_loc.
-```
-
-### Protocol change
-
-`protocols.ts` `Layer` type needs to accommodate a URL-less `poi` entry. The feature properties shape (`hasDetails`, `name`, `cuisine`, etc.) lives in the existing layer's GeoJSON — no new payload type needed, but the browser's GeoJSON parsing must tolerate and forward these extra fields. Agree the shape between geo-builder and geo-browser before the builder emits it.
-
-## Decisions log
-
-| Decision | Rationale |
-|---|---|
-| Build-time baking | Zero runtime latency; works offline; no API keys in the PWA |
-| `hasDetails` embedded in existing layer GeoJSON | No separate file, no data duplication — enriched points already contribute to the heatmap |
-| `poi` is a virtual layer (no URL) | Derived at runtime by filtering loaded features; manifest entry is the only signal needed |
-| No review links in GeoJSON | Computed lazily when popup opens — smaller files, no rebuild needed on URL schema changes |
-| `address` baked from Overpass addr tags | Needed for Yelp `find_loc`; raw coordinates are not reliable. Assembled as: `addr:full` → housenumber+street+city → city alone |
-| Yelp link shown only when `address` present | Yelp `find_loc` does not accept raw coordinates reliably; omit rather than show a broken search |
-| Builder emits manifest entry conditionally | Only when enriched POIs exist — presence signals browser to show the layer widget |
+Plain features carry only `weight`. The browser scans all loaded features for `hasDetails: true` to build the `__poi__` layer at runtime.

@@ -34,49 +34,49 @@ class StubBuilder:
 
 class TestParseArgs:
     def test_tasks_path_parsed(self):
-        args = parse_args(["tasks.json"])
+        args = parse_args(["template.json"])
 
-        assert args.tasks_path == Path("tasks.json")
+        assert args.tasks_path == Path("template.json")
 
     def test_edit_defaults_to_false(self):
-        args = parse_args(["tasks.json"])
+        args = parse_args(["template.json"])
 
         assert args.edit is False
 
     def test_edit_flag_parsed(self):
-        args = parse_args(["tasks.json", "--edit"])
+        args = parse_args(["template.json", "--edit"])
 
         assert args.edit is True
 
     def test_in_directory_defaults_to_in(self):
-        args = parse_args(["tasks.json"])
+        args = parse_args(["template.json"])
 
         assert args.in_directory == Path("./in")
 
     def test_out_directory_defaults_to_out(self):
-        args = parse_args(["tasks.json"])
+        args = parse_args(["template.json"])
 
         assert args.out_directory == Path("./out")
 
     def test_in_directory_parsed(self):
-        args = parse_args(["tasks.json", "--in", "/tmp/in"])
+        args = parse_args(["template.json", "--in", "/tmp/in"])
 
         assert args.in_directory == Path("/tmp/in")
 
     def test_out_directory_parsed(self):
-        args = parse_args(["tasks.json", "--out", "/tmp/out"])
+        args = parse_args(["template.json", "--out", "/tmp/out"])
 
         assert args.out_directory == Path("/tmp/out")
 
     def test_returns_cli_arguments(self):
-        assert isinstance(parse_args(["tasks.json"]), CliArguments)
+        assert isinstance(parse_args(["template.json"]), CliArguments)
 
 
 class TestMain:
     @pytest.fixture(autouse=True)
     def argv(self):
         original = sys.argv
-        sys.argv = ["geo-builder", "tasks.json", "--out", "/tmp/out"]
+        sys.argv = ["geo-builder", "template.json", "--out", "/tmp/out"]
         yield
         sys.argv = original
 
@@ -100,7 +100,7 @@ class TestMain:
 
             main()
 
-            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"), debug=False)
+            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"), debug=False, in_dir=Path("./in"))
 
     def test_settings_load_error_returns_1(self, capsys):
         with patch("geo_builder.cli.Settings") as MockSettings:
@@ -121,7 +121,7 @@ class TestMain:
         assert "something failed" in capsys.readouterr().err
 
     def test_in_directory_loads_catalog(self):
-        sys.argv = ["geo-builder", "tasks.json", "--in", "/tmp/in", "--out", "/tmp/out"]
+        sys.argv = ["geo-builder", "template.json", "--in", "/tmp/in", "--out", "/tmp/out"]
         loaded_catalog = GeoCatalog()
 
         with (
@@ -175,7 +175,7 @@ class TestDesignMode:
     @pytest.fixture(autouse=True)
     def argv(self):
         original = sys.argv
-        sys.argv = ["geo-builder", "tasks.json", "--edit"]
+        sys.argv = ["geo-builder", "template.json", "--edit"]
         yield
         sys.argv = original
 

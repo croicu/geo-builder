@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -73,6 +74,9 @@ _LEVEL_RANK: dict[TelemetryLevel, int] = {
 }
 
 
+_console_lock = threading.Lock()
+
+
 class ConsoleLogSink(DiagnosticsLogSink):
     def __init__(self, min_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
         self._min_level = min_level
@@ -80,7 +84,8 @@ class ConsoleLogSink(DiagnosticsLogSink):
     def log(self, level: TelemetryLevel, message: str) -> TelemetryRecord:
         record = super().log(level, message)
         if _LEVEL_RANK[level] >= _LEVEL_RANK[self._min_level]:
-            print(f"[{level.value.upper()}] {record.message}", flush=True)
+            with _console_lock:
+                print(f"[{level.value.upper()}] {record.message}", flush=True)
         return record
 
 

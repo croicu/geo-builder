@@ -55,7 +55,7 @@ def parse_args(argv: list[str]) -> CliArguments:
         "--edit",
         action="store_true",
         default=False,
-        help="open the designer WebView (requires designUrl in build.json)",
+        help="open the designer WebView (requires designUrl in settings.json)",
     )
 
     args = parser.parse_args(argv)
@@ -103,7 +103,7 @@ def main() -> int:
 
     if arguments.edit:
         if not settings.design_url:
-            print("geo-builder: error: no designUrl configured in build.json", file=sys.stderr)
+            print("geo-builder: error: no designUrl configured in settings.json", file=sys.stderr)
             return 1
         try:
             catalog = load_catalog(arguments.in_directory, debug=settings.debug)
@@ -135,7 +135,7 @@ def main() -> int:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug)
+        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug, in_dir=arguments.in_directory)
         return 0
     except GeoError as error:
         if settings.debug:

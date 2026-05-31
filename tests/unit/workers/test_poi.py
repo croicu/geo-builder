@@ -27,7 +27,6 @@ def make_layer(layer_id: str, features: list[Feature]) -> Layer:
         type="heatmap",
         visible=True,
         style={},
-        mergeKey=f"overpass:{layer_id}",
         url=f"./layers/{layer_id}.geojson",
         geojson=GeoJson(type="FeatureCollection", features=features),
     )
@@ -62,66 +61,84 @@ class TestPoiWorker:
         result = PoiWorker(task=None).execute(executor)
         assert not result.fatal
 
-    def test_no_stub_when_no_details(self):
-        layer = make_layer("restaurants", [make_feature(has_details=False)])
+    def test_stub_not_visible_when_no_details(self):
+        layer = make_layer("1", [make_feature(has_details=False)])
         area = make_area([layer])
         run([area])
-        layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi" not in layer_ids
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].visible is False
 
-    def test_stub_added_when_details_present(self):
-        layer = make_layer("restaurants", [make_feature(has_details=True)])
+    def test_stub_visible_when_details_present(self):
+        layer = make_layer("1", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
-        layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi" in layer_ids
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].visible is True
 
     def test_stub_has_correct_type(self):
-        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        layer = make_layer("1", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
-        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi"]
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
         assert len(poi_layers) == 1
-        assert poi_layers[0].type == "poi"
+        assert poi_layers[0].type == "__poi__"
 
     def test_stub_has_no_geojson(self):
-        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        layer = make_layer("1", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
-        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "poi"]
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
         assert poi_layers[0].geojson is None
         assert poi_layers[0].url is None
 
-    def test_existing_stub_removed_when_no_details(self):
+    def test_existing_stub_not_visible_when_no_details(self):
         stub = Layer(
-            id="poi",
+            id="__poi__",
             name="POI Details",
-            type="poi",
+            type="__poi__",
             visible=True,
             style={"opacity": 0.7},
-            mergeKey="poi",
         )
-        layer = make_layer("restaurants", [make_feature(has_details=False)])
+        layer = make_layer("1", [make_feature(has_details=False)])
         area = make_area([layer, stub])
         run([area])
-        layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi" not in layer_ids
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].visible is False
 
     def test_stub_not_duplicated_on_repeated_run(self):
-        layer = make_layer("restaurants", [make_feature(has_details=True)])
+        layer = make_layer("1", [make_feature(has_details=True)])
         area = make_area([layer])
         run([area])
         run([area])
-        poi_layers = [gl for gl in area.layers if gl.layer.id == "poi"]
+        poi_layers = [gl for gl in area.layers if gl.layer.id == "__poi__"]
         assert len(poi_layers) == 1
 
-    def test_details_in_any_layer_triggers_stub(self):
-        layer_a = make_layer("cafes", [make_feature(has_details=False)])
-        layer_b = make_layer("bars", [make_feature(has_details=True)])
+    def test_details_in_any_layer_triggers_visible_stub(self):
+        layer_a = make_layer("1", [make_feature(has_details=False)])
+        layer_b = make_layer("2", [make_feature(has_details=True)])
         area = make_area([layer_a, layer_b])
         run([area])
-        layer_ids = [gl.layer.id for gl in area.layers]
-        assert "poi" in layer_ids
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].visible is True
+
+    def test_existing_stub_style_preserved_on_rebuild(self):
+        existing_stub = Layer(
+            id="__poi__",
+            name="POI",
+            type="__poi__",
+            visible=True,
+            style={"opacity": 0.5, "color": "#aabbcc"},
+        )
+        layer = make_layer("1", [make_feature(has_details=True)])
+        area = make_area([layer, existing_stub])
+        run([area])
+        poi_layers = [gl.layer for gl in area.layers if gl.layer.id == "__poi__"]
+        assert len(poi_layers) == 1
+        assert poi_layers[0].style == {"opacity": 0.5, "color": "#aabbcc"}
 
     def test_no_catalog_returns_non_fatal(self):
         area = make_area([])

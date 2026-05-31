@@ -21,7 +21,7 @@ def make_area(layers: list[Layer]) -> GeoArea:
     return GeoArea(summary=summary, layers=geo_layers)
 
 
-def make_layer(merge_key: str, feature_count: int, name: str = "Layer") -> Layer:
+def make_layer(layer_id: str, acquisition: dict, feature_count: int, name: str = "Layer") -> Layer:
     features = []
     for _ in range(feature_count):
         features.append(
@@ -31,7 +31,6 @@ def make_layer(merge_key: str, feature_count: int, name: str = "Layer") -> Layer
                 geometry=Geometry(type="Point", coordinates=[14.27, 40.85]),
             )
         )
-    layer_id = GeoLayer.id_from_merge_key(merge_key)
     return Layer(
         id=layer_id,
         name=name,
@@ -39,9 +38,13 @@ def make_layer(merge_key: str, feature_count: int, name: str = "Layer") -> Layer
         url=f"./layers/{layer_id}.geojson",
         visible=True,
         style={},
-        mergeKey=merge_key,
+        acquisition=acquisition,
         geojson=GeoJson(type="FeatureCollection", features=features),
     )
+
+
+_ACQ_RESTAURANT = {"provider": "overpass", "filters": {"amenity": ["restaurant"]}}
+_ACQ_CAFE = {"provider": "overpass", "filters": {"amenity": ["cafe"]}}
 
 
 def make_executor(areas: list[GeoArea]) -> StubExecutor:
@@ -71,7 +74,7 @@ class TestExecute:
         assert result == WorkerResult()
 
     def test_single_layer_unchanged(self):
-        layer = make_layer("overpass:amenity=restaurant", feature_count=3)
+        layer = make_layer("1", _ACQ_RESTAURANT, feature_count=3)
         area = make_area([layer])
 
         run([area])
@@ -79,11 +82,11 @@ class TestExecute:
         assert len(area.layers) == 1
         assert len(area.layers[0].layer.geojson.features) == 3
 
-    def test_two_layers_same_merge_key_are_merged(self):
+    def test_two_layers_same_acquisition_are_merged(self):
         area = make_area(
             [
-                make_layer("overpass:amenity=restaurant", feature_count=3),
-                make_layer("overpass:amenity=restaurant", feature_count=2),
+                make_layer("1", _ACQ_RESTAURANT, feature_count=3),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=2),
             ]
         )
 
@@ -92,11 +95,11 @@ class TestExecute:
         assert len(area.layers) == 1
         assert len(area.layers[0].layer.geojson.features) == 5
 
-    def test_different_merge_keys_stay_separate(self):
+    def test_different_acquisitions_stay_separate(self):
         area = make_area(
             [
-                make_layer("overpass:amenity=restaurant", feature_count=2),
-                make_layer("overpass:amenity=cafe", feature_count=2),
+                make_layer("1", _ACQ_RESTAURANT, feature_count=2),
+                make_layer("2", _ACQ_CAFE, feature_count=2),
             ]
         )
 
@@ -104,23 +107,23 @@ class TestExecute:
 
         assert len(area.layers) == 2
 
-    def test_merged_layer_id_derived_from_merge_key(self):
+    def test_merged_layer_keeps_first_id(self):
         area = make_area(
             [
-                make_layer("overpass:amenity=restaurant", feature_count=1),
-                make_layer("overpass:amenity=restaurant", feature_count=1),
+                make_layer("1", _ACQ_RESTAURANT, feature_count=1),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=1),
             ]
         )
 
         run([area])
 
-        assert area.layers[0].layer.id == "overpass_amenity_restaurant"
+        assert area.layers[0].layer.id == "1"
 
     def test_merged_layer_url_derived_from_id(self):
         area = make_area(
             [
-                make_layer("overpass:amenity=restaurant", feature_count=1),
-                make_layer("overpass:amenity=restaurant", feature_count=1),
+                make_layer("1", _ACQ_RESTAURANT, feature_count=1),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=1),
             ]
         )
 
@@ -129,23 +132,11 @@ class TestExecute:
         geo_layer = area.layers[0]
         assert geo_layer.layer.url == f"./layers/{geo_layer.layer.id}.geojson"
 
+    def test_layer_without_acquisition_not_affected(self):
+        poi = Layer(id="__poi__", name="POI", type="__poi__", visible=True, style={})
+        area = make_area([make_layer("1", _ACQ_RESTAURANT, feature_count=2), poi])
 
-class TestCreateLayerId:
-    def setup_method(self):
-        self.worker = AggregationWorker(task=None)
+        run([area])
 
-    def test_colon_becomes_underscore(self):
-        assert self.worker._create_layer_id("overpass:amenity") == "overpass_amenity"
-
-    def test_equals_becomes_underscore(self):
-        assert self.worker._create_layer_id("amenity=restaurant") == "amenity_restaurant"
-
-    def test_comma_becomes_underscore(self):
-        assert self.worker._create_layer_id("restaurant,cafe") == "restaurant_cafe"
-
-    def test_collapses_consecutive_underscores(self):
-        result = self.worker._create_layer_id("overpass:amenity=restaurant,cafe")
-        assert result == "overpass_amenity_restaurant_cafe"
-
-    def test_strips_leading_trailing_underscores(self):
-        assert self.worker._create_layer_id(":amenity:") == "amenity"
+        layer_ids = [gl.layer.id for gl in area.layers]
+        assert "__poi__" in layer_ids

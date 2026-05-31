@@ -3,7 +3,7 @@
 ## High-Level Architecture
 
 ```text
-build.json
+settings.json
     → Settings.load()
     → Builder.run()
     → Workers
@@ -24,7 +24,7 @@ build.json
 ```text
 catalog.json
 └── Area
-    └── manifest.json        (tasks[] + layers[])
+    └── manifest.json        (aggregation + deduping + layers[])
         └── Layer
             └── .geojson
 ```
@@ -34,46 +34,51 @@ catalog.json
 ```json
 {
   "version": 1,
-  "tasks": [
+  "layers": [
     {
-      "type": "acquisition",
-      "provider": "overpass",
-      "filters": {
-        "amenity": { "values": ["restaurant"], "name": "Restaurants", "type": "heatmap", "color": null, "scale": null, "surface": false }
-      }
-    },
-    { "type": "deduping" },
-    { "type": "aggregation" }
+      "id": "1",
+      "name": "Restaurants",
+      "type": "heatmap",
+      "url": "./layers/1.geojson",
+      "visible": true,
+      "style": { "opacity": 0.7, "radiusScale": 1.0, "color": "#ff0000" },
+      "acquisition": { "provider": "overpass", "filter": "amenity", "values": ["restaurant"] }
+    }
   ],
-  "layers": [ ... ]
+  "aggregation": {},
+  "deduping": {}
 }
 ```
 
-`tasks` records the acquisition config that produced the area's layers — it is the source of truth used by `GeoArea.acquisition` and drives catalog-driven incremental builds.
+`layers[]` is the single source of truth for style, visibility, and acquisition config. Each data layer owns its own `acquisition` record, which the builder uses for catalog-driven incremental re-acquisition. `aggregation` and `deduping` are area-scoped pipeline steps (empty objects, reserved for future config).
 
 ## Tasks File Format
 
-Entries in the tasks file (e.g. `tasks.json`) are keyed by an arbitrary name and distinguished by the presence of `bbox`:
-
-**Concrete task** (`"type": "acquisition"` with `bbox`) — parsed into an `AcquisitionTask` and added to `settings.tasks`. Drives a full fresh build when passed to `Builder.run()`.
-
-**Template** (`"type": "acquisition"` without `bbox`) — parsed into an `Acquisition` and stored in `settings.templates` by name. Templates are never executed directly; they are applied to new areas at design time via the `AddArea` designer API.
+`template.json` is a flat manifest-shaped document used as the starting point for new areas created via the `AddArea` designer API. It omits `id` and `url` on data layers — those are assigned at build time.
 
 ```json
 {
-  "napoli": {
-    "type": "acquisition",
-    "provider": "overpass",
-    "bbox": { "west": 14.1, "south": 40.8, "east": 14.4, "north": 40.9 },
-    "filters": { ... }
-  },
-  "acquisition": {
-    "type": "acquisition",
-    "provider": "overpass",
-    "filters": { ... }
-  }
+  "layers": [
+    {
+      "type": "heatmap",
+      "visible": true,
+      "style": { "opacity": 0.7, "color": "#ff0000" },
+      "acquisition": { "provider": "overpass", "filter": "amenity", "values": ["restaurant"] }
+    },
+    {
+      "id": "__poi__",
+      "name": "POI",
+      "type": "__poi__",
+      "visible": true,
+      "style": { "opacity": 0.9, "color": "#3f3f3f", "radius": 8 }
+    }
+  ],
+  "aggregation": {},
+  "deduping": {}
 }
 ```
+
+The `template` field in `AddAreaInput` is reserved for future multi-template support; currently unused (there is only one `template.json`).
 
 ## Builder
 
@@ -90,7 +95,7 @@ Workers receive the builder as their `executor: Executor` parameter and mutate s
 
 `Builder.run()` has two modes, selected by whether an explicit task list is passed:
 
-**Explicit tasks** — `Builder.run(tasks=settings.tasks)`: used for a fresh build driven by a tasks file (entries with a `bbox` field). The caller supplies the full task list.
+**Explicit tasks** — `Builder.run(tasks=[...])`: used for a fresh build. The caller supplies the full task list (e.g. from a template or from the designer's `AddArea` handler).
 
 **Catalog-driven** — `Builder.run()` (no argument): used for an incremental build. `_tasks_from_catalog()` scans the loaded catalog and generates an `AcquisitionTask` for every area whose `acquisition` is set but whose `layers` list is empty. Aggregation and deduping tasks are appended once at the end if any acquisition tasks were generated.
 
@@ -113,10 +118,8 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 - Result
 - Catalog
 - Area
-- Acquisition — `provider: str`, `filters: dict[str, AreaStyle]`; the acquisition config stored on each area (via `manifest.tasks`) to drive incremental re-acquisition
-- Manifest — `version: int`, `tasks: list[PipelineStep]`, `layers: list[Layer]`; the per-area manifest file
-- PipelineStep — `type: str`, `provider: str | None`, `filters: dict[str, AreaStyle] | None`; one recorded pipeline step in the manifest
-- Layer — includes `Layer.id_from_merge_key(merge_key)` to derive a filesystem-safe layer id
+- Manifest — `version: int`, `aggregation: dict`, `deduping: dict`, `layers: list[Layer]`; the per-area manifest file
+- Layer — `id: str` (numeric string for data layers; `"__poi__"` for the builtin virtual layer), `acquisition: dict | None` (absent on virtual layers)
 - GeoJson
 - Feature
 - Geometry
@@ -125,9 +128,9 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 `settings.py` — `Settings` singleton, DI root for tests:
 
-- `Settings.load(path)` — parses `build.json`, instantiates tasks, stores the singleton
+- `Settings.load(path)` — parses `settings.json`, optionally loads the template file, stores the singleton
 - `Settings.current()` — returns the active instance (raises if not loaded)
-- Fields: `debug: bool`, `tasks: list[Task]`, `templates: dict[str, Acquisition]`, `providers: dict[str, dict]`
+- Fields: `debug: bool`, `template: dict | None`, `providers: dict[str, dict]`
 - Tests set up the singleton directly via `Settings._instance = Settings(...)`
 
 ## Debug Output

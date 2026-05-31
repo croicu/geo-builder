@@ -72,16 +72,11 @@ class TestFetch:
 
         assert len(layer.geojson.features) == 2
 
-    def test_merge_key_format(self):
+    def test_id_and_url_are_empty_pending_worker_assignment(self):
         layer = StubOverpassProvider(PAYLOAD).fetch(TASK)
 
-        assert layer.mergeKey == "overpass:amenity=bar,cafe,restaurant"
-
-    def test_layer_id_and_url(self):
-        layer = StubOverpassProvider(PAYLOAD).fetch(TASK)
-
-        assert layer.id == "overpass_amenity_bar_cafe_restaurant"
-        assert layer.url == "./layers/overpass_amenity_bar_cafe_restaurant.geojson"
+        assert layer.id == ""
+        assert layer.url is None
 
     def test_default_layer_type_is_heatmap(self):
         layer = StubOverpassProvider(PAYLOAD).fetch(TASK)
@@ -290,21 +285,6 @@ class TestWildcard:
         assert 'way["historic"]' in query
         assert 'relation["historic"]' in query
 
-    def test_wildcard_merge_key_uses_asterisk(self):
-        task = AcquisitionTask(
-            areaId="x",
-            areaName="X",
-            provider="overpass",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"historic": AreaStyle(values=["*"])},
-        )
-        assert self.provider._create_merge_key(task) == "overpass:historic=*"
-
-    def test_wildcard_layer_id_is_clean(self):
-        from geo_builder.entities import GeoLayer
-
-        assert GeoLayer.id_from_merge_key("overpass:historic=*") == "overpass_historic"
-
     def test_wildcard_mixed_with_specific_value(self):
         task = AcquisitionTask(
             areaId="x",
@@ -336,36 +316,6 @@ class TestBuildFilterExpr:
 
     def test_wildcard_uses_key_only(self):
         assert self.provider._build_filter_expr("historic", ["*"]) == '["historic"]'
-
-
-class TestCreateMergeKey:
-    def setup_method(self):
-        self.provider = OverpassProvider()
-
-    def test_single_filter(self):
-        task = AcquisitionTask(
-            areaId="x",
-            areaName="X",
-            provider="overpass",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["restaurant"])},
-        )
-
-        assert self.provider._create_merge_key(task) == "overpass:amenity=restaurant"
-
-    def test_multiple_values_sorted(self):
-        assert self.provider._create_merge_key(TASK) == "overpass:amenity=bar,cafe,restaurant"
-
-    def test_multiple_keys_sorted(self):
-        task = AcquisitionTask(
-            areaId="x",
-            areaName="X",
-            provider="overpass",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"leisure": AreaStyle(values=["park"]), "amenity": AreaStyle(values=["cafe"])},
-        )
-
-        assert self.provider._create_merge_key(task) == "overpass:amenity=cafe:leisure=park"
 
 
 class TestExpandFilter:
@@ -417,18 +367,6 @@ class TestExpandFilter:
 
         assert '"leisure"="park"' in query
         assert '"amenity"' not in query
-
-    def test_meta_name_preserved_in_merge_key(self):
-        task = AcquisitionTask(
-            areaId="x",
-            areaName="X",
-            provider="overpass",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["sustenance"])},
-        )
-        key = self.provider._create_merge_key(task)
-
-        assert key == "overpass:amenity=sustenance"
 
     def test_query_contains_expanded_values_not_meta_name(self):
         # sustenance expands to 8 values → regex union

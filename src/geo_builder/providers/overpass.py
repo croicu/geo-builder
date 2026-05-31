@@ -4,12 +4,10 @@ import time
 import urllib.parse
 import urllib.request
 
-from ..contracts import Provider
+from ..contracts import AcquisitionTask, Provider
 from ..diagnostics import Logger
-from ..entities import GeoLayer
 from ..errors import ProviderError
 from ..protocols import Feature, GeoJson, Geometry, Layer
-from ..tasks import AcquisitionTask
 
 _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
 
@@ -45,7 +43,7 @@ class OverpassProvider(Provider):
         scale = 1.0
         layer_type = "heatmap"
         layer_name: str | None = None
-        if len(task.filters) == 1:
+        if task.filters:
             area_style = next(iter(task.filters.values()))
             if area_style.scale is not None:
                 scale = area_style.scale
@@ -55,21 +53,19 @@ class OverpassProvider(Provider):
         query = self._build_query(task)
         payload = self._execute_query(query)
         geojson = self._to_geojson(payload, surface=surface, layer_type=layer_type)
-        merge_key = self._create_merge_key(task)
-        layer_id = GeoLayer.id_from_merge_key(merge_key)
 
         style: dict = {"opacity": 0.7, "radiusScale": scale}
         if surface:
             style["surface"] = True
 
+        # id and url are assigned by AcquisitionWorker after stable-id lookup.
         return Layer(
-            id=layer_id,
+            id="",
             name=layer_name or f"Overpass ({layer_type})",
             type=layer_type,
-            url=f"./layers/{layer_id}.geojson",
+            url=None,
             visible=True,
             style=style,
-            mergeKey=merge_key,
             geojson=geojson,
         )
 
@@ -289,12 +285,3 @@ out {out_mode};
             return ", ".join(parts)
 
         return None
-
-    def _create_merge_key(self, task: AcquisitionTask) -> str:
-        parts: list[str] = [task.provider]
-
-        for key in sorted(task.filters.keys()):
-            values = sorted(task.filters[key].values)
-            parts.append(f"{key}={','.join(values)}")
-
-        return ":".join(parts)

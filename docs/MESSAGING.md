@@ -158,7 +158,7 @@ interface ReadyData {}
 interface AddAreaInput {
   areaName: string;
   bbox: [number, number, number, number];  // [west, south, east, north]
-  template?: string;  // default "acquisition"
+  template?: string;  // reserved for future multi-template support; currently unused
 }
 interface AreaSummary {
   id: string;
@@ -211,6 +211,31 @@ interface PutAreaJsonOutput {
   errorDescription: string | null;
 }
 
+// __geo_get_user_points__ (method: JS → Python)
+interface GetUserPointsInput  { areaId: string; }
+interface GetUserPointsOutput {
+  error: number;
+  errorDescription: string | null;
+  geojson: GeoJsonFeatureCollection | null;  // null when error !== OK; empty FeatureCollection when no points yet
+}
+
+// __geo_add_user_point__ (method: JS → Python)
+interface UserPointData {
+  lat: number;
+  lon: number;
+  timestamp: string;   // ISO 8601
+  pressure: number;    // 0.0–1.0; 0 = light tap, 1 = maximum force
+  name: string | null; // optional label; null = unnamed
+}
+interface AddUserPointInput {
+  areaId: string;
+  point: UserPointData;
+}
+interface AddUserPointOutput {
+  error: number;
+  errorDescription: string | null;
+}
+
 // __geo_area_changed__ (event: Python → JS)
 interface AreaChangedData {
   area: AreaSummary;
@@ -241,11 +266,13 @@ Entry point. Tells the browser where the catalog file lives.
 ```jsonc
 {
   "version": 1,
-  "catalogUrl": "./release/catalog.json"
+  "catalogUrl": "./catalog.json"
 }
 ```
 
-`catalog.head.debug.json` is an alternate entry point written when `settings.debug: true` — same shape, points to a different `catalogUrl`.
+The `catalogUrl` is a relative URL resolved against the head file's location. The default points to `./catalog.json` (flat layout alongside the head file). Services may use a different layout; geo-builder mirrors whatever `catalogUrl` the service declares.
+
+`catalog.head.debug.json` is an alternate entry point for debug builds — same shape, default `catalogUrl` is `"./catalog.debug.json"`.
 
 ### `catalog.json`
 
@@ -276,30 +303,12 @@ Entry point. Tells the browser where the catalog file lives.
 ```jsonc
 {
   "version": 1,
-  "tasks": [
-    {
-      "type": "acquisition",
-      "provider": "overpass",
-      "filters": {
-        "amenity": {
-          "values": ["restaurant", "cafe"],
-          "name": "Restaurants",
-          "type": "heatmap",
-          "color": null,
-          "scale": null,
-          "surface": false
-        }
-      }
-    },
-    { "type": "deduping" },
-    { "type": "aggregation" }
-  ],
   "layers": [
     {
-      "id": "overpass_amenity_restaurant_cafe",
-      "name": "Overpass (heatmap)",
+      "id": "1",
+      "name": "Restaurants",
       "type": "heatmap",
-      "url": "./layers/overpass_amenity_restaurant_cafe.geojson",
+      "url": "./layers/1.geojson",
       "visible": true,
       "style": {
         "opacity": 0.7,
@@ -307,43 +316,56 @@ Entry point. Tells the browser where the catalog file lives.
         "color": "#ff0000",
         "surface": false
       },
-      "mergeKey": "overpass:amenity=restaurant,cafe"
+      "acquisition": { "provider": "overpass", "filter": "amenity", "values": ["restaurant", "cafe"] }
+    },
+    {
+      "id": "__poi__",
+      "name": "POI",
+      "type": "__poi__",
+      "url": null,
+      "visible": true,
+      "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
     }
-  ]
+  ],
+  "aggregation": {},
+  "deduping": {}
 }
 ```
 
-`tasks` records the acquisition config that produced this area's layers. The browser treats it as read-only metadata — it is the source of truth for incremental rebuilds on the Python side.
+`aggregation` and `deduping` are area-scoped pipeline steps. Both are empty objects today; reserved for future configuration. `layers[]` is the single source of truth for style, visibility, and acquisition config.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `"heatmap" \| "circle" \| "poi"` | Render mode |
-| `url` | `string \| null` | GeoJSON URL, or `null` for virtual layers |
+| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"` or `"__user__"` for builtin virtual layers |
+| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__"` | Render mode |
+| `url` | `string \| null` | GeoJSON URL for data layers; `null` for gateway-backed virtual layers (`__poi__`, `__user__`) |
 | `visible` | `boolean` | Default visibility |
-| `mergeKey` | `string` | Optional grouping key (required on `poi` layers) |
-| `style.type` | `string` | Optional render hint (e.g. `"circle"`) |
+| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`, `__user__`). Present on data layers |
+| `acquisition.provider` | `string` | Provider name (e.g. `"overpass"`) |
+| `acquisition.filter` | `string` | OSM tag key (e.g. `"amenity"`) |
+| `acquisition.values` | `string[]` | Accepted tag values (e.g. `["restaurant", "cafe"]`) |
 | `style.opacity` | `number` | Layer opacity (0–1) |
 | `style.radiusScale` | `number` | Multiplier applied to the base render radius |
 | `style.color` | `string` | Primary fill/gradient color (e.g. `"#ff0000"`) |
 | `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
 | `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
+| `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value; absent = always shown |
 
 All `style` fields are optional; absent fields fall back to layer defaults.
 
-#### `poi` layer
+#### `__poi__` layer
 
-A virtual layer with `url: null`. The browser derives its content at render time by scanning all other loaded layers for features with `hasDetails: true`. The manifest entry is only emitted when at least one enriched POI exists.
+A reserved builtin virtual layer with `url: null`. The browser derives its content at render time by scanning all other loaded layers for features with `hasDetails: true`. The entry is always present in the manifest after the first build. `visible` encodes data availability: `true` = enriched POIs found, show the layer; `false` = no data, no UX presence (entry retained to preserve style across rebuilds).
 
 ```jsonc
 {
-  "id": "poi",
+  "id": "__poi__",
   "name": "POI",
-  "type": "poi",
+  "type": "__poi__",
   "url": null,
   "visible": true,
-  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 },
-  "mergeKey": "poi"
+  "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
 }
 ```
 
@@ -559,7 +581,7 @@ gateway.invoke(AddArea, { areaName: "Rome", bbox: [12.30, 41.80, 12.60, 42.00] }
 class AddAreaInput:
     areaName: str
     bbox: list[float]     # [west, south, east, north]
-    template: str = "acquisition"  # key of the acquisition entry in tasks.json
+    template: str = "acquisition"  # key of the acquisition entry in template.json
 
 @dataclass
 class AddAreaOutput:
@@ -574,11 +596,11 @@ class AddAreaOutput:
 | Code | Constant | Meaning |
 |------|----------|---------|
 | `0` | `OK` | Area built and saved successfully |
-| `2` | `ERR_TEMPLATE_NOT_FOUND` | No template with the given name in tasks.json |
+| `2` | `ERR_TEMPLATE_NOT_FOUND` | No template with the given name in template.json |
 
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
-- `template` defaults to `"acquisition"` — the key of the acquisition entry in `tasks.json`. `tasks.json` is the pipeline template: a named set of steps (acquisition, aggregation, deduplication). The `template` field selects which acquisition entry to use.
+- `template` is reserved for future multi-template support and is currently unused. `template.json` is a flat manifest-shaped document; the builder uses all data layers in it to create `AcquisitionTask`s for the new area.
 - On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
 
@@ -594,7 +616,7 @@ const GetAreaJson: MethodDef<GetAreaJsonInput, GetAreaJsonOutput> = { id: "__geo
 
 gateway.invoke(GetAreaJson, { areaId: "paris" }, ({ error, manifest }) => {
   if (error !== OK) return;
-  // manifest is the full manifest.json-shaped object (tasks + layers)
+  // manifest is the full manifest.json-shaped object (layers + aggregation + deduping)
 });
 ```
 
@@ -635,14 +657,14 @@ gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ e
 
 **Notes:**
 - The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
-- The browser is responsible for reloading any `.geojson` files whose layers changed — the builder does not push a re-render event.
+- On success the builder fires `AreaChanged`. A full pipeline re-run (re-acquisition) is triggered only when the `acquisition` block of at least one layer changed, a layer was added, or a layer was removed. Style, visibility, and name changes skip the pipeline — the builder copies the updated manifest to `out_dir` directly.
 - Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
 
 ---
 
 ## AreaChanged (`__geo_area_changed__`)
 
-Fired by the builder after an area's manifest has been saved and its pipeline has been re-run successfully. The browser should reload the area's manifest and layers from their URLs.
+Fired by the builder after an area's pipeline has been re-run successfully. The browser should reload the area's manifest and layers from their URLs.
 
 **TypeScript:**
 ```typescript
@@ -654,6 +676,103 @@ gateway.subscribe(AreaChanged, ({ area }) => {
 ```
 
 **Notes:**
-- Fired asynchronously after `put_area_json` returns — subscribe separately, do not rely on receiving it before or after the `put_area_json` response.
+- Fired asynchronously after the triggering method returns — subscribe separately, do not rely on receiving it before or after the method response.
 - `area` contains the updated `AreaSummary` (same shape as in `catalog.json`). The browser can use this to refresh its in-memory area record without re-fetching `catalog.json`.
-- The pipeline has already completed and all output files have been written by the time this event fires.
+- All output files (manifest + geojson) have been written by the time this event fires.
+
+---
+
+## GetUserPoints (`__geo_get_user_points__`)
+
+Returns all user-placed points for an area as a GeoJSON `FeatureCollection`. This is the **only** way the browser receives user points — there is no URL to fetch. The `__user__` layer always has `url: null` in the manifest.
+
+The API contract is implemented differently depending on context:
+- **Designer mode (builder running):** handled by geo-builder, reads from disk.
+- **Standalone mode (no builder):** handled by the browser's own implementation (localStorage now, Cloudflare Worker in the future).
+
+The browser calls this on initial area load and again after every `AreaChanged` event.
+
+**TypeScript:**
+```typescript
+const GetUserPoints: MethodDef<GetUserPointsInput, GetUserPointsOutput> = { id: "__geo_get_user_points__" };
+
+gateway.invoke(GetUserPoints, { areaId: "redmond" }, ({ error, geojson }) => {
+  if (error !== OK) return;
+  // geojson is a GeoJSON FeatureCollection (may have zero features)
+  renderUserLayer(geojson!);
+});
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | GeoJSON returned (may be empty) |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+
+**Notes:**
+- Returns `{ type: "FeatureCollection", features: [] }` when no points have been added yet — never `null` on `OK`.
+- Designed for bulk access: returns all points for the area in one call. This keeps the contract compatible with future cloud backends where per-point requests would be too chatty.
+
+---
+
+## AddUserPoint (`__geo_add_user_point__`)
+
+Appends a user-placed point to the area's `__user__` layer. No pipeline rebuild is triggered; the builder writes directly to the geojson file on disk and fires `AreaChanged`. The browser should call `GetUserPoints` on receipt of `AreaChanged` to refresh the layer.
+
+**TypeScript:**
+```typescript
+const AddUserPoint: MethodDef<AddUserPointInput, AddUserPointOutput> = { id: "__geo_add_user_point__" };
+
+gateway.invoke(AddUserPoint, {
+  areaId: "redmond",
+  point: {
+    lat: 47.67,
+    lon: -122.12,
+    timestamp: new Date().toISOString(),
+    pressure: event.pressure ?? 0.5,
+    name: null,
+  }
+}, ({ error, errorDescription }) => {
+  if (error !== OK) {
+    console.error(errorDescription);
+    return;
+  }
+  // point saved; wait for AreaChanged then call GetUserPoints
+});
+```
+
+**Python:** registered by the designer host.
+```python
+@dataclass
+class UserPointData:
+    lat: float
+    lon: float
+    timestamp: str
+    pressure: float
+    name: str | None
+
+@dataclass
+class AddUserPointInput:
+    areaId: str
+    point: UserPointData
+
+@dataclass
+class AddUserPointOutput:
+    error: int
+    errorDescription: str | None
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Point saved successfully |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+| `4` | `ERR_IO` | I/O error writing to disk |
+
+**Notes:**
+- `pressure` is 0.0–1.0. The builder stores it verbatim; all rendering decisions stay in the browser.
+- `name` is optional — pass `null` for an unnamed point.
+- Points are persisted in `{in_dir}/areas/{areaId}/user.geojson` — a file the browser never fetches directly.
+- `AreaChanged` is fired after the file is written. The browser should call `GetUserPoints` to refresh rather than relying on the point data from the `AddUserPoint` response.
