@@ -107,15 +107,15 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
-## New Task
+## Completed Tasks
+
 - **File**: [User Layer](tasks/user_layer.md)
-- **Status**: Implementation
+- **Status**: Done
 - **GitHub Issue**: N/A
-- **Key Context**: End user is able to define points during his/her trip. the points are going to get stored in a dedicated layer.
-  
-- ## Completed Task
+- **Key Context**: `__user__` layer stub injected at area creation and on startup for pulled areas; `GetUserPoints`/`AddUserPoint` APIs; `AddUserPointInput.__post_init__` coerces nested dict from gateway dispatch; 325 tests pass.
+
 - **File**: [Catalog Head Defaults & Path Mirroring](tasks/catalog_head_defaults.md)
-- **Status**: Completed
+- **Status**: Done
 - **GitHub Issue**: N/A
 - **Key Context**: `pull.py` writes default head files on 404; `load_catalog` falls back to defaults if head file absent; `save_catalog` mirrors `in_dir` path structure instead of hard-coding `./release/` or `./debug/` subdirs; defaults are flat (`./catalog.json`, `./catalog.debug.json`).
 
