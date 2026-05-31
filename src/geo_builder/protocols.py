@@ -28,6 +28,15 @@ class PoiStyle:
 
 
 @dataclass
+class UserStyle:
+    name: str = "My Trip"
+    color: str = "#9E9E9E"
+    opacity: float = 0.9
+    radius: float = 10.0
+    min_zoom: float = 14.0
+
+
+@dataclass
 class Area:
     id: str
     name: str

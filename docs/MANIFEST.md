@@ -93,6 +93,91 @@ const fsqUrl    = `https://foursquare.com/search?query=${encodeURIComponent(name
 
 `protocols.ts` `Layer` type needs to accommodate a URL-less `__poi__` entry. The feature properties shape (`hasDetails`, `name`, `cuisine`, etc.) lives in the existing layer's GeoJSON — no new payload type needed, but the browser's GeoJSON parsing must tolerate and forward these extra fields. Agree the shape between geo-builder and geo-browser before the builder emits it.
 
+---
+
+# User Layer
+
+## Goal
+
+Let the end user record points of personal interest during a trip — "I've been here" markers — that persist across catalog reloads and pipeline rebuilds without touching OSM data.
+
+## Build-time (geo-builder)
+
+- The `__user__` layer stub is injected into every area at creation time (alongside `__poi__`).
+- `url` is always `null` — the browser never fetches user points via HTTP. Points are accessed exclusively through `__geo_get_user_points__`.
+- Points are stored at `{in_dir}/areas/{areaId}/user.geojson` — alongside the catalog source data, not inside `layers/` and not URL-served. `in_dir` holds both service-pulled catalog data and user-generated points; when a Cloudflare Worker is introduced, `pull` will sync user points from the service and the folder stays semantically consistent.
+- Points are written by `__geo_add_user_point__` — no pipeline re-run occurs. The file is never written to `out_dir`.
+- Default style comes from the `__user__` entry in `template.json`. Defaults: color `#9E9E9E`, opacity `0.9`, radius `10`, minZoom `14`.
+
+### Manifest entry
+
+```json
+{
+  "id": "__user__",
+  "name": "My Trip",
+  "type": "__user__",
+  "url": null,
+  "visible": true,
+  "style": {
+    "opacity": 0.7,
+    "color": "#5f5f5f",
+    "radius": 40,
+    "minZoom": 12
+  }
+}
+```
+
+`url` is always `null`. The browser uses `__geo_get_user_points__` to load points, not URL fetch.
+
+### GeoJSON point shape
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.12, 47.67] },
+      "properties": {
+        "timestamp": "2026-05-29T14:00:00Z",
+        "pressure": 0.6,
+        "name": null
+      }
+    }
+  ]
+}
+```
+
+`coordinates` are `[longitude, latitude]` — GeoJSON convention.
+
+| Property | Type | Description |
+|---|---|---|
+| `timestamp` | `string` | ISO 8601 UTC string of when the point was added |
+| `pressure` | `number` | Force at time of tap, 0.0 (light) – 1.0 (maximum). Stored verbatim; browser decides rendering |
+| `name` | `string \| null` | Optional label. `null` = unnamed. Browser may populate via reverse geocode or nearest-layer name |
+
+## Runtime (geo-browser)
+
+- When the browser encounters a `__user__` layer it calls `__geo_get_user_points__` (not a URL fetch) to load the GeoJSON. This call is made on initial area load and again when `AreaChanged` fires.
+- `__user__` is rendered as a circle layer using `style.color`, `style.radius`, and `style.opacity` from the manifest.
+- `pressure` can be used to modulate visual weight — e.g. a heavier press yields a slightly larger or darker circle. Keep subtle; avoid visual overwhelm.
+- Points are visible at zoom ≥ `style.minZoom` (default 14 — city-district level, not landmark detail).
+- Tapping a point may show a detail popup with `timestamp` and `name` (if present).
+- `GetUserPoints` returns an empty `FeatureCollection` when no points exist — the browser never needs to special-case a missing or null url.
+
+## Decisions log
+
+| Decision | Rationale |
+|---|---|
+| No per-point id | Not needed until delete/edit is implemented; keeps the schema minimal |
+| `pressure` stored verbatim | Builder has no rendering context — all visual decisions belong in the browser |
+| `name` optional, accepted as-is | Reverse geocode / nearest-label population is a future browser feature; builder just persists what it receives |
+| Direct file write, no pipeline rebuild | User points are independent of OSM acquisition — no reason to re-fetch data |
+| Stub always present, `url` lazy | Avoids creating an empty file for every area; file is created on first actual point |
+| `minZoom: 14` | "I've been here" markers are meaningful at city-district zoom, not the POI detail zoom of 18 |
+
+---
+
 ## Decisions log
 
 | Decision | Rationale |

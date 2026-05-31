@@ -211,6 +211,31 @@ interface PutAreaJsonOutput {
   errorDescription: string | null;
 }
 
+// __geo_get_user_points__ (method: JS → Python)
+interface GetUserPointsInput  { areaId: string; }
+interface GetUserPointsOutput {
+  error: number;
+  errorDescription: string | null;
+  geojson: GeoJsonFeatureCollection | null;  // null when error !== OK; empty FeatureCollection when no points yet
+}
+
+// __geo_add_user_point__ (method: JS → Python)
+interface UserPointData {
+  lat: number;
+  lon: number;
+  timestamp: string;   // ISO 8601
+  pressure: number;    // 0.0–1.0; 0 = light tap, 1 = maximum force
+  name: string | null; // optional label; null = unnamed
+}
+interface AddUserPointInput {
+  areaId: string;
+  point: UserPointData;
+}
+interface AddUserPointOutput {
+  error: number;
+  errorDescription: string | null;
+}
+
 // __geo_area_changed__ (event: Python → JS)
 interface AreaChangedData {
   area: AreaSummary;
@@ -311,11 +336,11 @@ The `catalogUrl` is a relative URL resolved against the head file's location. Th
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"` for the builtin virtual layer |
-| `type` | `"heatmap" \| "circle" \| "__poi__"` | Render mode |
-| `url` | `string \| null` | GeoJSON URL, or `null` for virtual layers |
+| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"` or `"__user__"` for builtin virtual layers |
+| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__"` | Render mode |
+| `url` | `string \| null` | GeoJSON URL for data layers; `null` for gateway-backed virtual layers (`__poi__`, `__user__`) |
 | `visible` | `boolean` | Default visibility |
-| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`). Present on data layers |
+| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`, `__user__`). Present on data layers |
 | `acquisition.provider` | `string` | Provider name (e.g. `"overpass"`) |
 | `acquisition.filter` | `string` | OSM tag key (e.g. `"amenity"`) |
 | `acquisition.values` | `string[]` | Accepted tag values (e.g. `["restaurant", "cafe"]`) |
@@ -632,7 +657,7 @@ gateway.invoke(PutAreaJson, { areaId: "paris", manifest: updatedManifest }, ({ e
 
 **Notes:**
 - The builder atomically saves to disk before updating its in-memory state. If the save fails the in-memory catalog is unchanged.
-- On success the builder re-runs the pipeline (re-acquisition with the updated manifest) and fires `AreaChanged`. Style changes in `layers[]` are picked up by the re-run and written to `out_dir`.
+- On success the builder fires `AreaChanged`. A full pipeline re-run (re-acquisition) is triggered only when the `acquisition` block of at least one layer changed, a layer was added, or a layer was removed. Style, visibility, and name changes skip the pipeline — the builder copies the updated manifest to `out_dir` directly.
 - Sending a manifest with a `url`-bearing layer whose geojson file does not exist on disk returns `ERR_MANIFEST_INVALID`.
 
 ---
@@ -654,3 +679,100 @@ gateway.subscribe(AreaChanged, ({ area }) => {
 - Fired asynchronously after the triggering method returns — subscribe separately, do not rely on receiving it before or after the method response.
 - `area` contains the updated `AreaSummary` (same shape as in `catalog.json`). The browser can use this to refresh its in-memory area record without re-fetching `catalog.json`.
 - All output files (manifest + geojson) have been written by the time this event fires.
+
+---
+
+## GetUserPoints (`__geo_get_user_points__`)
+
+Returns all user-placed points for an area as a GeoJSON `FeatureCollection`. This is the **only** way the browser receives user points — there is no URL to fetch. The `__user__` layer always has `url: null` in the manifest.
+
+The API contract is implemented differently depending on context:
+- **Designer mode (builder running):** handled by geo-builder, reads from disk.
+- **Standalone mode (no builder):** handled by the browser's own implementation (localStorage now, Cloudflare Worker in the future).
+
+The browser calls this on initial area load and again after every `AreaChanged` event.
+
+**TypeScript:**
+```typescript
+const GetUserPoints: MethodDef<GetUserPointsInput, GetUserPointsOutput> = { id: "__geo_get_user_points__" };
+
+gateway.invoke(GetUserPoints, { areaId: "redmond" }, ({ error, geojson }) => {
+  if (error !== OK) return;
+  // geojson is a GeoJSON FeatureCollection (may have zero features)
+  renderUserLayer(geojson!);
+});
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | GeoJSON returned (may be empty) |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+
+**Notes:**
+- Returns `{ type: "FeatureCollection", features: [] }` when no points have been added yet — never `null` on `OK`.
+- Designed for bulk access: returns all points for the area in one call. This keeps the contract compatible with future cloud backends where per-point requests would be too chatty.
+
+---
+
+## AddUserPoint (`__geo_add_user_point__`)
+
+Appends a user-placed point to the area's `__user__` layer. No pipeline rebuild is triggered; the builder writes directly to the geojson file on disk and fires `AreaChanged`. The browser should call `GetUserPoints` on receipt of `AreaChanged` to refresh the layer.
+
+**TypeScript:**
+```typescript
+const AddUserPoint: MethodDef<AddUserPointInput, AddUserPointOutput> = { id: "__geo_add_user_point__" };
+
+gateway.invoke(AddUserPoint, {
+  areaId: "redmond",
+  point: {
+    lat: 47.67,
+    lon: -122.12,
+    timestamp: new Date().toISOString(),
+    pressure: event.pressure ?? 0.5,
+    name: null,
+  }
+}, ({ error, errorDescription }) => {
+  if (error !== OK) {
+    console.error(errorDescription);
+    return;
+  }
+  // point saved; wait for AreaChanged then call GetUserPoints
+});
+```
+
+**Python:** registered by the designer host.
+```python
+@dataclass
+class UserPointData:
+    lat: float
+    lon: float
+    timestamp: str
+    pressure: float
+    name: str | None
+
+@dataclass
+class AddUserPointInput:
+    areaId: str
+    point: UserPointData
+
+@dataclass
+class AddUserPointOutput:
+    error: int
+    errorDescription: str | None
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Point saved successfully |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+| `4` | `ERR_IO` | I/O error writing to disk |
+
+**Notes:**
+- `pressure` is 0.0–1.0. The builder stores it verbatim; all rendering decisions stay in the browser.
+- `name` is optional — pass `null` for an unnamed point.
+- Points are persisted in `{in_dir}/areas/{areaId}/user.geojson` — a file the browser never fetches directly.
+- `AreaChanged` is fired after the file is written. The browser should call `GetUserPoints` to refresh rather than relying on the point data from the `AddUserPoint` response.

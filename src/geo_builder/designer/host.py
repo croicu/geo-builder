@@ -35,6 +35,60 @@ def _apply_template_style(geo_layer, tlayer: dict) -> None:
         geo_layer.layer.style[k] = v
 
 
+def _build_user_stub(tmpl: dict):
+    from ..entities import GeoLayer
+    from ..protocols import Layer, UserStyle
+
+    user_style = UserStyle()
+    for tlayer in tmpl.get("layers", []):
+        if tlayer.get("id") == "__user__":
+            s = tlayer.get("style", {})
+            user_style = UserStyle(
+                name=str(tlayer.get("name", "My Trip")),
+                color=str(s.get("color", "#9E9E9E")),
+                opacity=float(s.get("opacity", 0.9)),
+                radius=float(s.get("radius", 10.0)),
+                min_zoom=float(s.get("minZoom", 14.0)),
+            )
+            break
+    return GeoLayer(
+        Layer(
+            id="__user__",
+            name=user_style.name,
+            type="__user__",
+            visible=True,
+            style={
+                "opacity": user_style.opacity,
+                "color": user_style.color,
+                "radius": user_style.radius,
+                "minZoom": user_style.min_zoom,
+            },
+        )
+    )
+
+
+def _inject_missing_user_layers(catalog: GeoCatalog, tmpl: dict, in_dir: Path | None) -> None:
+    """Ensure every area in the catalog has a __user__ layer stub.
+
+    Injects the stub into memory and, when in_dir is provided, saves the area's
+    manifest so subsequent loads include the layer.
+    """
+    for area in catalog.areas:
+        has_user = False
+        for gl in area.layers:
+            if gl.layer.id == "__user__":
+                has_user = True
+                break
+        if not has_user:
+            area.layers.append(_build_user_stub(tmpl))
+            Logger.info(f"_inject_missing_user_layers: added __user__ stub to area '{area.id}'.")
+            if in_dir is not None:
+                try:
+                    area.save(in_dir)
+                except OSError as exc:
+                    Logger.warning(f"_inject_missing_user_layers: failed to save manifest for area '{area.id}': {exc}")
+
+
 _core = None
 _form = None
 api: Gateway | None = None
@@ -111,21 +165,27 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
     from ..api import (
         ADD_AREA_ID,
+        ADD_USER_POINT_ID,
         AREA_CHANGED_ID,
         ERR_AREA_NOT_FOUND,
         ERR_IO,
         ERR_MANIFEST_INVALID,
         ERR_TEMPLATE_NOT_FOUND,
         GET_AREA_JSON_ID,
+        GET_USER_POINTS_ID,
         OK,
         PUT_AREA_JSON_ID,
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
+        AddUserPointInput,
+        AddUserPointOutput,
         AreaChangedData,
         AreaSummary,
         GetAreaJsonInput,
         GetAreaJsonOutput,
+        GetUserPointsInput,
+        GetUserPointsOutput,
         PutAreaJsonInput,
         PutAreaJsonOutput,
         SetAreaBboxInput,
@@ -146,7 +206,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         for a in fresh_catalog.areas:
             if a.id == area_id:
                 for geo_layer in a.layers:
-                    if geo_layer.layer.type != "__poi__":
+                    if geo_layer.layer.type not in ("__poi__", "__user__"):
                         geo_layer.layer.geojson = None
                 break
 
@@ -191,6 +251,10 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             fresh_catalog = catalog
 
         _rebuild_area(changed_area.id, fresh_catalog)
+
+    settings_for_inject = Settings.current()
+    tmpl_for_inject = settings_for_inject.template or {}
+    _inject_missing_user_layers(catalog, tmpl_for_inject, in_dir)
 
     for area in catalog.areas:
         area.subscribe_changed(on_area_changed)
@@ -308,6 +372,14 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                             geo_layer.seed_raw(tlayer)
                             _apply_template_style(geo_layer, tlayer)
                             break
+
+                has_user = False
+                for gl in a.layers:
+                    if gl.layer.id == "__user__":
+                        has_user = True
+                        break
+                if not has_user:
+                    a.layers.append(_build_user_stub(template))
                 break
 
         save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
@@ -409,6 +481,103 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         return MethodResult(PutAreaJsonOutput(error=OK))
 
     api.register(PUT_AREA_JSON_ID, on_put_area_json)
+
+    api.define_method(GET_USER_POINTS_ID, GetUserPointsInput, GetUserPointsOutput)
+
+    def on_get_user_points(data: GetUserPointsInput) -> GetUserPointsOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return MethodResult(GetUserPointsOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
+
+        if in_dir is None:
+            return MethodResult(GetUserPointsOutput(error=ERR_IO, errorDescription="No input directory configured"))
+
+        user_path = in_dir / "areas" / data.areaId / "user.geojson"
+        if not user_path.exists():
+            return MethodResult(GetUserPointsOutput(error=OK, geojson={"type": "FeatureCollection", "features": []}))
+
+        try:
+            with open(user_path, "r", encoding="utf-8") as f:
+                geojson = json.load(f)
+            return MethodResult(GetUserPointsOutput(error=OK, geojson=geojson))
+        except OSError as exc:
+            return MethodResult(GetUserPointsOutput(error=ERR_IO, errorDescription=str(exc)))
+
+    api.register(GET_USER_POINTS_ID, on_get_user_points)
+
+    api.define_method(ADD_USER_POINT_ID, AddUserPointInput, AddUserPointOutput)
+
+    def on_add_user_point(data: AddUserPointInput) -> AddUserPointOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return MethodResult(AddUserPointOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
+
+        if in_dir is None:
+            return MethodResult(AddUserPointOutput(error=ERR_IO, errorDescription="No input directory configured"))
+
+        has_user = False
+        for gl in area.layers:
+            if gl.layer.id == "__user__":
+                has_user = True
+                break
+        if not has_user:
+            settings = Settings.current()
+            tmpl = settings.template or {}
+            area.layers.append(_build_user_stub(tmpl))
+
+        user_path = in_dir / "areas" / data.areaId / "user.geojson"
+        if user_path.exists():
+            try:
+                with open(user_path, "r", encoding="utf-8") as f:
+                    geojson = json.load(f)
+            except OSError as exc:
+                return MethodResult(AddUserPointOutput(error=ERR_IO, errorDescription=str(exc)))
+        else:
+            geojson = {"type": "FeatureCollection", "features": []}
+
+        feature: dict = {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [data.point.lon, data.point.lat]},
+            "properties": {
+                "timestamp": data.point.timestamp,
+                "pressure": data.point.pressure,
+                "name": data.point.name,
+            },
+        }
+        geojson["features"].append(feature)
+
+        try:
+            user_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(user_path, "w", encoding="utf-8") as f:
+                json.dump(geojson, f, indent=2)
+        except OSError as exc:
+            return MethodResult(AddUserPointOutput(error=ERR_IO, errorDescription=str(exc)))
+
+        Logger.info(f"AddUserPoint: added point to area '{data.areaId}'. Total: {len(geojson['features'])}.")
+        area_summary = AreaSummary(
+            id=area.id,
+            name=area.name,
+            bbox=area.bbox,
+            minRadiusPx=area.minRadiusPx,
+            maxRadiusPx=area.maxRadiusPx,
+            liveMapRadiusPx=area.liveMapRadiusPx,
+            manifestUrl=area.manifestUrl,
+        )
+        Logger.info(f"AreaChanged: firing for area '{data.areaId}'.")
+        api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+        return MethodResult(AddUserPointOutput(error=OK))
+
+    api.register(ADD_USER_POINT_ID, on_add_user_point)
 
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:

@@ -48,6 +48,18 @@
         "radius": 8,
         "minZoom": 18
       }
+    },
+    {
+      "id": "__user__",
+      "name": "My Trip",
+      "type": "__user__",
+      "visible": true,
+      "style": {
+        "opacity": 0.7,
+        "color": "#5f5f5f",
+        "radius": 40,
+        "minZoom": 12
+      }
     }
   ],
   "aggregation": {},

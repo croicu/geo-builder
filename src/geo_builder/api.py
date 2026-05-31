@@ -137,3 +137,52 @@ class PutAreaJsonOutput:
 
 
 PUT_AREA_JSON_ID = "__geo_put_area_json__"
+
+
+# --- GetUserPoints ---
+
+
+@dataclass
+class GetUserPointsInput:
+    areaId: str
+
+
+@dataclass
+class GetUserPointsOutput:
+    error: int
+    errorDescription: str | None = None
+    geojson: dict | None = None  # GeoJSON FeatureCollection; null when error != OK
+
+
+GET_USER_POINTS_ID = "__geo_get_user_points__"
+
+
+# --- AddUserPoint ---
+
+
+@dataclass
+class UserPointData:
+    lat: float
+    lon: float
+    timestamp: str
+    pressure: float
+    name: str | None = None
+
+
+@dataclass
+class AddUserPointInput:
+    areaId: str
+    point: UserPointData
+
+    def __post_init__(self) -> None:
+        if isinstance(self.point, dict):
+            self.point = UserPointData(**self.point)
+
+
+@dataclass
+class AddUserPointOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+ADD_USER_POINT_ID = "__geo_add_user_point__"
