@@ -35,6 +35,22 @@ def _apply_template_style(geo_layer, tlayer: dict) -> None:
         geo_layer.layer.style[k] = v
 
 
+def _acquisition_matches(layer_acq: dict, template_acq: dict | None) -> bool:
+    if template_acq is None:
+        return False
+    if layer_acq.get("provider") != template_acq.get("provider"):
+        return False
+    layer_filters = layer_acq.get("filters", {})
+    template_filters = template_acq.get("filters", {})
+    if not layer_filters or set(layer_filters.keys()) != set(template_filters.keys()):
+        return False
+    for key, layer_vals in layer_filters.items():
+        template_vals = template_filters.get(key, [])
+        if sorted(layer_vals) != sorted(template_vals):
+            return False
+    return True
+
+
 def _build_user_stub(tmpl: dict):
     from ..entities import GeoLayer
     from ..protocols import Layer, UserStyle
@@ -114,19 +130,20 @@ def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
 
 def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
     url = str(args.Request.Uri)
-    # Logger.info(f"WebResourceRequested: {url}")
+    Logger.diagnostic(f"WebResourceRequested: {url}")
     if data_pipeline is not None:
         deferral = args.GetDeferral()
 
-        def complete(result: tuple[bytes, str] | None) -> None:
+        def complete(result) -> None:  # noqa: ANN001
             def on_ui() -> None:
                 try:
                     if result is not None:
-                        data, content_type = result
                         from System.IO import MemoryStream  # type: ignore[import]
 
-                        stream = MemoryStream(bytearray(data))
-                        headers = f"Content-Type: {content_type}\r\nAccess-Control-Allow-Origin: *"
+                        stream = MemoryStream(bytearray(result.data))
+                        headers = f"Content-Type: {result.content_type}\r\nAccess-Control-Allow-Origin: *"
+                        if result.cache_control is not None:
+                            headers += f"\r\nCache-Control: {result.cache_control}"
                         args.Response = _core.Environment.CreateWebResourceResponse(stream, 200, "OK", headers)
                 except Exception as exc:
                     Logger.warning(f"data pipeline: response error: {exc}")
@@ -309,24 +326,33 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             acq = tlayer.get("acquisition")
             if acq is None:
                 continue
-            filter_key = str(acq.get("filter", ""))
-            values = [str(v) for v in acq.get("values", [])]
+            filters_raw = acq.get("filters", {})
+            if not isinstance(filters_raw, dict) or not filters_raw:
+                continue
             provider = str(acq.get("provider", "overpass"))
             layer_style = tlayer.get("style", {})
-            area_style = AreaStyle(
-                values=values,
-                name=str(tlayer["name"]) if tlayer.get("name") else None,
-                color=str(layer_style["color"]) if layer_style.get("color") is not None else None,
-                surface=bool(layer_style.get("surface", False)),
-                type=str(tlayer.get("type", "heatmap")),
-            )
+            layer_name = str(tlayer["name"]) if tlayer.get("name") else None
+            layer_type = str(tlayer.get("type", "heatmap"))
+            color = str(layer_style["color"]) if layer_style.get("color") is not None else None
+            surface = bool(layer_style.get("surface", False))
+            scale = float(layer_style["scale"]) if layer_style.get("scale") is not None else None
+            filters = {}
+            for filter_key, values in filters_raw.items():
+                filters[filter_key] = AreaStyle(
+                    values=[str(v) for v in values],
+                    name=layer_name,
+                    color=color,
+                    surface=surface,
+                    type=layer_type,
+                    scale=scale,
+                )
             tasks.append(
                 AcquisitionTask(
                     areaId=area_id,
                     areaName=data.areaName,
                     provider=provider,
                     bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
-                    filters={filter_key: area_style},
+                    filters=filters,
                 )
             )
         tasks.append(AggregationTask())
@@ -368,7 +394,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                             geo_layer.seed_raw(tlayer)
                             _apply_template_style(geo_layer, tlayer)
                             break
-                        if geo_layer.layer.acquisition is not None and tlayer.get("acquisition") == geo_layer.layer.acquisition:
+                        if geo_layer.layer.acquisition is not None and _acquisition_matches(geo_layer.layer.acquisition, tlayer.get("acquisition")):
                             geo_layer.seed_raw(tlayer)
                             _apply_template_style(geo_layer, tlayer)
                             break
@@ -383,6 +409,18 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 break
 
         save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+
+        if in_dir is not None:
+            from ..persistence import save_area_to_catalog, save_catalog_meta
+
+            new_area_obj = None
+            for a in result.areas:
+                if a.id == area_id:
+                    new_area_obj = a
+                    break
+            if new_area_obj is not None:
+                save_area_to_catalog(new_area_obj, in_dir, debug=debug)
+            save_catalog_meta(result, in_dir, debug=debug)
 
         catalog.areas[:] = result.areas
         for a in catalog.areas:
@@ -726,6 +764,10 @@ def launch(
                 resolved_catalog = load_catalog(in_dir, debug=debug)
             except GeoError as exc:
                 Logger.warning(f"launch: failed to load catalog after pull: {exc}")
+
+        udf = Path(os.environ.get("LOCALAPPDATA", "~")).expanduser() / "geo-builder" / "WebView2"
+        udf.mkdir(parents=True, exist_ok=True)
+        os.environ["WEBVIEW2_USER_DATA_FOLDER"] = str(udf)
 
         threading.Thread(target=run_dispatcher, daemon=True).start()
         Logger.info("WebView control starting.")

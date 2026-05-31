@@ -74,12 +74,12 @@ class Settings:
             dev_tools = bool(settings_payload.get("devTools", False))
             design_url = str(settings_payload["designUrl"]) if "designUrl" in settings_payload else None
             try:
-                log_level = TelemetryLevel(settings_payload.get("logging", "error"))
+                log_level = TelemetryLevel(settings_payload.get("logLevel", "error"))
             except ValueError:
                 valid_levels = []
                 for level in TelemetryLevel:
                     valid_levels.append(level.value)
-                raise TaskError(f"'settings.logging' in settings.json must be one of: {', '.join(valid_levels)}")
+                raise TaskError(f"'settings.logLevel' in settings.json must be one of: {', '.join(valid_levels)}")
 
             if debug and design_url is not None:
                 sep = "&" if "?" in design_url else "?"

@@ -28,7 +28,7 @@ def make_layer() -> Layer:
         url="./layers/1.geojson",
         visible=True,
         style={"color": "#00ff00"},
-        acquisition={"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
+        acquisition={"provider": "overpass", "filters": {"amenity": ["restaurant"]}},
         geojson=GeoJson(type="FeatureCollection", features=[make_feature()]),
     )
 
@@ -231,7 +231,7 @@ class TestRoundTrip:
         geo_layer = load_catalog(tmp_path).areas[0].layers[0]
 
         assert geo_layer.layer.id == "1"
-        assert geo_layer.layer.acquisition == {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]}
+        assert geo_layer.layer.acquisition == {"provider": "overpass", "filters": {"amenity": ["restaurant"]}}
         assert geo_layer.layer.style == {"color": "#00ff00"}
 
     def test_feature_coordinates(self, tmp_path):

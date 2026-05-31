@@ -107,6 +107,12 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **No lambdas** — use named functions or plain `for` loops. Lambdas hide intent and cannot be stepped through in a debugger.
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
+## New Task
+- **File**: [Default Layers](tasks/default_layers.md)
+- **Status**: Brainstorm
+- **GitHub Issue**: N/A
+- **Key Context**: Rationalize the default layers created when a new area is being created (template.json)
+
 ## Completed Tasks
 
 - **File**: [User Layer](tasks/user_layer.md)

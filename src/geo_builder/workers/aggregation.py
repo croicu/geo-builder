@@ -33,7 +33,8 @@ class AggregationWorker(Worker):
             acq = geo_layer.layer.acquisition
             if acq is None:
                 continue
-            group_key = (acq["provider"], acq["filter"], tuple(sorted(acq["values"])))
+            filters_frozen = frozenset((k, tuple(sorted(v))) for k, v in acq["filters"].items())
+            group_key = (acq["provider"], filters_frozen)
             groups[group_key].append(geo_layer)
 
         for group_key, geo_layers in groups.items():

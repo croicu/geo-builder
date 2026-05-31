@@ -38,7 +38,7 @@ def make_layer(layer_id: str, feature_count: int) -> Layer:
         url=f"./layers/{layer_id}.geojson",
         visible=True,
         style={},
-        acquisition={"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
+        acquisition={"provider": "overpass", "filters": {"amenity": ["restaurant"]}},
         geojson=GeoJson(type="FeatureCollection", features=features),
     )
 

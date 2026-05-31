@@ -117,6 +117,15 @@ def save_catalog(
         save_area_csv(geo_area, catalog_base)
 
 
+def save_area_to_catalog(geo_area: GeoArea, output_dir: str | Path, debug: bool = False) -> None:
+    """Write one area's manifest, geojson, and CSV into a catalog directory without touching other areas."""
+    output_dir = Path(output_dir)
+    catalog_url = _resolve_catalog_url(output_dir, debug)
+    catalog_base = child_path(output_dir, catalog_url).parent
+    geo_area.save(catalog_base)
+    save_area_csv(geo_area, catalog_base)
+
+
 def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
     """Write head + catalog.json only; does not touch area directories."""
     from dataclasses import asdict

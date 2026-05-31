@@ -1,6 +1,7 @@
 {
   "layers": [
     {
+      "name": "Parks",
       "type": "circle",
       "visible": true,
       "style": {
@@ -10,31 +11,73 @@
       },
       "acquisition": {
         "provider": "overpass",
-        "filter": "leisure",
-        "values": ["park"]
+        "filters": {
+          "leisure": ["park"]
+        }
       }
     },
     {
-      "type": "heatmap",
-      "visible": true,
-      "style": {},
-      "acquisition": {
-        "provider": "overpass",
-        "filter": "amenity",
-        "values": ["sustenance", "entertainment"]
-      }
-    },
-    {
+      "name": "Restaurants/Food",
       "type": "heatmap",
       "visible": true,
       "style": {
-        "scale": 3.0, 
-        "color": "#ffff00"  
+        "opacity": 0.7,
+        "radiusScale": 1.5,
+        "color": "#C41C3B"
       },
       "acquisition": {
         "provider": "overpass",
-        "filter": "historic",
-        "values": ["monuments", "memorials"]
+        "filters": {
+          "amenity": ["bar", "biergarten", "cafe", "fast_food", "food_court", "ice_cream", "pub", "restaurant"]
+        }
+      }
+    },
+    {
+      "name": "Attractions/Tourism",
+      "type": "heatmap",
+      "visible": true,
+      "style": {
+        "opacity": 1,
+        "radiusScale": 3.0,
+        "color": "#DDBD55"
+      },
+      "acquisition": {
+        "provider": "overpass",
+        "filters": {
+          "tourism": ["attraction", "museum", "viewpoint", "theme_park", "zoo", "aquarium", "gallery", "artwork"]
+        }
+      }
+    },
+    {
+      "name": "Culture/Entertainment",
+      "type": "heatmap",
+      "visible": true,
+      "style": {
+        "opacity": 1.0,
+        "radiusScale": 3.0,
+        "color": "#6A0DAD"
+      },
+      "acquisition": {
+        "provider": "overpass",
+        "filters": {
+          "amenity": ["arts_centre", "casino", "cinema", "nightclub", "theatre"]
+        }
+      }
+    },
+    {
+      "name": "Shops/Services",
+      "type": "heatmap",
+      "visible": true,
+      "style": {
+        "opacity": 0.7,
+        "radiusScale": 1,
+        "color": "#4C98D6"
+      },
+      "acquisition": {
+        "provider": "overpass",
+        "filters": {
+          "shop": ["*"]
+        }
       }
     },
     {

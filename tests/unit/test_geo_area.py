@@ -30,7 +30,7 @@ def _make_layer() -> Layer:
         url="./layers/1.geojson",
         visible=True,
         style={"color": "#ff0000"},
-        acquisition={"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+        acquisition={"provider": "overpass", "filters": {"amenity": ["cafe"]}},
         geojson=GeoJson(
             type="FeatureCollection",
             features=[
@@ -113,8 +113,7 @@ class TestGeoAreaLoad:
         acq = loaded.layers[0].layer.acquisition
         assert acq is not None
         assert acq["provider"] == "overpass"
-        assert acq["filter"] == "amenity"
-        assert acq["values"] == ["cafe"]
+        assert acq["filters"] == {"amenity": ["cafe"]}
 
     def test_loads_manifest_aggregation_deduping(self, tmp_path):
         manifest_path = tmp_path / "manifest.json"
@@ -201,7 +200,7 @@ class TestGeoAreaSave:
 
         assert acq is not None
         assert acq["provider"] == "overpass"
-        assert acq["filter"] == "amenity"
+        assert "amenity" in acq["filters"]
 
     def test_manifest_omits_acquisition_for_poi_stub(self, tmp_path):
         summary = Area(
@@ -349,7 +348,7 @@ class TestGeoAreaApplyManifest:
                     "url": "./layers/2.geojson",
                     "visible": True,
                     "style": {},
-                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
+                    "acquisition": {"provider": "overpass", "filters": {"amenity": ["restaurant"]}},
                 }
             ],
             "aggregation": {},
@@ -396,7 +395,7 @@ class TestGeoAreaApplyManifest:
                     "url": "./layers/1.geojson",
                     "visible": True,
                     "style": {},
-                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]},
+                    "acquisition": {"provider": "overpass", "filters": {"amenity": ["restaurant"]}},
                 }
             ],
             "aggregation": {},
@@ -418,7 +417,7 @@ class TestGeoAreaApplyManifest:
                     "url": "./layers/1.geojson",
                     "visible": True,
                     "style": {},
-                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                    "acquisition": {"provider": "overpass", "filters": {"amenity": ["cafe"]}},
                 },
                 {
                     "id": "__poi__",
@@ -454,7 +453,7 @@ class TestGeoAreaApplyManifest:
                     "url": "./layers/1.geojson",
                     "visible": False,
                     "style": {"color": "#0000ff", "opacity": 0.5},
-                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                    "acquisition": {"provider": "overpass", "filters": {"amenity": ["cafe"]}},
                 }
             ],
             "aggregation": {},
@@ -476,7 +475,7 @@ class TestGeoAreaApplyManifest:
                     "url": "./layers/1.geojson",
                     "visible": True,
                     "style": {},
-                    "acquisition": {"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                    "acquisition": {"provider": "overpass", "filters": {"amenity": ["cafe"]}},
                 }
             ],
             "aggregation": {},

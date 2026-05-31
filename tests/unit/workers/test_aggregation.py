@@ -43,8 +43,8 @@ def make_layer(layer_id: str, acquisition: dict, feature_count: int, name: str =
     )
 
 
-_ACQ_RESTAURANT = {"provider": "overpass", "filter": "amenity", "values": ["restaurant"]}
-_ACQ_CAFE = {"provider": "overpass", "filter": "amenity", "values": ["cafe"]}
+_ACQ_RESTAURANT = {"provider": "overpass", "filters": {"amenity": ["restaurant"]}}
+_ACQ_CAFE = {"provider": "overpass", "filters": {"amenity": ["cafe"]}}
 
 
 def make_executor(areas: list[GeoArea]) -> StubExecutor:

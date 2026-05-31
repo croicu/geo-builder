@@ -80,14 +80,21 @@ class Builder:
                     acq = geo_layer.layer.acquisition
                     if acq is None:
                         continue
+                    filters_raw = acq.get("filters", {})
+                    if not isinstance(filters_raw, dict) or not filters_raw:
+                        continue
                     layer = geo_layer.layer
-                    style = AreaStyle(
-                        values=[str(v) for v in acq["values"]],
-                        name=layer.name or None,
-                        surface=bool(layer.style.get("surface", False)),
-                        scale=float(layer.style["radiusScale"]) if "radiusScale" in layer.style else None,
-                        type=layer.type,
-                    )
+                    surface = bool(layer.style.get("surface", False))
+                    scale = float(layer.style["radiusScale"]) if "radiusScale" in layer.style else None
+                    filters = {}
+                    for filter_key, values in filters_raw.items():
+                        filters[filter_key] = AreaStyle(
+                            values=[str(v) for v in values],
+                            name=layer.name or None,
+                            surface=surface,
+                            scale=scale,
+                            type=layer.type,
+                        )
                     bbox = area.bbox
                     result.append(
                         AcquisitionTask(
@@ -95,7 +102,7 @@ class Builder:
                             areaName=area.name,
                             provider=str(acq["provider"]),
                             bbox=BoundingBox(west=bbox[0], south=bbox[1], east=bbox[2], north=bbox[3]),
-                            filters={str(acq["filter"]): style},
+                            filters=filters,
                         )
                     )
         if result:

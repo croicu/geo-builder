@@ -137,7 +137,7 @@ class TestLayerIdAssignment:
             type="circle",
             visible=True,
             style={},
-            acquisition={"provider": "overpass", "filter": "leisure", "values": ["park"]},
+            acquisition={"provider": "overpass", "filters": {"leisure": ["park"]}},
         )
         area.layers.append(GeoLayer(existing))
 
@@ -159,7 +159,7 @@ class TestLayerIdAssignment:
         from geo_builder.entities import GeoLayer
 
         area = make_area()
-        existing_acq = {"provider": "stub", "filter": "amenity", "values": ["restaurant"]}
+        existing_acq = {"provider": "stub", "filters": {"amenity": ["restaurant"]}}
         existing = Layer(
             id="5",
             name="Restaurant",
@@ -181,7 +181,7 @@ class TestLayerIdAssignment:
         from geo_builder.entities import GeoLayer
 
         area = make_area()
-        existing_acq = {"provider": "stub", "filter": "amenity", "values": ["restaurant"]}
+        existing_acq = {"provider": "stub", "filters": {"amenity": ["restaurant"]}}
         existing = Layer(
             id="5",
             name="Restaurant",
@@ -208,8 +208,7 @@ class TestLayerIdAssignment:
         acq = executor.added_layers[0].acquisition
         assert acq is not None
         assert acq["provider"] == "stub"
-        assert acq["filter"] == "amenity"
-        assert acq["values"] == ["restaurant"]
+        assert acq["filters"] == {"amenity": ["restaurant"]}
 
     def test_layer_url_set_from_id(self):
         executor = StubExecutor(make_area())
@@ -219,57 +218,6 @@ class TestLayerIdAssignment:
 
         layer = executor.added_layers[0]
         assert layer.url == f"./layers/{layer.id}.geojson"
-
-
-class TestSplitByKey:
-    def test_returns_one_task_per_key(self):
-        task = AcquisitionTask(
-            areaId="napoli",
-            areaName="Napoli",
-            provider="stub",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
-        )
-        worker = AcquisitionWorker(task)
-
-        children = worker._split_by_key(task)
-
-        assert len(children) == 2
-
-    def test_each_child_has_single_key_filter(self):
-        task = AcquisitionTask(
-            areaId="napoli",
-            areaName="Napoli",
-            provider="stub",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
-        )
-        worker = AcquisitionWorker(task)
-
-        children = worker._split_by_key(task)
-
-        assert all(len(c.filters) == 1 for c in children)
-        filter_keys = []
-        for c in children:
-            filter_keys.append(next(iter(c.filters)))
-        assert "amenity" in filter_keys
-        assert "leisure" in filter_keys
-
-    def test_child_tasks_inherit_bbox_and_area(self):
-        task = AcquisitionTask(
-            areaId="napoli",
-            areaName="Napoli",
-            provider="stub",
-            bbox=BoundingBox(west=1, south=2, east=3, north=4),
-            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
-        )
-        worker = AcquisitionWorker(task)
-
-        children = worker._split_by_key(task)
-
-        assert all(c.bbox == task.bbox for c in children)
-        assert all(c.areaId == "napoli" for c in children)
-        assert all(c.areaName == "Napoli" for c in children)
 
 
 class TestColorOverride:
@@ -288,57 +236,40 @@ class TestColorOverride:
 
         assert executor.added_layers[0].style["color"] == "#00ff00"
 
-    def test_color_inherited_by_key_split_children(self):
+
+class TestExecuteMultiFilter:
+    def test_multi_filter_adds_one_layer(self):
         task = AcquisitionTask(
             areaId="napoli",
             areaName="Napoli",
             provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={
-                "amenity": AreaStyle(values=["restaurant"]),
-                "leisure": AreaStyle(values=["park"], color="#00ff00"),
-            },
+            filters={"tourism": AreaStyle(values=["museum"]), "historic": AreaStyle(values=["castle"])},
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
 
         worker.execute(executor)
 
-        children = executor.pushed_tasks
-        leisure_task = next(t for t in children if "leisure" in t.filters)
-        assert leisure_task.filters["leisure"].color == "#00ff00"
+        assert len(executor.added_layers) == 1
+        assert executor.pushed_tasks == []
 
-
-class TestExecuteMultiKey:
-    def test_multi_key_filter_pushes_one_task_per_key(self):
+    def test_multi_filter_acquisition_contains_all_keys(self):
         task = AcquisitionTask(
             areaId="napoli",
             areaName="Napoli",
             provider="stub",
             bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
+            filters={"tourism": AreaStyle(values=["museum"]), "historic": AreaStyle(values=["castle"])},
         )
         executor = StubExecutor(make_area())
         worker = make_worker(StubProvider(layer=make_layer()), task=task)
 
         worker.execute(executor)
 
-        assert len(executor.pushed_tasks) == 2
-
-    def test_multi_key_filter_does_not_add_layer(self):
-        task = AcquisitionTask(
-            areaId="napoli",
-            areaName="Napoli",
-            provider="stub",
-            bbox=BoundingBox(west=0, south=0, east=1, north=1),
-            filters={"amenity": AreaStyle(values=["restaurant"]), "leisure": AreaStyle(values=["park"])},
-        )
-        executor = StubExecutor(make_area())
-        worker = make_worker(StubProvider(layer=make_layer()), task=task)
-
-        worker.execute(executor)
-
-        assert executor.added_layers == []
+        acq = executor.added_layers[0].acquisition
+        assert acq is not None
+        assert set(acq["filters"].keys()) == {"tourism", "historic"}
 
 
 class TestSplitTask:

@@ -25,12 +25,6 @@ class AcquisitionWorker(Worker):
             f"filters=[{filter_keys}]"
         )
 
-        if len(task.filters) > 1:
-            area = executor.add_area(task)
-            Logger.info(f"AcquisitionWorker [{task.areaId}] splitting {len(task.filters)} filters into per-key tasks")
-            executor.push_tasks(self._split_by_key(task))
-            return self._result()
-
         area = executor.add_area(task)
         provider = self._provider_factory.create(task.provider)
 
@@ -47,10 +41,10 @@ class AcquisitionWorker(Worker):
             executor.push_tasks(child_tasks)
             return self._result()
 
-        # Single-filter task: set acquisition dict and assign stable layer id.
-        filter_key = next(iter(task.filters))
-        filter_values = sorted(task.filters[filter_key].values)
-        acquisition = {"provider": task.provider, "filter": filter_key, "values": filter_values}
+        filters_dict = {}
+        for key, style in task.filters.items():
+            filters_dict[key] = sorted(style.values)
+        acquisition = {"provider": task.provider, "filters": filters_dict}
         layer.acquisition = acquisition
 
         existing = self._find_existing_layer(area, acquisition)
@@ -62,9 +56,9 @@ class AcquisitionWorker(Worker):
             layer.visible = existing.layer.visible
         else:
             layer.id = self._next_id(area)
-            color = task.filters[filter_key].color
-            if color:
-                layer.style["color"] = color
+            first_style = next(iter(task.filters.values()))
+            if first_style.color:
+                layer.style["color"] = first_style.color
 
         layer.url = f"./layers/{layer.id}.geojson"
 
@@ -93,21 +87,6 @@ class AcquisitionWorker(Worker):
             except (ValueError, TypeError):
                 pass
         return str(max_id + 1)
-
-    def _split_by_key(self, task: AcquisitionTask) -> list[AcquisitionTask]:
-        result: list[AcquisitionTask] = []
-        for key, style in task.filters.items():
-            result.append(
-                AcquisitionTask(
-                    areaId=task.areaId,
-                    areaName=task.areaName,
-                    provider=task.provider,
-                    bbox=task.bbox,
-                    filters={key: style},
-                    depth=task.depth,
-                )
-            )
-        return result
 
     def _split_task(self, task: AcquisitionTask) -> list[AcquisitionTask]:
         bbox = task.bbox

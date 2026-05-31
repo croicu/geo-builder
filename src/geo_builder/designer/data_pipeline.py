@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Callable, NamedTuple
 from urllib.parse import urlparse
 
 import requests as _requests
@@ -23,6 +23,12 @@ def _to_path(url: str) -> str:
     return urlparse(url).path.lstrip("/")
 
 
+class PipelineResult(NamedTuple):
+    data: bytes
+    content_type: str
+    cache_control: str | None  # None = omit header; non-None = use this value
+
+
 class DataPipeline:
     def __init__(self, out_dir: Path, in_dir: Path | None) -> None:
         self._out_dir = out_dir
@@ -33,10 +39,10 @@ class DataPipeline:
         """Store data in L1 memory for the given URL (in-session edits)."""
         self._memory[_to_path(url)] = data
 
-    def handle(self, url: str, complete: Callable[[tuple[bytes, str] | None], None]) -> None:
+    def handle(self, url: str, complete: Callable[[PipelineResult | None], None]) -> None:
         threading.Thread(target=self._run, args=(url, complete), daemon=True).start()
 
-    def _run(self, url: str, complete: Callable[[tuple[bytes, str] | None], None]) -> None:
+    def _run(self, url: str, complete: Callable[[PipelineResult | None], None]) -> None:
         result = None
         try:
             result = self._resolve(url)
@@ -44,32 +50,38 @@ class DataPipeline:
             Logger.warning(f"data pipeline: '{url}': {exc}")
         complete(result)
 
-    def _resolve(self, url: str) -> tuple[bytes, str] | None:
+    def _resolve(self, url: str) -> PipelineResult | None:
         path = _to_path(url)
 
         data = self._memory.get(path)
         if data is not None:
-            return data, _JSON
+            Logger.info(f"data pipeline: memory '{url}'")
+            return PipelineResult(data, _JSON, cache_control="no-store")
 
-        data = _read_file(self._out_dir / path)
+        out_path = self._out_dir / path
+        data = _read_file(out_path)
         if data is not None:
-            return data, _JSON
+            Logger.info(f"data pipeline: out path '{url}', {out_path}")
+            return PipelineResult(data, _JSON, cache_control="no-store")
 
         if self._in_dir is not None:
-            data = _read_file(self._in_dir / path)
+            in_path = self._in_dir / path
+            data = _read_file(in_path)
             if data is not None:
-                return data, _JSON
+                Logger.info(f"data pipeline: in path '{url}', {in_path}")
+                return PipelineResult(data, _JSON, cache_control="no-store")
 
         return _from_network(url)
 
 
-def _from_network(url: str) -> tuple[bytes, str] | None:
+def _from_network(url: str) -> PipelineResult | None:
     try:
         Logger.info(f"data pipeline: network '{url}'")
         resp = _session.get(url, timeout=_TIMEOUT)
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", _JSON).split(";")[0].strip()
-        return resp.content, content_type
+        cache_control = resp.headers.get("Cache-Control")
+        return PipelineResult(resp.content, content_type, cache_control=cache_control)
     except Exception as exc:
         Logger.warning(f"data pipeline: network error '{url}': {exc}")
         return None

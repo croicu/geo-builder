@@ -1,6 +1,6 @@
 # Catalog Head Defaults & Path Mirroring
 
-## Status: Ready to Submit
+## Status: Done
 
 ## Problem Statement
 

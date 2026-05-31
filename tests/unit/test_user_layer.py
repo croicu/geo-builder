@@ -165,7 +165,7 @@ class TestUserLayerPipelinePreservation:
                 url="./layers/1.geojson",
                 visible=True,
                 style={},
-                acquisition={"provider": "overpass", "filter": "amenity", "values": ["cafe"]},
+                acquisition={"provider": "overpass", "filters": {"amenity": ["cafe"]}},
                 geojson=GeoJson(type="FeatureCollection", features=[]),
             )
         )

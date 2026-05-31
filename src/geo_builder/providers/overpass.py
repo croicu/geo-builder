@@ -43,7 +43,7 @@ class OverpassProvider(Provider):
         scale = 1.0
         layer_type = "heatmap"
         layer_name: str | None = None
-        if len(task.filters) == 1:
+        if task.filters:
             area_style = next(iter(task.filters.values()))
             if area_style.scale is not None:
                 scale = area_style.scale

@@ -2,7 +2,8 @@
   "settings": {
     "devTools": false,
     "designUrl": "http://localhost:5173/?design=1",
-    "break": false
+    "break": false,
+    "logLevel": "info"
   },
   "providers": {
     "overpass": {
