@@ -167,6 +167,7 @@ class UserPointData:
     timestamp: str
     pressure: float
     name: str | None = None
+    properties: dict | None = None  # optional POI metadata; None when no nearby POI
 
 
 @dataclass
@@ -186,3 +187,22 @@ class AddUserPointOutput:
 
 
 ADD_USER_POINT_ID = "__geo_add_user_point__"
+
+
+# --- RemoveUserPoint ---
+
+
+@dataclass
+class RemoveUserPointInput:
+    areaId: str
+    lon: float
+    lat: float
+
+
+@dataclass
+class RemoveUserPointOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+REMOVE_USER_POINT_ID = "__geo_remove_user_point__"

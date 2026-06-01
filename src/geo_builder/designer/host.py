@@ -192,6 +192,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         GET_USER_POINTS_ID,
         OK,
         PUT_AREA_JSON_ID,
+        REMOVE_USER_POINT_ID,
         SET_AREA_BBOX_ID,
         AddAreaInput,
         AddAreaOutput,
@@ -205,6 +206,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         GetUserPointsOutput,
         PutAreaJsonInput,
         PutAreaJsonOutput,
+        RemoveUserPointInput,
+        RemoveUserPointOutput,
         SetAreaBboxInput,
         SetAreaBboxOutput,
     )
@@ -583,14 +586,18 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         else:
             geojson = {"type": "FeatureCollection", "features": []}
 
+        props: dict = {
+            "timestamp": data.point.timestamp,
+            "pressure": data.point.pressure,
+            "name": data.point.name,
+        }
+        if data.point.properties is not None:
+            for k, v in data.point.properties.items():
+                props[k] = v
         feature: dict = {
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [data.point.lon, data.point.lat]},
-            "properties": {
-                "timestamp": data.point.timestamp,
-                "pressure": data.point.pressure,
-                "name": data.point.name,
-            },
+            "properties": props,
         }
         geojson["features"].append(feature)
 
@@ -602,20 +609,52 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             return MethodResult(AddUserPointOutput(error=ERR_IO, errorDescription=str(exc)))
 
         Logger.info(f"AddUserPoint: added point to area '{data.areaId}'. Total: {len(geojson['features'])}.")
-        area_summary = AreaSummary(
-            id=area.id,
-            name=area.name,
-            bbox=area.bbox,
-            minRadiusPx=area.minRadiusPx,
-            maxRadiusPx=area.maxRadiusPx,
-            liveMapRadiusPx=area.liveMapRadiusPx,
-            manifestUrl=area.manifestUrl,
-        )
-        Logger.info(f"AreaChanged: firing for area '{data.areaId}'.")
-        api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
         return MethodResult(AddUserPointOutput(error=OK))
 
     api.register(ADD_USER_POINT_ID, on_add_user_point)
+
+    api.define_method(REMOVE_USER_POINT_ID, RemoveUserPointInput, RemoveUserPointOutput)
+
+    def on_remove_user_point(data: RemoveUserPointInput) -> RemoveUserPointOutput:
+        area = None
+        for a in catalog.areas:
+            if a.id == data.areaId:
+                area = a
+                break
+
+        if area is None:
+            return MethodResult(RemoveUserPointOutput(error=ERR_AREA_NOT_FOUND, errorDescription=f"Area '{data.areaId}' not found"))
+
+        if in_dir is None:
+            return MethodResult(RemoveUserPointOutput(error=ERR_IO, errorDescription="No input directory configured"))
+
+        user_path = in_dir / "areas" / data.areaId / "user.geojson"
+        if not user_path.exists():
+            return MethodResult(RemoveUserPointOutput(error=OK))
+
+        try:
+            with open(user_path, "r", encoding="utf-8") as f:
+                geojson = json.load(f)
+        except OSError as exc:
+            return MethodResult(RemoveUserPointOutput(error=ERR_IO, errorDescription=str(exc)))
+
+        target = [data.lon, data.lat]
+        kept = []
+        for feat in geojson.get("features", []):
+            if feat.get("geometry", {}).get("coordinates") != target:
+                kept.append(feat)
+        geojson["features"] = kept
+
+        try:
+            with open(user_path, "w", encoding="utf-8") as f:
+                json.dump(geojson, f, indent=2)
+        except OSError as exc:
+            return MethodResult(RemoveUserPointOutput(error=ERR_IO, errorDescription=str(exc)))
+
+        Logger.info(f"RemoveUserPoint: removed point from area '{data.areaId}'. Remaining: {len(kept)}.")
+        return MethodResult(RemoveUserPointOutput(error=OK))
+
+    api.register(REMOVE_USER_POINT_ID, on_remove_user_point)
 
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
