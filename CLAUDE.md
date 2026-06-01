@@ -111,7 +111,7 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **File**: [Default Layers](tasks/default_layers.md)
 - **Status**: Brainstorm
 - **GitHub Issue**: N/A
-- **Key Context**: Rationalize the default layers created when a new area is being created (template.json)
+- **Key Context**: Rationalize the default layers created when a new area is being created (template.json). Features reference is located at: https://wiki.openstreetmap.org/wiki/Category:Features
 
 ## Completed Tasks
 

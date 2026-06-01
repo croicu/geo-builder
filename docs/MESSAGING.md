@@ -229,9 +229,20 @@ interface UserPointData {
 }
 interface AddUserPointInput {
   areaId: string;
-  point: UserPointData;
+  point: UserPointData;  // UserPointData.properties carries optional POI metadata
 }
 interface AddUserPointOutput {
+  error: number;
+  errorDescription: string | null;
+}
+
+// __geo_remove_user_point__ (method: JS → Python)
+interface RemoveUserPointInput {
+  areaId: string;
+  lon: number;
+  lat: number;
+}
+interface RemoveUserPointOutput {
   error: number;
   errorDescription: string | null;
 }
@@ -731,7 +742,8 @@ gateway.invoke(AddUserPoint, {
     lon: -122.12,
     timestamp: new Date().toISOString(),
     pressure: event.pressure ?? 0.5,
-    name: null,
+    name: "Bar Gaetano",           // null when no nearby POI
+    properties: { cuisine: "italian", address: "Via Roma 42" },  // omit when no nearby POI
   }
 }, ({ error, errorDescription }) => {
   if (error !== OK) {
@@ -751,6 +763,7 @@ class UserPointData:
     timestamp: str
     pressure: float
     name: str | None
+    properties: dict | None  # optional POI metadata copied at add-time; None when no POI matched
 
 @dataclass
 class AddUserPointInput:
@@ -774,5 +787,51 @@ class AddUserPointOutput:
 **Notes:**
 - `pressure` is 0.0–1.0. The builder stores it verbatim; all rendering decisions stay in the browser.
 - `name` is optional — pass `null` for an unnamed point.
+- `properties` carries the full POI property bag (name, amenity, cuisine, address, phone, website, opening_hours, etc.) when the point was added near a known POI. Internal flags (`weight`, `hasDetails`) are stripped before sending. Omit the field entirely when there is no nearby POI.
 - Points are persisted in `{in_dir}/areas/{areaId}/user.geojson` — a file the browser never fetches directly.
-- `AreaChanged` is fired after the file is written. The browser should call `GetUserPoints` to refresh rather than relying on the point data from the `AddUserPoint` response.
+- The builder writes the file and does **not** fire `AreaChanged` — the browser renders the marker immediately on the client side and needs no refresh.
+
+---
+
+## RemoveUserPoint (`__geo_remove_user_point__`)
+
+Removes a user-placed point from the area's `__user__` layer by exact coordinate match.
+
+**TypeScript:**
+```typescript
+const RemoveUserPoint: MethodDef<RemoveUserPointInput, RemoveUserPointOutput> = { id: "__geo_remove_user_point__" };
+
+gateway.invoke(RemoveUserPoint, { areaId: "redmond", lon: -122.12, lat: 47.67 }, ({ error, errorDescription }) => {
+  if (error !== OK) {
+    console.error(errorDescription);
+    return;
+  }
+  // point removed; wait for AreaChanged then call GetUserPoints
+});
+```
+
+**Python:** registered by the designer host.
+```python
+@dataclass
+class RemoveUserPointInput:
+    areaId: str
+    lon: float
+    lat: float
+
+@dataclass
+class RemoveUserPointOutput:
+    error: int
+    errorDescription: str | None
+```
+
+**Error codes:**
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Point removed successfully (or was already absent) |
+| `1` | `ERR_AREA_NOT_FOUND` | No area with the given `areaId` |
+| `4` | `ERR_IO` | I/O error writing to disk |
+
+**Notes:**
+- Deletion is matched by exact `(lon, lat)` float equality — the same values that were stored by `AddUserPoint`.
+- The builder writes the updated file to disk but does **not** fire `AreaChanged` — the browser removes the marker immediately on the client side and needs no refresh.

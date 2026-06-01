@@ -6,9 +6,12 @@ from pathlib import Path
 from geo_builder.api import (
     ADD_USER_POINT_ID,
     GET_USER_POINTS_ID,
+    REMOVE_USER_POINT_ID,
     AddUserPointInput,
     AddUserPointOutput,
     GetUserPointsOutput,
+    RemoveUserPointInput,
+    RemoveUserPointOutput,
     UserPointData,
 )
 from geo_builder.builder import Builder
@@ -86,6 +89,7 @@ class TestUserLayerApi:
     def test_ids(self):
         assert GET_USER_POINTS_ID == "__geo_get_user_points__"
         assert ADD_USER_POINT_ID == "__geo_add_user_point__"
+        assert REMOVE_USER_POINT_ID == "__geo_remove_user_point__"
 
     def test_get_user_points_output_defaults(self):
         out = GetUserPointsOutput(error=0)
@@ -101,10 +105,26 @@ class TestUserLayerApi:
     def test_user_point_data_name_optional(self):
         pt = UserPointData(lat=47.0, lon=-122.0, timestamp="2026-05-29T00:00:00Z", pressure=0.5)
         assert pt.name is None
+        assert pt.properties is None
 
     def test_user_point_data_with_name(self):
         pt = UserPointData(lat=47.0, lon=-122.0, timestamp="2026-05-29T00:00:00Z", pressure=0.5, name="Cafe")
         assert pt.name == "Cafe"
+
+    def test_user_point_data_with_properties(self):
+        pt = UserPointData(lat=47.0, lon=-122.0, timestamp="2026-05-29T00:00:00Z", pressure=0.5, properties={"cuisine": "italian"})
+        assert pt.properties == {"cuisine": "italian"}
+
+    def test_remove_user_point_output_defaults(self):
+        out = RemoveUserPointOutput(error=0)
+        assert out.error == 0
+        assert out.errorDescription is None
+
+    def test_remove_user_point_input_shape(self):
+        inp = RemoveUserPointInput(areaId="rome", lon=12.5, lat=41.9)
+        assert inp.areaId == "rome"
+        assert inp.lon == 12.5
+        assert inp.lat == 41.9
 
     def test_add_user_point_input_shape(self):
         inp = AddUserPointInput(
@@ -212,6 +232,78 @@ class TestUserPointFileIo:
         assert loaded["features"][0]["properties"]["pressure"] == 0.6
         assert loaded["features"][0]["geometry"]["coordinates"] == [-122.12, 47.67]
 
+    def test_properties_merged_into_feature(self, tmp_path: Path):
+        user_path = tmp_path / "areas" / "rome" / "user.geojson"
+        user_path.parent.mkdir(parents=True)
+        geojson: dict = {"type": "FeatureCollection", "features": []}
+        props = {"timestamp": "2026-05-31T00:00:00Z", "pressure": 0.7, "name": "Bar Gaetano", "cuisine": "italian", "address": "Via Roma 1"}
+        feature = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [12.5, 41.9]}, "properties": props}
+        geojson["features"].append(feature)
+        with open(user_path, "w", encoding="utf-8") as f:
+            json.dump(geojson, f)
+        with open(user_path, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        p = loaded["features"][0]["properties"]
+        assert p["cuisine"] == "italian"
+        assert p["address"] == "Via Roma 1"
+        assert p["timestamp"] == "2026-05-31T00:00:00Z"
+
+    def test_remove_feature_by_coordinates(self, tmp_path: Path):
+        user_path = tmp_path / "areas" / "rome" / "user.geojson"
+        user_path.parent.mkdir(parents=True)
+        existing: dict = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [12.48, 41.90]},
+                    "properties": {"timestamp": "T1", "pressure": 0.3, "name": None},
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [12.50, 41.92]},
+                    "properties": {"timestamp": "T2", "pressure": 0.8, "name": "Colosseum"},
+                },
+            ],
+        }
+        with open(user_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f)
+        with open(user_path, "r", encoding="utf-8") as f:
+            geojson = json.load(f)
+        target = [12.48, 41.90]
+        geojson["features"] = [f for f in geojson["features"] if f["geometry"]["coordinates"] != target]
+        with open(user_path, "w", encoding="utf-8") as f:
+            json.dump(geojson, f)
+        with open(user_path, "r", encoding="utf-8") as f:
+            result = json.load(f)
+        assert len(result["features"]) == 1
+        assert result["features"][0]["properties"]["name"] == "Colosseum"
+
+    def test_remove_absent_point_is_noop(self, tmp_path: Path):
+        user_path = tmp_path / "areas" / "rome" / "user.geojson"
+        user_path.parent.mkdir(parents=True)
+        existing: dict = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [12.48, 41.90]},
+                    "properties": {"timestamp": "T1", "pressure": 0.3, "name": None},
+                },
+            ],
+        }
+        with open(user_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f)
+        with open(user_path, "r", encoding="utf-8") as f:
+            geojson = json.load(f)
+        target = [99.0, 99.0]
+        geojson["features"] = [f for f in geojson["features"] if f["geometry"]["coordinates"] != target]
+        with open(user_path, "w", encoding="utf-8") as f:
+            json.dump(geojson, f)
+        with open(user_path, "r", encoding="utf-8") as f:
+            result = json.load(f)
+        assert len(result["features"]) == 1
+
     def test_append_to_existing_file(self, tmp_path: Path):
         user_path = tmp_path / "areas" / "rome" / "user.geojson"
         user_path.parent.mkdir(parents=True)
@@ -268,6 +360,17 @@ class TestAddUserPointInputCoercion:
         assert inp.point.lon == 12.5
         assert inp.point.pressure == 0.6
         assert inp.point.name is None
+        assert inp.point.properties is None
+
+    def test_point_dict_with_properties_coerced(self):
+        from geo_builder.api import AddUserPointInput, UserPointData
+
+        inp = AddUserPointInput(
+            areaId="rome",
+            point={"lat": 41.9, "lon": 12.5, "timestamp": "2026-05-31T00:00:00Z", "pressure": 0.6, "properties": {"cuisine": "italian"}},  # type: ignore[arg-type]
+        )
+        assert isinstance(inp.point, UserPointData)
+        assert inp.point.properties == {"cuisine": "italian"}
 
     def test_point_already_user_point_data_unchanged(self):
         from geo_builder.api import AddUserPointInput, UserPointData
