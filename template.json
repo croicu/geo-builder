@@ -21,7 +21,7 @@
       "type": "heatmap",
       "visible": true,
       "style": {
-        "opacity": 0.7,
+        "opacity": 0.5,
         "radiusScale": 1.5,
         "color": "#C41C3B"
       },
@@ -37,9 +37,9 @@
       "type": "heatmap",
       "visible": true,
       "style": {
-        "opacity": 0.7,
+        "opacity": 0.5,
         "radiusScale": 3.0,
-        "color": "#DDBD55"
+        "color": "#FBC02D"
       },
       "acquisition": {
         "provider": "overpass",
@@ -53,7 +53,7 @@
       "type": "heatmap",
       "visible": true,
       "style": {
-        "opacity": 0.7,
+        "opacity": 0.5,
         "radiusScale": 3.0,
         "color": "#6A0DAD"
       },
@@ -82,7 +82,7 @@
     },
     {
       "id": "__poi__",
-      "name": "POI",
+      "name": "Points of Interest",
       "type": "__poi__",
       "visible": true,
       "style": {

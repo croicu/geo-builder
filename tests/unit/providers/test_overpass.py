@@ -206,6 +206,105 @@ class TestToGeoJson:
 
         assert "hasDetails" not in geojson.features[0].properties
 
+    def test_wikidata_stored_and_triggers_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 99,
+                    "lat": 40.85,
+                    "lon": 14.27,
+                    "tags": {
+                        "amenity": "monument",
+                        "name": "Colosseum",
+                        "wikidata": "Q10285",
+                    },
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert props["hasDetails"] is True
+        assert props["wikidata"] == "Q10285"
+
+    def test_wikidata_alone_qualifies_for_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 7,
+                    "lat": 41.9,
+                    "lon": 12.5,
+                    "tags": {"wikidata": "Q1234"},
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert props["hasDetails"] is True
+        assert props["wikidata"] == "Q1234"
+
+    def test_stars_stored_and_triggers_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 55,
+                    "lat": 48.86,
+                    "lon": 2.35,
+                    "tags": {"tourism": "hotel", "name": "Grand Hotel", "stars": "4"},
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert props["hasDetails"] is True
+        assert props["stars"] == "4"
+
+    def test_wikipedia_stored_and_triggers_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 88,
+                    "lat": 41.9,
+                    "lon": 12.5,
+                    "tags": {"wikipedia": "en:Colosseum"},
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert props["hasDetails"] is True
+        assert props["wikipedia"] == "en:Colosseum"
+
+    def test_outdoor_seating_stored_and_triggers_has_details(self):
+        payload = {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 77,
+                    "lat": 48.86,
+                    "lon": 2.35,
+                    "tags": {"amenity": "cafe", "outdoor_seating": "yes"},
+                }
+            ]
+        }
+
+        geojson = self.provider._to_geojson(payload)
+
+        props = geojson.features[0].properties
+        assert props["hasDetails"] is True
+        assert props["outdoor_seating"] == "yes"
+
     def test_empty_elements_returns_empty_collection(self):
         geojson = self.provider._to_geojson({"elements": []})
 
