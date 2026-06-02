@@ -177,7 +177,11 @@ out {out_mode};
             address = self._build_address(tags)
             website = tags.get("contact:website") or tags.get("website")
             opening_hours = tags.get("opening_hours")
-            has_details = bool(cuisine or address or website or opening_hours)
+            wikidata = tags.get("wikidata")
+            wikipedia = tags.get("wikipedia")
+            stars = tags.get("stars")
+            outdoor_seating = tags.get("outdoor_seating")
+            has_details = bool(cuisine or address or website or opening_hours or wikidata or wikipedia or stars or outdoor_seating)
 
             properties: dict = {"weight": 1.0}
 
@@ -209,6 +213,14 @@ out {out_mode};
                     properties["website"] = website
                 if opening_hours:
                     properties["opening_hours"] = opening_hours
+                if wikidata:
+                    properties["wikidata"] = wikidata
+                if wikipedia:
+                    properties["wikipedia"] = wikipedia
+                if stars:
+                    properties["stars"] = stars
+                if outdoor_seating:
+                    properties["outdoor_seating"] = outdoor_seating
 
             features.append(
                 Feature(

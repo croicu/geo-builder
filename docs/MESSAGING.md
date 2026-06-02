@@ -360,6 +360,8 @@ The `catalogUrl` is a relative URL resolved against the head file's location. Th
 | `style.color` | `string` | Primary fill/gradient color (e.g. `"#ff0000"`) |
 | `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
 | `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
+| `style.enhancedColor` | `string` | `__poi__` only — border color for enriched POI markers (those with `wikipedia`, `wikidata`, `stars`, or `outdoor_seating="yes"`); defaults to `"#003380"` |
+| `style.outdoorColor` | `string` | `__poi__` only — border color for POI markers with `outdoor_seating="yes"`; overrides `enhancedColor` for those markers; defaults to `"#f5c518"` |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
 | `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value; absent = always shown |
 
@@ -382,18 +384,23 @@ A reserved builtin virtual layer with `url: null`. The browser derives its conte
 
 #### Enriched feature properties (`hasDetails: true`)
 
-Features in any heatmap layer may carry POI detail fields. All detail fields are optional except `hasDetails`.
+Features in any heatmap layer may carry POI detail fields. All detail fields are optional and present only when the OSM element carries the corresponding tag. Any single one of them causes `hasDetails: true` to be set.
 
 | Property | Type | Description |
 |---|---|---|
-| `weight` | `number` | Heat contribution (default `1.0`) |
-| `hasDetails` | `boolean` | `true` = tappable POI marker in the `poi` layer |
-| `id` | `number` | OSM node ID |
+| `weight` | `number` | Heat contribution (always present, default `1.0`) |
+| `hasDetails` | `boolean` | `true` = tappable POI marker in the `__poi__` layer |
+| `id` | `number` | OSM element ID |
 | `name` | `string` | Venue name |
-| `amenity` | `string` | OSM amenity tag (e.g. `"restaurant"`, `"cafe"`) |
+| `amenity` | `string` | OSM amenity tag value (e.g. `"restaurant"`, `"cafe"`) |
 | `cuisine` | `string` | Semicolon-separated cuisine tags (e.g. `"italian;pizza"`) |
-| `opening_hours` | `string` | OSM opening hours string |
-| `website` | `string` | Venue website URL |
+| `address` | `string` | Constructed from `addr:street`, `addr:housenumber`, `addr:city` (or `addr:full`) |
+| `website` | `string` | Venue website URL (`contact:website` preferred over `website`) |
+| `opening_hours` | `string` | OSM opening hours string (e.g. `"Mo-Su 12:00-23:00"`) |
+| `wikidata` | `string` | Wikidata entity ID (e.g. `"Q12345"`) — use to fetch descriptions, images, and Wikipedia links |
+| `wikipedia` | `string` | Wikipedia article in `lang:Title` format (e.g. `"en:Colosseum"`) |
+| `stars` | `string` | Star rating from OSM (e.g. `"4"`) — common on hotels |
+| `outdoor_seating` | `string` | OSM `outdoor_seating` value (e.g. `"yes"`, `"no"`) |
 
 ### `.geojson`
 
@@ -787,7 +794,7 @@ class AddUserPointOutput:
 **Notes:**
 - `pressure` is 0.0–1.0. The builder stores it verbatim; all rendering decisions stay in the browser.
 - `name` is optional — pass `null` for an unnamed point.
-- `properties` carries the full POI property bag (name, amenity, cuisine, address, phone, website, opening_hours, etc.) when the point was added near a known POI. Internal flags (`weight`, `hasDetails`) are stripped before sending. Omit the field entirely when there is no nearby POI.
+- `properties` carries the full POI property bag (name, amenity, cuisine, address, website, opening_hours, wikidata, wikipedia, stars, outdoor_seating, etc.) when the point was added near a known POI. Internal flags (`weight`, `hasDetails`) are stripped before sending. Omit the field entirely when there is no nearby POI.
 - Points are persisted in `{in_dir}/areas/{areaId}/user.geojson` — a file the browser never fetches directly.
 - The builder writes the file and does **not** fire `AreaChanged` — the browser renders the marker immediately on the client side and needs no refresh.
 

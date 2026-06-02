@@ -172,10 +172,32 @@ Enriched features (those with detail data baked in at build time) carry addition
     "cuisine": "italian;pizza",
     "address": "Via Roma 42, Naples",
     "website": "https://example.com",
-    "opening_hours": "Mo-Su 12:00-23:00"
+    "opening_hours": "Mo-Su 12:00-23:00",
+    "wikidata": "Q12345",
+    "wikipedia": "en:Bar_Gaetano",
+    "stars": "4",
+    "outdoor_seating": "yes"
   },
   "geometry": { "type": "Point", "coordinates": [14.267789, 40.853179] }
 }
 ```
 
-Plain features carry only `weight`. The browser scans all loaded features for `hasDetails: true` to build the `__poi__` layer at runtime.
+All detail properties are optional and present only when the OSM element carries the corresponding tag. Any single one of them (or any combination) causes `hasDetails: true` to be set. Plain features carry only `weight`.
+
+| Property | Type | Description |
+|---|---|---|
+| `weight` | `number` | Heat contribution (always present, default `1.0`) |
+| `hasDetails` | `boolean` | `true` = feature is tappable as a POI marker |
+| `id` | `number` | OSM element ID |
+| `name` | `string` | Venue name |
+| `amenity` | `string` | OSM amenity tag value (e.g. `"restaurant"`) |
+| `cuisine` | `string` | Semicolon-separated cuisine tags (e.g. `"italian;pizza"`) |
+| `address` | `string` | Constructed from `addr:street`, `addr:housenumber`, `addr:city` (or `addr:full`) |
+| `website` | `string` | Venue website URL (`contact:website` preferred over `website`) |
+| `opening_hours` | `string` | OSM opening hours string (e.g. `"Mo-Su 12:00-23:00"`) |
+| `wikidata` | `string` | Wikidata entity ID (e.g. `"Q12345"`) — use to fetch descriptions, images, and Wikipedia links |
+| `wikipedia` | `string` | Wikipedia article in `lang:Title` format (e.g. `"en:Colosseum"`) |
+| `stars` | `string` | Star rating from OSM (e.g. `"4"`) — common on hotels |
+| `outdoor_seating` | `string` | OSM `outdoor_seating` value (e.g. `"yes"`, `"no"`) |
+
+The browser scans all loaded features for `hasDetails: true` to build the `__poi__` layer at runtime.
