@@ -7,10 +7,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .colors import layer_color
-from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task, VoidTask
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import GeoError
-from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle
+from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle, VoidStyle
 from .workers.factory import WorkerFactory
 
 
@@ -72,7 +72,7 @@ class Builder:
         for area in self.catalog.areas:
             has_data_layers = False
             for geo_layer in area.layers:
-                if geo_layer.layer.type not in ("__poi__",) and geo_layer.layer.geojson is not None:
+                if geo_layer.layer.type not in ("__poi__", "__void__") and geo_layer.layer.geojson is not None:
                     has_data_layers = True
                     break
             if not has_data_layers:
@@ -108,8 +108,11 @@ class Builder:
         if result:
             result.append(AggregationTask())
             result.append(DedupingTask())
-            poi_style = self._poi_style_from_template(Settings.current())
+            settings = Settings.current()
+            poi_style = self._poi_style_from_template(settings)
             result.append(PoiTask(style=poi_style))
+            void_style = self._void_style_from_template(settings)
+            result.append(VoidTask(style=void_style))
         return result
 
     def _poi_style_from_template(self, settings) -> PoiStyle:
@@ -126,6 +129,20 @@ class Builder:
                     radius=float(s["radius"]) if s.get("radius") is not None else None,
                 )
         return PoiStyle()
+
+    def _void_style_from_template(self, settings) -> VoidStyle:
+        template = settings.template
+        if template is None:
+            return VoidStyle()
+        for tlayer in template.get("layers", []):
+            if tlayer.get("id") == "__void__":
+                s = tlayer.get("style", {})
+                return VoidStyle(
+                    name=str(tlayer.get("name", "Mundane")),
+                    color=str(s["color"]) if s.get("color") is not None else "#1f1f1f",
+                    opacity=float(s.get("opacity", 0.9)),
+                )
+        return VoidStyle()
 
     def push_task(self, task: JsonObject) -> None:
         self._stack.append(task)

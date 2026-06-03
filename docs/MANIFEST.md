@@ -106,6 +106,32 @@ Virtual layer — `url` is absent. The browser derives POI markers at runtime fr
 
 ---
 
+### Void layer (`type: "__void__"`, `id: "__void__"`)
+
+Virtual layer — `url` is absent. The browser populates it at runtime with a density grid derived from loaded feature data. No builder content; pure client-side computation.
+
+```json
+{
+  "id": "__void__",
+  "name": "Mundane",
+  "type": "__void__",
+  "visible": false,
+  "style": {
+    "color": "#000000",
+    "opacity": 0.9
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `color` | `string` | `"#1f1f1f"` | Grid cell color. |
+| `opacity` | `number` | `0.9` | Grid opacity, 0–1. |
+
+`visible` is always `false` as written by the builder — the browser decides when to show the layer based on its own runtime state.
+
+---
+
 ### User layer (`type: "__user__"`, `id: "__user__"`)
 
 Virtual layer — `url` is absent. Points are loaded via the `GetUserPoints` API, not HTTP. Stored in `{in_dir}/areas/{areaId}/user.geojson`.

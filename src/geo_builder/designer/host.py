@@ -105,6 +105,56 @@ def _inject_missing_user_layers(catalog: GeoCatalog, tmpl: dict, in_dir: Path | 
                     Logger.warning(f"_inject_missing_user_layers: failed to save manifest for area '{area.id}': {exc}")
 
 
+def _build_void_stub(tmpl: dict):
+    from ..entities import GeoLayer
+    from ..protocols import Layer, VoidStyle
+
+    void_style = VoidStyle()
+    for tlayer in tmpl.get("layers", []):
+        if tlayer.get("id") == "__void__":
+            s = tlayer.get("style", {})
+            void_style = VoidStyle(
+                name=str(tlayer.get("name", "Mundane")),
+                color=str(s.get("color", "#1f1f1f")),
+                opacity=float(s.get("opacity", 0.9)),
+            )
+            break
+    return GeoLayer(
+        Layer(
+            id="__void__",
+            name=void_style.name,
+            type="__void__",
+            visible=False,
+            style={
+                "opacity": void_style.opacity,
+                "color": void_style.color,
+            },
+        )
+    )
+
+
+def _inject_missing_void_layers(catalog: GeoCatalog, tmpl: dict, in_dir: Path | None) -> None:
+    """Ensure every area in the catalog has a __void__ layer stub.
+
+    Injects the stub into memory and, when in_dir is provided, saves the area's
+    manifest so subsequent loads include the layer.
+    """
+    for area in catalog.areas:
+        has_void = False
+        for gl in area.layers:
+            if gl.layer.id == "__void__":
+                has_void = True
+                break
+        if not has_void:
+            area.layers.append(_build_void_stub(tmpl))
+            Logger.info(f"_inject_missing_void_layers: added __void__ stub to area '{area.id}'.")
+            if in_dir is not None:
+                try:
+                    area.save(in_dir)
+                except OSError as exc:
+                    Logger.warning(f"_inject_missing_void_layers: failed to save manifest for area '{area.id}': {exc}")
+
+
 _core = None
 _form = None
 api: Gateway | None = None
@@ -212,11 +262,11 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SetAreaBboxOutput,
     )
     from ..builder import Builder
-    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, VoidTask
     from ..entities import GeoArea
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
-    from ..protocols import AreaStyle, PoiStyle
+    from ..protocols import AreaStyle, PoiStyle, VoidStyle
     from ..settings import Settings
 
     api.define_event(AREA_CHANGED_ID, AreaChangedData)
@@ -226,7 +276,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         for a in fresh_catalog.areas:
             if a.id == area_id:
                 for geo_layer in a.layers:
-                    if geo_layer.layer.type not in ("__poi__", "__user__"):
+                    if geo_layer.layer.type not in ("__poi__", "__user__", "__void__"):
                         geo_layer.layer.geojson = None
                 break
 
@@ -275,6 +325,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     settings_for_inject = Settings.current()
     tmpl_for_inject = settings_for_inject.template or {}
     _inject_missing_user_layers(catalog, tmpl_for_inject, in_dir)
+    _inject_missing_void_layers(catalog, tmpl_for_inject, in_dir)
 
     for area in catalog.areas:
         area.subscribe_changed(on_area_changed)
@@ -373,6 +424,18 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 )
                 break
         tasks.append(PoiTask(style=poi_style))
+
+        void_style = VoidStyle()
+        for tlayer in template.get("layers", []):
+            if tlayer.get("id") == "__void__":
+                s = tlayer.get("style", {})
+                void_style = VoidStyle(
+                    name=str(tlayer.get("name", "Mundane")),
+                    color=str(s["color"]) if s.get("color") is not None else "#1f1f1f",
+                    opacity=float(s.get("opacity", 0.9)),
+                )
+                break
+        tasks.append(VoidTask(style=void_style))
 
         if in_dir is not None:
             try:

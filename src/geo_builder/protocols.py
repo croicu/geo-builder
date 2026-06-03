@@ -37,6 +37,13 @@ class UserStyle:
 
 
 @dataclass
+class VoidStyle:
+    name: str = "Mundane"
+    color: str = "#1f1f1f"
+    opacity: float = 0.9
+
+
+@dataclass
 class Area:
     id: str
     name: str
