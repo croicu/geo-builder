@@ -93,16 +93,6 @@
       }
     },
     {
-      "id": "__void__",
-      "name": "Mundane",
-      "type": "__void__",
-      "visible": false,
-      "style": {
-        "opacity": 0.3,
-        "color": "#3f3f3f"
-      }
-    },
-    {
       "id": "__user__",
       "name": "My Trip",
       "type": "__user__",
@@ -112,6 +102,16 @@
         "color": "#5f5f5f",
         "radius": 40,
         "minZoom": 12
+      }
+    },
+    {
+      "id": "__void__",
+      "name": "Mundane",
+      "type": "__void__",
+      "visible": false,
+      "style": {
+        "opacity": 0.3,
+        "color": "#3f3f3f"
       }
     }
   ],
