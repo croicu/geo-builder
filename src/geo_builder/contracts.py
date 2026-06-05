@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .entities import GeoArea
-from .protocols import AreaStyle, Layer, PoiStyle
+from .protocols import AreaStyle, Layer, PoiStyle, VoidStyle
 
 
 @dataclass
@@ -66,6 +66,14 @@ class PoiTask(Task):
     def __init__(self, style: PoiStyle | None = None) -> None:
         super().__init__("poi")
         self.style = style if style is not None else PoiStyle()
+
+
+class VoidTask(Task):
+    style: VoidStyle
+
+    def __init__(self, style: VoidStyle | None = None) -> None:
+        super().__init__("void")
+        self.style = style if style is not None else VoidStyle()
 
 
 class Map(Protocol):

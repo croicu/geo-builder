@@ -347,11 +347,11 @@ The `catalogUrl` is a relative URL resolved against the head file's location. Th
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"` or `"__user__"` for builtin virtual layers |
-| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__"` | Render mode |
-| `url` | `string \| null` | GeoJSON URL for data layers; `null` for gateway-backed virtual layers (`__poi__`, `__user__`) |
+| `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"`, `"__user__"`, or `"__void__"` for builtin virtual layers |
+| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__" \| "__void__"` | Render mode |
+| `url` | `string \| null` | GeoJSON URL for data layers; `null` for virtual layers (`__poi__`, `__user__`, `__void__`) |
 | `visible` | `boolean` | Default visibility |
-| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`, `__user__`). Present on data layers |
+| `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`, `__user__`, `__void__`). Present on data layers |
 | `acquisition.provider` | `string` | Provider name (e.g. `"overpass"`) |
 | `acquisition.filter` | `string` | OSM tag key (e.g. `"amenity"`) |
 | `acquisition.values` | `string[]` | Accepted tag values (e.g. `["restaurant", "cafe"]`) |
@@ -379,6 +379,21 @@ A reserved builtin virtual layer with `url: null`. The browser derives its conte
   "url": null,
   "visible": true,
   "style": { "opacity": 0.7, "color": "#7b241c", "strokeWidth": 0 }
+}
+```
+
+#### `__void__` layer
+
+A reserved builtin virtual layer with `url: null`. The browser populates it at runtime with a density grid derived from loaded feature data — no builder content, pure client-side computation. Always present in the manifest; `visible` is always `false` on write (the builder never has data to show).
+
+```jsonc
+{
+  "id": "__void__",
+  "name": "Mundane",
+  "type": "__void__",
+  "url": null,
+  "visible": false,
+  "style": { "opacity": 0.9, "color": "#000000" }
 }
 ```
 

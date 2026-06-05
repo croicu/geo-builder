@@ -17,7 +17,7 @@
       }
     },
     {
-      "name": "Restaurants/Food",
+      "name": "Restaurants, Food",
       "type": "heatmap",
       "visible": true,
       "style": {
@@ -33,7 +33,7 @@
       }
     },
     {
-      "name": "Attractions/Tourism",
+      "name": "Attractions, Tourism",
       "type": "heatmap",
       "visible": true,
       "style": {
@@ -49,7 +49,7 @@
       }
     },
     {
-      "name": "Culture/Entertainment",
+      "name": "Culture, Entertainment",
       "type": "heatmap",
       "visible": true,
       "style": {
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "Shops/Services",
+      "name": "Shops, Services",
       "type": "heatmap",
       "visible": true,
       "style": {
@@ -93,6 +93,16 @@
       }
     },
     {
+      "id": "__search__",
+      "name": "Search Results",
+      "type": "__search__",
+      "visible": false,
+      "style": {
+        "opacity": 0.3,
+        "color": "#00007f"
+      }
+    },
+    {
       "id": "__user__",
       "name": "My Trip",
       "type": "__user__",
@@ -102,6 +112,16 @@
         "color": "#5f5f5f",
         "radius": 40,
         "minZoom": 12
+      }
+    },
+    {
+      "id": "__void__",
+      "name": "Mundane",
+      "type": "__void__",
+      "visible": false,
+      "style": {
+        "opacity": 0.3,
+        "color": "#3f3f3f"
       }
     }
   ],
