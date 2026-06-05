@@ -93,6 +93,16 @@
       }
     },
     {
+      "id": "__search__",
+      "name": "Search Results",
+      "type": "__search__",
+      "visible": false,
+      "style": {
+        "opacity": 0.3,
+        "color": "#00007f"
+      }
+    },
+    {
       "id": "__user__",
       "name": "My Trip",
       "type": "__user__",
