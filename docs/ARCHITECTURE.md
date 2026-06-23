@@ -244,3 +244,13 @@ Thread-6        — dispatcher; owned by Api.run(), the only thread that process
 - `Api.run()` — dequeues and processes both; the only place handlers execute and `_send` is called
 
 This cannot be enforced at the model layer. Callers must not call `_dispatch` or `_send` directly.
+
+### WebView2 User Data Folder
+
+`host.py` sets `WEBVIEW2_USER_DATA_FOLDER` to `%LOCALAPPDATA%\geo-builder\WebView2` before launch. This folder holds the WebView2 browser profile (cache, cookies, local storage, etc.). It is safe to delete while the designer is closed — WebView2 recreates it on next launch.
+
+### Debugging "catalog changes don't show up in the designer"
+
+`_on_web_resource_requested` intercepts every request the WebView2 page makes (`AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All)`) and `DataPipeline._resolve` logs each one (`memory` / `out path` / `in path` / `network`) at info level. If a catalog rebuild doesn't appear after restarting the designer, check this log first: if there is no log line at all for `catalog.head.json` / `catalog.head.debug.json` / `catalog.json` / `catalog.debug.json`, the geo-browser frontend never issued a request for it in this session — the bug is not in geo-builder's serving path.
+
+One confirmed cause on the geo-browser side: when its dev server statically imports the catalog file (`import catalog from './public/catalog.json'`) instead of fetching it at runtime, the bundler inlines the file's contents at build/transform time, reading from geo-browser's own `public/` folder. No HTTP request is ever made, so geo-builder's `out`/`in` dirs are never consulted — this is independent of dev vs. production and independent of host/port; it depends only on whether geo-browser uses a static import or a runtime `fetch()` for the catalog. The documented contract (`docs/MESSAGING.md`) assumes a runtime fetch of `catalog.head.json`; if a catalog update isn't visible, confirm that assumption holds on the geo-browser side.

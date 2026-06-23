@@ -270,6 +270,8 @@ catalog.head.json
 
 All relative URLs in the payload are resolved relative to the file that contains them (same rule as HTML `<base>`).
 
+> **Open issue for geo-browser team:** in local dev (`localhost:5173` via Vite), catalog updates produced by geo-builder were observed not to reach the browser at all. Root-caused on the geo-builder side by instrumenting every WebView2 request (`host.py`'s `WebResourceRequested` filter intercepts 100% of outgoing requests, logged via `DataPipeline._resolve`): across a full session there was **no request whatsoever** for `catalog.head.json` / `catalog.head.debug.json` / `catalog.json` / `catalog.debug.json` — confirming the page never issued the fetch described in the loading chain above. Manually copying the updated file into geo-browser's `public/` folder made it appear immediately. This points to the catalog being loaded via a static import (`import catalog from './public/catalog.json'`) rather than a runtime `fetch()` against the loading chain — bundlers inline statically-imported JSON at build/transform time, independent of dev vs. production and independent of host/port. If a static import is in fact happening anywhere in the catalog-loading path, it should be replaced with a runtime fetch per the contract above, otherwise rebuilt catalogs will never be reflected without a manual file copy.
+
 ### `catalog.head.json`
 
 Entry point. Tells the browser where the catalog file lives.
