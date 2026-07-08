@@ -4,6 +4,15 @@ import math
 from copy import deepcopy
 
 from ..contracts import Executor, Task, Worker, WorkerResult
+from ..diagnostics import Logger
+
+# Points farther apart in latitude than this cannot be within 10 m of each other
+# (10 m / 111,111 m per degree). Used as a sliding-window cutoff after sorting by lat.
+_LAT_WINDOW_DEG = 10.0 / 111_111.0
+
+
+def _lat_of(feature) -> float:
+    return float(feature.geometry.coordinates[1])
 
 
 class DedupingWorker(Worker):
@@ -15,28 +24,40 @@ class DedupingWorker(Worker):
         self._task = task
 
     def execute(self, executor: Executor) -> WorkerResult:
-        print("DedupingWorker: execute.")
+        Logger.info("DedupingWorker: execute.")
 
         if executor.catalog is None:
             return WorkerResult()
 
+        total_removed = 0
+
         for area in executor.catalog.areas:
+            area_removed = 0
             for geo_layer in area.layers:
                 if geo_layer.layer.geojson is None:
                     continue
-
+                before = len(geo_layer.layer.geojson.features)
                 geo_layer.layer.geojson.features = self._dedupe_features(geo_layer.layer.geojson.features)
+                area_removed += before - len(geo_layer.layer.geojson.features)
+            Logger.info(f"DedupingWorker: {area.name}: removed {area_removed} duplicates.")
+            total_removed += area_removed
 
-        print("DedupingWorker: completed.")
+        Logger.info(f"DedupingWorker: completed. Removed {total_removed} duplicates across {len(executor.catalog.areas)} areas.")
         return WorkerResult()
 
     def _dedupe_features(self, features: list) -> list:
+        sorted_features = sorted(features, key=_lat_of)
         result = []
 
-        for feature in features:
+        for feature in sorted_features:
+            b_lat = float(feature.geometry.coordinates[1])
             merged = False
 
-            for existing in result:
+            for i in range(len(result) - 1, -1, -1):
+                existing = result[i]
+                a_lat = float(existing.geometry.coordinates[1])
+                if b_lat - a_lat > _LAT_WINDOW_DEG:
+                    break
                 if self._is_duplicate(existing, feature):
                     self._merge_features(existing, feature)
                     merged = True
