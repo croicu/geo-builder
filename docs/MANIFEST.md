@@ -90,7 +90,7 @@ Virtual layer — `url` is absent. The browser derives POI markers at runtime fr
     "color": "#7f0000",
     "opacity": 0.9,
     "radius": 8,
-    "minZoom": 18
+    "minZoom": 16
   }
 }
 ```
@@ -100,7 +100,7 @@ Virtual layer — `url` is absent. The browser derives POI markers at runtime fr
 | `color` | `string` | `"#7f0000"` | Marker color. |
 | `opacity` | `number` | `0.9` | Marker opacity. |
 | `radius` | `number` | `8` | Marker radius in pixels. |
-| `minZoom` | `number` | `18` | Zoom level below which markers are hidden. |
+| `minZoom` | `number` | `16` | Zoom level below which markers are hidden. |
 
 `visible: true` means enriched POIs exist in the data layers. `visible: false` means none were found but the entry is retained to preserve style across rebuilds.
 
