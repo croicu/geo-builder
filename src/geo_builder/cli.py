@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .builder import Builder
+from .diagnostics import ConsoleLogSink, Logger
 from .entities import GeoCatalog
 from .errors import GeoError
 from .persistence import load_catalog, save_catalog
@@ -121,6 +122,7 @@ def main() -> int:
         )
         return 0
 
+    Logger.set_logger(ConsoleLogSink(min_level=settings.logging))
     try:
         try:
             catalog = load_catalog(arguments.in_directory, debug=settings.debug)
@@ -142,6 +144,8 @@ def main() -> int:
             raise
         print(f"geo-builder: error: {error}", file=sys.stderr)
         return 1
+    finally:
+        Logger.set_logger(None)
 
 
 if __name__ == "__main__":
