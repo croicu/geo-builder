@@ -185,7 +185,7 @@ class TestDefaultHead:
         mock_get.side_effect = Exception("404")
         pull("http://svc", tmp_path)
         payload = json.loads((tmp_path / "catalog.head.debug.json").read_text())
-        assert payload["catalogUrl"] == "./catalog.debug.json"
+        assert payload["catalogUrl"] == "./catalog.json"
 
     @patch("geo_builder.designer.pull.requests.get")
     def test_existing_head_not_overwritten_on_404(self, mock_get, tmp_path):
@@ -248,6 +248,43 @@ class TestCatalogUrlNormalization:
         mock_get.side_effect = lambda url, **kw: responses[url]
         pull("http://svc", tmp_path)
         assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
+
+
+class TestIncrementalPull:
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_existing_file_not_fetched_from_server(self, mock_get, tmp_path):
+        (tmp_path / "catalog.head.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        (tmp_path / "catalog.json").write_text(json.dumps({"areas": []}))
+        (tmp_path / "catalog.head.debug.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        mock_get.side_effect = Exception("should not be called")
+        pull("http://svc", tmp_path)
+        mock_get.assert_not_called()
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_missing_layer_is_fetched_when_other_files_present(self, mock_get, tmp_path):
+        (tmp_path / "catalog.head.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        (tmp_path / "catalog.head.debug.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        (tmp_path / "catalog.json").write_text(json.dumps({"areas": [{"id": "a", "manifestUrl": "../areas/a/manifest.json"}]}))
+        (tmp_path / "areas" / "a").mkdir(parents=True)
+        (tmp_path / "areas" / "a" / "manifest.json").write_text(json.dumps({"layers": [{"id": "l", "url": "./layers/l.geojson"}]}))
+        responses = {
+            "http://svc/areas/a/layers/l.geojson": _resp(_GEOJSON),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        assert (tmp_path / "areas" / "a" / "layers" / "l.geojson").exists()
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_existing_file_content_is_used_to_traverse(self, mock_get, tmp_path):
+        (tmp_path / "catalog.head.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        (tmp_path / "catalog.head.debug.json").write_text(json.dumps({"version": 1, "catalogUrl": "./catalog.json"}))
+        (tmp_path / "catalog.json").write_text(json.dumps({"areas": [{"id": "b", "manifestUrl": "../areas/b/manifest.json"}]}))
+        responses = {
+            "http://svc/areas/b/manifest.json": _resp(_manifest()),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        assert (tmp_path / "areas" / "b" / "manifest.json").exists()
 
 
 class TestErrorHandling:

@@ -11,7 +11,7 @@ from ..diagnostics import Logger
 _HEAD_FILES = ("catalog.head.json", "catalog.head.debug.json")
 _HEAD_DEFAULTS = {
     "catalog.head.json": {"version": 1, "catalogUrl": "./catalog.json"},
-    "catalog.head.debug.json": {"version": 1, "catalogUrl": "./catalog.debug.json"},
+    "catalog.head.debug.json": {"version": 1, "catalogUrl": "./catalog.json"},
 }
 _TIMEOUT = 30
 
@@ -85,6 +85,9 @@ def _fetch_and_save(url: str, in_dir: Path, seen: set[str]) -> bytes | None:
     seen.add(url)
     path = urlparse(url).path.lstrip("/")
     dest = in_dir / path
+    if dest.exists() and dest.is_file():
+        Logger.info(f"pull: '{path}' already present, skipping fetch.")
+        return dest.read_bytes()
     try:
         Logger.info(f"pull: fetch '{url}'")
         resp = requests.get(url, timeout=_TIMEOUT)

@@ -169,10 +169,22 @@ class TestSaveCatalog:
 
         assert (tmp_path / "catalog.head.json").exists()
 
+    def test_catalog_head_debug_json_always_written(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        assert (tmp_path / "catalog.head.debug.json").exists()
+
     def test_catalog_head_json_points_to_catalog(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
         payload = json.loads((tmp_path / "catalog.head.json").read_text())
+
+        assert payload["catalogUrl"] == "./catalog.json"
+
+    def test_catalog_head_debug_json_points_to_same_catalog(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        payload = json.loads((tmp_path / "catalog.head.debug.json").read_text())
 
         assert payload["catalogUrl"] == "./catalog.json"
 
