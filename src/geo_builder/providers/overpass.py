@@ -140,10 +140,12 @@ out {out_mode};
 
         for attempt in range(len(_RETRY_DELAYS) + 1):
             try:
+                t0 = time.perf_counter()
                 with urllib.request.urlopen(request, timeout=60) as response:
                     body = response.read()
-                    Logger.info(f"OverpassProvider: {len(body)} bytes received")
-                    return json.loads(body.decode("utf-8"))
+                elapsed = time.perf_counter() - t0
+                Logger.info(f"OverpassProvider: {len(body)} bytes received in {elapsed:.1f}s")
+                return json.loads(body.decode("utf-8"))
             except urllib.error.HTTPError as error:
                 if error.code == 400:
                     Logger.warning("OverpassProvider: HTTP 400 — query rejected, will split bbox")
