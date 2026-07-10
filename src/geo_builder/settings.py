@@ -20,6 +20,7 @@ class Settings:
     break_on_load: bool = False
     dev_tools: bool = False
     design_url: str | None = None
+    assets_url: str | None = None
     logging: TelemetryLevel = TelemetryLevel.ERROR
     window_left: int | None = None
     window_top: int | None = None
@@ -34,6 +35,7 @@ class Settings:
         break_on_load = False
         dev_tools = False
         design_url: str | None = None
+        assets_url: str | None = None
         providers: dict[str, dict[str, object]] = {}
         log_level = TelemetryLevel.ERROR
         window_left: int | None = None
@@ -125,6 +127,7 @@ class Settings:
             break_on_load=break_on_load,
             dev_tools=dev_tools,
             design_url=design_url,
+            assets_url=assets_url,
             template=template,
             providers=providers,
             logging=log_level,

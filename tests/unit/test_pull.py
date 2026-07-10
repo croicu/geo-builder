@@ -197,6 +197,59 @@ class TestDefaultHead:
         assert payload["catalogUrl"] == "./custom/catalog.json"
 
 
+class TestCatalogUrlNormalization:
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_absolute_catalog_url_normalized_to_relative(self, mock_get, tmp_path):
+        head = json.dumps({"version": 1, "catalogUrl": "https://cdn.example.com/catalog.json"}).encode()
+        responses = {
+            "http://svc/catalog.head.json": _resp(head),
+            "http://svc/catalog.head.debug.json": _resp(head),
+            "https://cdn.example.com/catalog.json": _resp(_catalog()),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        saved = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert saved["catalogUrl"] == "./catalog.json"
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_absolute_catalog_url_nested_path_normalized(self, mock_get, tmp_path):
+        head = json.dumps({"version": 1, "catalogUrl": "https://cdn.example.com/v2/catalog.json"}).encode()
+        responses = {
+            "http://svc/catalog.head.json": _resp(head),
+            "http://svc/catalog.head.debug.json": _resp(head),
+            "https://cdn.example.com/v2/catalog.json": _resp(_catalog()),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        saved = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert saved["catalogUrl"] == "./v2/catalog.json"
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_relative_catalog_url_unchanged(self, mock_get, tmp_path):
+        responses = {
+            "http://svc/catalog.head.json": _resp(_head("./catalog.json")),
+            "http://svc/catalog.head.debug.json": _resp(_head("./catalog.json")),
+            "http://svc/catalog.json": _resp(_catalog()),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        saved = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert saved["catalogUrl"] == "./catalog.json"
+
+    @patch("geo_builder.designer.pull.requests.get")
+    def test_catalog_still_fetched_from_absolute_url_after_normalization(self, mock_get, tmp_path):
+        head = json.dumps({"version": 1, "catalogUrl": "https://cdn.example.com/catalog.json"}).encode()
+        responses = {
+            "http://svc/catalog.head.json": _resp(head),
+            "http://svc/catalog.head.debug.json": _resp(head),
+            "https://cdn.example.com/catalog.json": _resp(_catalog("../areas/napoli/manifest.json")),
+            "https://cdn.example.com/areas/napoli/manifest.json": _resp(_manifest()),
+        }
+        mock_get.side_effect = lambda url, **kw: responses[url]
+        pull("http://svc", tmp_path)
+        assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
+
+
 class TestErrorHandling:
     @patch("geo_builder.designer.pull.requests.get")
     def test_missing_head_does_not_crash(self, mock_get, tmp_path):

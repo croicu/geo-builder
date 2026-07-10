@@ -19,6 +19,7 @@ class CliArguments:
     in_directory: Path | None
     out_directory: Path
     edit: bool = False
+    noninvasive: bool = False
 
 
 def parse_args(argv: list[str]) -> CliArguments:
@@ -59,6 +60,13 @@ def parse_args(argv: list[str]) -> CliArguments:
         help="open the designer WebView (requires designUrl in settings.json)",
     )
 
+    parser.add_argument(
+        "--noninvasive",
+        action="store_true",
+        default=False,
+        help="skip the first-launch pull into --in when --in already has content (designer mode only)",
+    )
+
     args = parser.parse_args(argv)
 
     return CliArguments(
@@ -66,6 +74,7 @@ def parse_args(argv: list[str]) -> CliArguments:
         in_directory=args.in_directory,
         out_directory=args.out_directory,
         edit=args.edit,
+        noninvasive=args.noninvasive,
     )
 
 
@@ -78,6 +87,8 @@ def _launch_designer(
     break_on_load: bool = False,
     dev_tools: bool = False,
     log_level=None,
+    noninvasive: bool = False,
+    assets_url: str | None = None,
 ) -> None:
     from geo_builder.designer.host import launch
 
@@ -90,6 +101,8 @@ def _launch_designer(
         break_on_load=break_on_load,
         dev_tools=dev_tools,
         log_level=log_level,
+        noninvasive=noninvasive,
+        assets_url=assets_url,
     )
 
 
@@ -120,6 +133,8 @@ def main() -> int:
             break_on_load=settings.break_on_load,
             dev_tools=settings.dev_tools,
             log_level=settings.logging,
+            noninvasive=arguments.noninvasive,
+            assets_url=settings.assets_url,
         )
         return 0
 

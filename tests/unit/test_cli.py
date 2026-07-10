@@ -10,7 +10,15 @@ from geo_builder.errors import GeoError
 
 
 class StubSettings:
-    def __init__(self, debug: bool = False, design_url: str | None = None, break_on_load: bool = False, dev_tools: bool = False, logging=None) -> None:
+    def __init__(
+        self,
+        debug: bool = False,
+        design_url: str | None = None,
+        break_on_load: bool = False,
+        dev_tools: bool = False,
+        logging=None,
+        assets_url: str | None = None,
+    ) -> None:
         from geo_builder.diagnostics import TelemetryLevel
 
         self.debug = debug
@@ -18,6 +26,7 @@ class StubSettings:
         self.break_on_load = break_on_load
         self.dev_tools = dev_tools
         self.logging = logging or TelemetryLevel.ERROR
+        self.assets_url = assets_url
 
 
 class StubBuilder:
@@ -52,6 +61,16 @@ class TestParseArgs:
         args = parse_args(["template.json"])
 
         assert args.in_directory is None
+
+    def test_noninvasive_defaults_to_false(self):
+        args = parse_args(["template.json"])
+
+        assert args.noninvasive is False
+
+    def test_noninvasive_flag_parsed(self):
+        args = parse_args(["template.json", "--noninvasive"])
+
+        assert args.noninvasive is True
 
     def test_out_directory_defaults_to_out(self):
         args = parse_args(["template.json"])
@@ -206,6 +225,8 @@ class TestDesignMode:
                 break_on_load=False,
                 dev_tools=False,
                 log_level=TelemetryLevel.ERROR,
+                noninvasive=False,
+                assets_url=None,
             )
             assert result == 0
 
