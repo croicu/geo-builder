@@ -38,8 +38,16 @@ def _pull_head(url: str, name: str, in_dir: Path, seen: set[str]) -> None:
                 _pull_catalog(urljoin(url, catalog_rel), in_dir, seen)
         return
     try:
-        catalog_rel = json.loads(data).get("catalogUrl", "")
+        payload = json.loads(data)
+        catalog_rel = payload.get("catalogUrl", "")
         if catalog_rel:
+            parsed_catalog = urlparse(catalog_rel)
+            if parsed_catalog.scheme:
+                local_rel = "./" + parsed_catalog.path.lstrip("/")
+                payload["catalogUrl"] = local_rel
+                dest = in_dir / name
+                dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                Logger.info(f"pull: '{name}': normalized absolute catalogUrl to '{local_rel}'")
             _pull_catalog(urljoin(url, catalog_rel), in_dir, seen)
     except Exception as exc:
         Logger.warning(f"pull: head parse '{url}': {exc}")

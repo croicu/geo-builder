@@ -808,6 +808,8 @@ def launch(
     break_on_load: bool = False,
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
+    noninvasive: bool = False,
+    assets_url: str | None = None,
 ) -> None:
     resolved_catalog = catalog if catalog is not None else GeoCatalog()
     resolved_out_dir = out_dir if out_dir is not None else Path("./out")
@@ -853,19 +855,26 @@ def launch(
 
     Logger.set_logger(ConsoleLogSink(min_level=log_level))
     try:
-        if in_dir is not None and not (in_dir / _HEAD_FILE).exists():
-            p = urlparse(url)
-            origin = f"{p.scheme}://{p.netloc}"
-            Logger.info(f"Pulling from {origin} into {in_dir}")
-            in_dir.mkdir(parents=True, exist_ok=True)
-            _pull(origin, in_dir)
-            from ..errors import GeoError
-            from ..persistence import load_catalog
+        if in_dir is not None:
+            head_file = in_dir / _HEAD_FILE
+            in_dir_is_empty = not in_dir.exists() or not any(in_dir.iterdir())
+            should_pull = not head_file.exists() and (not noninvasive or in_dir_is_empty)
+            if should_pull:
+                if assets_url is not None:
+                    pull_origin = assets_url
+                else:
+                    p = urlparse(url)
+                    pull_origin = f"{p.scheme}://{p.netloc}"
+                Logger.info(f"Pulling from {pull_origin} into {in_dir}")
+                in_dir.mkdir(parents=True, exist_ok=True)
+                _pull(pull_origin, in_dir)
+                from ..errors import GeoError
+                from ..persistence import load_catalog
 
-            try:
-                resolved_catalog = load_catalog(in_dir, debug=debug)
-            except GeoError as exc:
-                Logger.warning(f"launch: failed to load catalog after pull: {exc}")
+                try:
+                    resolved_catalog = load_catalog(in_dir, debug=debug)
+                except GeoError as exc:
+                    Logger.warning(f"launch: failed to load catalog after pull: {exc}")
 
         udf = Path(os.environ.get("LOCALAPPDATA", "~")).expanduser() / "geo-builder" / "WebView2"
         udf.mkdir(parents=True, exist_ok=True)

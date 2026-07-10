@@ -270,6 +270,28 @@ catalog.head.json
 
 All relative URLs in the payload are resolved relative to the file that contains them (same rule as HTML `<base>`).
 
+### Design mode: overriding the asset origin
+
+In design mode the browser fetches geo assets from a different origin than the Vite dev server (e.g. geo-places.croicu.com in production, or a local static server during development). The asset base URL is configured via `assetsUrl` in `settings.json` and appended as a query parameter when geo-builder opens the WebView:
+
+```json
+// settings.json
+{ "settings": { "assetsUrl": "http://localhost:5174/" } }
+```
+
+```
+// resulting designUrl (geo-builder appends assetsBase automatically)
+http://localhost:5173/?design=1&assetsBase=http://localhost:5174/
+```
+
+| settings.json field | Query parameter | Example value | Description |
+|---------------------|-----------------|---------------|-------------|
+| `assetsUrl` | `assetsBase` | `http://localhost:5174/` | Base URL for all geo asset fetches. Overrides the default origin for the entire loading chain (head → catalog → manifests → geojson). Trailing slash is optional — the browser normalizes it. |
+
+When `assetsUrl` is set the browser resolves the head URL as `{assetsUrl}catalog.head.json` (or the debug variant when `?debug` is also present). All downstream URLs inherit the override automatically because they are resolved relative to the head URL via the standard `resolveUrl` chain.
+
+Omit `assetsUrl` from settings.json in production builds — the browser defaults to its own origin.
+
 > **Open issue for geo-browser team:** in local dev (`localhost:5173` via Vite), catalog updates produced by geo-builder were observed not to reach the browser at all. Root-caused on the geo-builder side by instrumenting every WebView2 request (`host.py`'s `WebResourceRequested` filter intercepts 100% of outgoing requests, logged via `DataPipeline._resolve`): across a full session there was **no request whatsoever** for `catalog.head.json` / `catalog.head.debug.json` / `catalog.json` / `catalog.debug.json` — confirming the page never issued the fetch described in the loading chain above. Manually copying the updated file into geo-browser's `public/` folder made it appear immediately. This points to the catalog being loaded via a static import (`import catalog from './public/catalog.json'`) rather than a runtime `fetch()` against the loading chain — bundlers inline statically-imported JSON at build/transform time, independent of dev vs. production and independent of host/port. If a static import is in fact happening anywhere in the catalog-loading path, it should be replaced with a runtime fetch per the contract above, otherwise rebuilt catalogs will never be reflected without a manual file copy.
 
 ### `catalog.head.json`
@@ -350,7 +372,7 @@ The `catalogUrl` is a relative URL resolved against the head file's location. Th
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Layer identifier. Numeric string for data layers (`"1"`, `"2"`, …); `"__poi__"`, `"__user__"`, or `"__void__"` for builtin virtual layers |
-| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__" \| "__void__"` | Render mode |
+| `type` | `"heatmap" \| "circle" \| "__poi__" \| "__user__" \| "__void__" \| "__search__"` | Render mode |
 | `url` | `string \| null` | GeoJSON URL for data layers; `null` for virtual layers (`__poi__`, `__user__`, `__void__`) |
 | `visible` | `boolean` | Default visibility |
 | `acquisition` | `object \| null` | Absent on virtual layers (`__poi__`, `__user__`, `__void__`). Present on data layers |
@@ -396,6 +418,21 @@ A reserved builtin virtual layer with `url: null`. The browser populates it at r
   "url": null,
   "visible": false,
   "style": { "opacity": 0.9, "color": "#000000" }
+}
+```
+
+#### `__search__` layer
+
+A reserved builtin virtual layer with `url: null`. Holds ephemeral search results (Nominatim) rendered as temporary markers. The browser synthesizes this layer at runtime if it is absent from the manifest — geo-builder pipelines are not required to emit it. `visible` is always `false` on write; the layer is never shown until a search result arrives.
+
+```jsonc
+{
+  "id": "__search__",
+  "name": "Search Results",
+  "type": "__search__",
+  "url": null,
+  "visible": false,
+  "style": { "opacity": 0.3, "color": "#00007f" }
 }
 ```
 

@@ -20,6 +20,7 @@ class Settings:
     break_on_load: bool = False
     dev_tools: bool = False
     design_url: str | None = None
+    assets_url: str | None = None
     logging: TelemetryLevel = TelemetryLevel.ERROR
     window_left: int | None = None
     window_top: int | None = None
@@ -34,6 +35,7 @@ class Settings:
         break_on_load = False
         dev_tools = False
         design_url: str | None = None
+        assets_url: str | None = None
         providers: dict[str, dict[str, object]] = {}
         log_level = TelemetryLevel.ERROR
         window_left: int | None = None
@@ -85,6 +87,11 @@ class Settings:
                 sep = "&" if "?" in design_url else "?"
                 design_url = f"{design_url}{sep}debug=1"
 
+            assets_url = str(settings_payload["assetsUrl"]) if "assetsUrl" in settings_payload else None
+            if assets_url is not None and design_url is not None:
+                sep = "&" if "?" in design_url else "?"
+                design_url = f"{design_url}{sep}assetsBase={assets_url}"
+
             map_payload = settings_payload.get("map", {})
             if isinstance(map_payload, dict) and design_url is not None:
                 map_center = map_payload.get("center")
@@ -120,6 +127,7 @@ class Settings:
             break_on_load=break_on_load,
             dev_tools=dev_tools,
             design_url=design_url,
+            assets_url=assets_url,
             template=template,
             providers=providers,
             logging=log_level,

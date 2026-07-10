@@ -11,9 +11,10 @@ geo-builder <tasks_path> [--in <dir>] [--out <dir>] [--edit]
 | Argument | Default | Description |
 |---|---|---|
 | `tasks_path` | required | Path to the template JSON file (e.g. `template.json`). Always required. |
-| `--in <dir>` | `./in` | Working directory for service artifacts. Auto-created if absent. |
+| `--in <dir>` | required in build mode; `./in` in designer mode | Working directory for service artifacts. Auto-created if absent. |
 | `--out <dir>` | `./out` | Output directory for built artifacts. |
 | `--edit` | off | Open the designer WebView instead of running a build. |
+| `--noninvasive` | off | Skip the first-launch pull into `--in` when `--in` already has content. Designer mode only. |
 
 ## Modes
 
@@ -23,14 +24,14 @@ Runs the processing pipeline and writes artifacts to `--out`.
 
 1. Loads `settings.json` and `settings.local.json` from the current directory.
 2. Loads the template file at `tasks_path`.
-3. Reads `--in` as the seed catalog for an incremental build. If `--in` is absent or contains no valid catalog, starts from scratch.
+3. `--in` is required. Reads it as the seed catalog for an incremental build. If it contains no valid catalog, starts from scratch.
 4. Runs the build pipeline (acquisition → deduping → aggregation).
 5. On success, writes all artifacts to `--out`. Output is never written when errors are present.
 6. On error, prints each error to stderr prefixed with `geo-builder: error:` and exits with code `1`.
 
 ```bash
-geo-builder template.json                          # scratch build to ./out
-geo-builder template.json --in ./in --out ./out    # incremental build
+geo-builder template.json --in ./in               # scratch build to ./out
+geo-builder template.json --in ./in --out ./out   # incremental build with explicit out
 ```
 
 ### Designer mode (`--edit`)
@@ -48,8 +49,9 @@ Opens the geo-browser WebView. Requires `designUrl` in `settings.json`.
 6. Window geometry (position and size) is saved to `settings.local.json` on close and restored on the next launch.
 
 ```bash
-geo-builder template.json --edit                           # designer with defaults
-geo-builder template.json --in ./in --out ./out --edit     # designer with explicit paths
+geo-builder template.json --edit                                        # designer with defaults
+geo-builder template.json --in ./in --out ./out --edit                  # designer with explicit paths
+geo-builder template.json --in public --out dist --edit --noninvasive   # skip pull; keep --in clean
 ```
 
 ## Configuration files
@@ -83,7 +85,7 @@ Stable settings checked into the repository.
 | Key | Default | Description |
 |---|---|---|
 | `debug` | `false` | Enables debug mode: full exception tracebacks, per-task snapshots under `./build/`, and `debug=1` appended to `designUrl`. |
-| `logLevel` | `"error"` | Minimum log level printed to stdout during a designer session. One of: `verbose`, `info`, `warning`, `error`, `critical`. |
+| `logLevel` | `"error"` | Minimum log level printed to stdout. Applies in both build mode and designer mode. One of: `verbose`, `info`, `warning`, `error`, `critical`. |
 | `designUrl` | — | URL of the geo-browser app. Required for `--edit`. |
 | `devTools` | `false` | Auto-opens DevTools when the WebView starts. |
 | `map.center` | — | Initial map center passed to the designer as `center=<value>`. |
@@ -162,10 +164,40 @@ geo-builder areas/<area>/manifest.json --in build/.scratch --out areas/<area>
 
 2. **`settings.json` requirement.** Optional — no action needed. All fields have working defaults, and `OverpassProvider` falls back to `https://overpass-api.de/api/interpreter` when no `providers.overpass.url` is configured. Build mode works with no `settings.json` present at all.
 
-3. **`--in` on ephemeral CI runners.** Confirmed — no action needed. An absent or empty `--in` triggers a from-scratch build with no seed catalog required.
+3. **`--in` on ephemeral CI runners.** `--in` is now required in build mode (exit 1 if absent). On ephemeral runners, pass `--in` pointing to an empty or pre-populated directory. An empty directory triggers a from-scratch build with no seed catalog required.
 
 4. **Debug output path collision.** Confirmed hardcoded to `./build/` (not configurable). **No action needed for CI** as long as `debug: false` is kept. Making the path configurable is a future enhancement; worth filing a geo-builder issue if it becomes a problem.
 
 5. **Atomic failure.** Partially atomic — no action needed under normal conditions. `save_catalog()` begins by deleting and recreating `--out` in full, then writes all files. A pipeline error that occurs *before* `save_catalog` is called leaves `--out` entirely untouched. A rare OS-level error occurring *during* the write (after the directory wipe) could leave `--out` in a partial state, but this is not a realistic CI failure mode.
 
 6. **Console-script entry point.** **Resolved.** `[project.scripts]` has been added to `pyproject.toml` — `geo-builder` is now an installable binary after `pip install -e .`. CI scripts can use the bare `geo-builder` command.
+
+### New request: `--noninvasive` flag for designer mode
+
+**Problem.** geo-places uses designer mode (`--edit --in public/`) to make structural catalog/manifest edits (bbox, layer styles, filters) directly in `public/`, which must stay hand-authored-input-only — no `url` fields, no `layers/*.geojson`, no `catalog.head*.json` (see `CLAUDE.md`'s Hard Architecture Rules in geo-places). But per the documented "First launch" behavior above, if `--in` has no head file, designer mode pulls real acquired artifacts (`url` fields, `layers/*.geojson`, `catalog.head*.json`) straight into `--in`. Traced through `designer/host.py`'s `launch()`: the pull origin is derived from `designUrl`'s own origin, not a separate data-source setting, and `_pull()` writes everything — including `catalogUrl` — verbatim to `--in`.
+
+This has real consequences for geo-places specifically:
+- It broke `tests/ci/test_catalog.py`'s no-premature-`url` check.
+- Since acquired layers now have real `geojson` data loaded, `has_data_layers` would skip re-acquisition on the next build, silently breaking the "always rebuild fresh from Overpass on deploy" invariant `cd.yaml` depends on.
+- One pulled `catalog.head.json` had an **absolute** `catalogUrl` (`https://geo-places.croicu.com/catalog.json`) rather than a relative one. This only resolved correctly by a Windows-specific `pathlib` join quirk (`Path("public") / "https://…"` happened to collapse to `public/catalog.json`) — it would almost certainly resolve to a broken path on Linux, which is what `cd.yaml` actually deploys from.
+
+geo-places worked around all of this locally with a defense-in-depth script (`scripts/clean_public.py`, run automatically before every build) that strips `url` fields, deletes `layers/`, and deletes stray `catalog.head*.json` from `public/` — but this is a workaround, not a fix, and depends on remembering to run it (or trusting `build.sh` to).
+
+**Requested fix — new opt-in flag:**
+
+```bash
+geo-builder template.json --in public --edit --noninvasive
+```
+
+When `--noninvasive` is passed (only meaningful together with `--edit`):
+
+- **Skip the "first launch" pull into `--in` entirely** — regardless of whether `--in` has a head file. `--in` is loaded and used exactly as it already is (structural manifests only, whatever `load_catalog` finds), with no network pull writing into it.
+- Everything that *already* only writes structural data back to `--in` should keep working exactly as today — this is most of what a geo-places-style editing session needs:
+  - Bbox edits (`SET_AREA_BBOX` → `save_catalog_meta(catalog, in_dir, ...)`) — writes `catalog.json`/head only, never touches area manifests' `url`/geojson.
+  - Style/filter/layer-list edits (`PUT_AREA_JSON` → `area.apply_manifest(data.manifest, in_dir)`) — as long as the manifest round-tripped through the UI never contained a `url` field to begin with (guaranteed if the initial pull never ran), this stays clean automatically.
+- Real builds (`Builder(...).run()`, triggered by bbox/style changes needing re-acquisition) continue to write full acquired data to `--out` only, same as today — `--noninvasive` doesn't change build/acquisition behavior, only what touches `--in`.
+- Not requesting a change to default (non-`--noninvasive`) behavior — this needs to be strictly opt-in so nothing about the existing "pull real data for a full interactive preview" workflow changes for other designer-mode use cases.
+
+**Also worth fixing regardless of the flag above** (both are real bugs independent of this feature request):
+1. `pull.py`'s head-file handling should always write a **relative** local `catalogUrl` (e.g. `"./catalog.json"`), never persist whatever absolute URL the service happened to return.
+2. `assetsUrl` in `settings.json` (added speculatively on the geo-places side) is currently **not read anywhere** in `geo-builder` — the pull origin is always derived from `designUrl`'s own origin instead. Either wire up a real separate data-source setting, or document clearly that `designUrl`'s origin is what's actually used, so users don't assume `assetsUrl` does something it doesn't.

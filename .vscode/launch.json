@@ -2,16 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Run (New)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "geo_builder.cli",
-      "args": ["${workspaceFolder}/template.json", "--out", "${workspaceFolder}/out"],
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
-      "name": "Python: Run (Update)",
+      "name": "Python: Run (CLI)",
       "type": "debugpy",
       "request": "launch",
       "module": "geo_builder.cli",

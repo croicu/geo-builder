@@ -99,6 +99,22 @@ Workers receive the builder as their `executor: Executor` parameter and mutate s
 
 **Catalog-driven** — `Builder.run()` (no argument): used for an incremental build. `_tasks_from_catalog()` scans the loaded catalog and generates an `AcquisitionTask` for every area whose `acquisition` is set but whose `layers` list is empty. Aggregation and deduping tasks are appended once at the end if any acquisition tasks were generated.
 
+## Workers
+
+### AcquisitionWorker
+
+Fetches one task's bbox from the configured provider, creates or updates the area, and inserts the resulting layer. On HTTP 400 (query too large), splits the bbox into four quadrants and pushes child tasks onto the executor stack. HTTP 429 / 504 trigger retry-with-backoff (5 s, 15 s, 45 s) before splitting.
+
+### DedupingWorker
+
+Removes near-duplicate points within each layer (not cross-layer). Two features are duplicates if their Haversine distance is ≤ 10 m and they share the same OSM name.
+
+Algorithm: **O(n log n)** — features are sorted by latitude, then scanned in order. For each candidate, only the trailing suffix of the result list whose latitude is within 10 m / 111 111 ° of the candidate's latitude needs to be checked. The early-exit lat-gap condition makes the inner loop effectively constant-depth in practice.
+
+### AggregationWorker
+
+Merges compatible layers within an area, grouped by `mergeKey`. Layers sharing a mergeKey have their feature lists concatenated into a single layer.
+
 ## Error Handling
 
 `errors.py` defines the exception hierarchy:
@@ -184,6 +200,8 @@ The `DataPipeline` (`designer/data_pipeline.py`) intercepts every WebView HTTP r
 - `read_json`, `save_json`, `child_path` utilities
 
 `save_area_csv` writes `{areaId}.csv` into each area directory combining all features across all layers. Columns: `lon`, `lat`, `layer_id`, then all unique property keys (sorted). Missing properties are written as empty strings.
+
+`child_path(parent, relative_path)` resolves a URL relative to a parent directory. If `relative_path` contains a scheme (e.g. `https://cdn.example.com/catalog.json`), the scheme and host are stripped and only the path component is used, so the result is always under `parent`. This allows catalog and manifest files to reference layers hosted on a different origin without breaking local resolution.
 
 ## Runtime Contracts
 
