@@ -85,6 +85,7 @@ Stable settings checked into the repository.
 | `debug` | `false` | Enables debug mode: full exception tracebacks, per-task snapshots under `./build/`, and `debug=1` appended to `designUrl`. |
 | `logLevel` | `"error"` | Minimum log level printed to stdout. Applies in both build mode and designer mode. One of: `verbose`, `info`, `warning`, `error`, `critical`. |
 | `designUrl` | — | URL of the geo-browser app. Required for `--edit`. |
+| `assetsUrl` | — | Base URL for geo asset fetches (head → catalog → manifests → geojson). When set, geo-builder appends it as `assetsUrl=<value>` to `designUrl` so the browser resolves artifacts from this origin instead of its own. Omit in production. |
 | `devTools` | `false` | Auto-opens DevTools when the WebView starts. |
 | `map.center` | — | Initial map center passed to the designer as `center=<value>`. |
 | `map.zoom` | — | Initial map zoom passed to the designer as `zoom=<value>`. |
