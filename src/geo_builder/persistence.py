@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .entities import GeoArea, GeoCatalog
 from .errors import CatalogError
@@ -32,7 +33,12 @@ _DEFAULT_CATALOG_URL_DEBUG = "./catalog.debug.json"
 
 
 def child_path(parent: Path, relative_path: str) -> Path:
-    return parent / relative_path.removeprefix("./")
+    parsed = urlparse(relative_path)
+    if parsed.scheme:
+        path = parsed.path.lstrip("/")
+    else:
+        path = relative_path.removeprefix("./")
+    return parent / path
 
 
 def _default_catalog_url(debug: bool) -> str:

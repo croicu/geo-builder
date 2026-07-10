@@ -65,6 +65,12 @@ class TestChildPath:
     def test_no_prefix_unchanged(self):
         assert child_path(Path("/out"), "layers/foo.geojson") == Path("/out/layers/foo.geojson")
 
+    def test_absolute_url_uses_path_component(self):
+        assert child_path(Path("/out"), "https://cdn.example.com/catalog.json") == Path("/out/catalog.json")
+
+    def test_absolute_url_nested_path(self):
+        assert child_path(Path("/out"), "https://cdn.example.com/data/v2/catalog.json") == Path("/out/data/v2/catalog.json")
+
 
 class TestReadWriteJson:
     def test_round_trip(self, tmp_path):

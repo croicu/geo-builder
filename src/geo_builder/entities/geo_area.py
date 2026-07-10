@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ..errors import CatalogError
 from ..protocols import (
@@ -33,7 +34,12 @@ def _save_json(path: Path, payload: object) -> None:
 
 
 def _child_path(parent: Path, relative_path: str) -> Path:
-    return parent / relative_path.removeprefix("./")
+    parsed = urlparse(relative_path)
+    if parsed.scheme:
+        path = parsed.path.lstrip("/")
+    else:
+        path = relative_path.removeprefix("./")
+    return parent / path
 
 
 # --- GeoJSON loaders ---
