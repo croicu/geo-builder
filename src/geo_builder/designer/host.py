@@ -827,7 +827,9 @@ def launch(
         html = template.replace("GEO_TARGET_URL", json.dumps(app_url))
         window = webview.create_window("Geo Designer", html=html, hidden=True)
     else:
-        window = webview.create_window("Geo Designer", url, hidden=True)
+        # Load an empty page first so the WebResourceRequested filter can be registered
+        # before geo-browser's JS starts making catalog requests (race condition fix).
+        window = webview.create_window("Geo Designer", html="<html><body></body></html>", hidden=True)
 
     setup_done = False
 
@@ -838,8 +840,8 @@ def launch(
 
             def do_setup() -> None:
                 _setup(window, resolved_catalog, resolved_out_dir, in_dir, debug)
-                if not break_on_load and api is not None:
-                    api.ready()
+                if not break_on_load:
+                    window.load_url(url)
 
             threading.Thread(target=do_setup, daemon=True).start()
         else:
@@ -855,11 +857,9 @@ def launch(
 
     Logger.set_logger(ConsoleLogSink(min_level=log_level))
     try:
-        if in_dir is not None:
+        if in_dir is not None and not noninvasive:
             head_file = in_dir / _HEAD_FILE
-            in_dir_is_empty = not in_dir.exists() or not any(in_dir.iterdir())
-            should_pull = not head_file.exists() and (not noninvasive or in_dir_is_empty)
-            if should_pull:
+            if not head_file.exists():
                 if assets_url is not None:
                     pull_origin = assets_url
                 else:

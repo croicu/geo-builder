@@ -98,7 +98,6 @@ def save_catalog(
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
     source_dir = Path(in_dir) if in_dir is not None else None
     catalog_url = _resolve_catalog_url(source_dir, debug) if source_dir is not None else _default_catalog_url(debug)
 
@@ -113,7 +112,9 @@ def save_catalog(
     }
 
     _clean_dir(output_dir)
-    save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
+    head_payload = {"version": 1, "catalogUrl": catalog_url}
+    save_json(output_dir / _CATALOG_HEAD, head_payload)
+    save_json(output_dir / _CATALOG_HEAD_DEBUG, head_payload)
     catalog_path = child_path(output_dir, catalog_url)
     save_json(catalog_path, catalog_payload)
 
@@ -137,7 +138,6 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    head_filename = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
     catalog_url = _resolve_catalog_url(output_dir, debug)
 
     areas_payload = []
@@ -150,7 +150,9 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
         "areas": areas_payload,
     }
 
-    save_json(output_dir / head_filename, {"version": 1, "catalogUrl": catalog_url})
+    head_payload = {"version": 1, "catalogUrl": catalog_url}
+    save_json(output_dir / _CATALOG_HEAD, head_payload)
+    save_json(output_dir / _CATALOG_HEAD_DEBUG, head_payload)
     catalog_path = child_path(output_dir, catalog_url)
     save_json(catalog_path, catalog_payload)
 
