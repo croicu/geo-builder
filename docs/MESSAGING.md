@@ -280,13 +280,13 @@ In design mode the browser fetches geo assets from a different origin than the V
 ```
 
 ```
-// resulting designUrl (geo-builder appends assetsUrl automatically)
-http://localhost:5173/?design=1&assetsUrl=http://localhost:5174/
+// resulting designUrl (geo-builder appends assetsBase automatically)
+http://localhost:5173/?design=1&assetsBase=http://localhost:5174/
 ```
 
 | settings.json field | Query parameter | Example value | Description |
 |---------------------|-----------------|---------------|-------------|
-| `assetsUrl` | `assetsUrl` | `http://localhost:5174/` | Base URL for all geo asset fetches. Overrides the default origin for the entire loading chain (head → catalog → manifests → geojson). Trailing slash is optional — the browser normalizes it. |
+| `assetsUrl` | `assetsBase` | `http://localhost:5174/` | Base URL for all geo asset fetches. Overrides the default origin for the entire loading chain (head → catalog → manifests → geojson). Trailing slash is optional — the browser normalizes it. |
 
 When `assetsUrl` is set the browser resolves the head URL as `{assetsUrl}catalog.head.json` (or the debug variant when `?debug` is also present). All downstream URLs inherit the override automatically because they are resolved relative to the head URL via the standard `resolveUrl` chain.
 
