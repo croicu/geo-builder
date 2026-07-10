@@ -16,7 +16,7 @@ from .settings import Settings
 @dataclass
 class CliArguments:
     tasks_path: Path
-    in_directory: Path
+    in_directory: Path | None
     out_directory: Path
     edit: bool = False
 
@@ -38,9 +38,9 @@ def parse_args(argv: list[str]) -> CliArguments:
         "--in",
         dest="in_directory",
         type=Path,
-        default=Path("./in"),
+        default=None,
         metavar="dir",
-        help="working directory for service artifacts (default: ./in); auto-created if absent; pulled from the service on first designer launch",
+        help="working directory for service artifacts; required in build mode; defaults to ./in in designer mode",
     )
 
     parser.add_argument(
@@ -106,21 +106,26 @@ def main() -> int:
         if not settings.design_url:
             print("geo-builder: error: no designUrl configured in settings.json", file=sys.stderr)
             return 1
+        in_dir = arguments.in_directory or Path("./in")
         try:
-            catalog = load_catalog(arguments.in_directory, debug=settings.debug)
+            catalog = load_catalog(in_dir, debug=settings.debug)
         except GeoError:
             catalog = GeoCatalog(is_default=True)
         _launch_designer(
             settings.design_url,
             catalog=catalog,
             out_dir=arguments.out_directory,
-            in_dir=arguments.in_directory,
+            in_dir=in_dir,
             debug=settings.debug,
             break_on_load=settings.break_on_load,
             dev_tools=settings.dev_tools,
             log_level=settings.logging,
         )
         return 0
+
+    if arguments.in_directory is None:
+        print("geo-builder: error: --in is required in build mode", file=sys.stderr)
+        return 1
 
     Logger.set_logger(ConsoleLogSink(min_level=settings.logging))
     try:
