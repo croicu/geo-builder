@@ -2,6 +2,7 @@
   "settings": {
     "devTools": false,
     "designUrl": "http://localhost:5173/?design=1",
+    "assetsUrl": "http://localhost:5174/",
     "break": false,
     "logLevel": "info"
   },
