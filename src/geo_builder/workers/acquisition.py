@@ -1,3 +1,5 @@
+import time
+
 from ..contracts import AcquisitionTask, Executor, Worker, WorkerResult
 from ..diagnostics import Logger
 from ..entities import GeoArea, GeoLayer
@@ -14,8 +16,10 @@ class AcquisitionWorker(Worker):
 
         self._task = task
         self._provider_factory = ProviderFactory()
+        self._start_time: float = 0.0
 
     def execute(self, executor: Executor) -> WorkerResult:
+        self._start_time = time.perf_counter()
         task = self._task
         bbox = task.bbox
         filter_keys = ", ".join(task.filters.keys())
@@ -67,8 +71,12 @@ class AcquisitionWorker(Worker):
 
     def _result(self, fatal: bool = False, error: str | None = None) -> WorkerResult:
         task = self._task
+        elapsed = time.perf_counter() - self._start_time
 
-        Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} Completed. Error: {error}")
+        if error:
+            Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} completed in {elapsed:.1f}s. Error: {error}")
+        else:
+            Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} completed in {elapsed:.1f}s.")
         return WorkerResult(fatal, error)
 
     def _find_existing_layer(self, area: GeoArea, acquisition: dict) -> GeoLayer | None:
