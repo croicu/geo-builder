@@ -85,6 +85,11 @@ class Settings:
                 sep = "&" if "?" in design_url else "?"
                 design_url = f"{design_url}{sep}debug=1"
 
+            assets_url = str(settings_payload["assetsUrl"]) if "assetsUrl" in settings_payload else None
+            if assets_url is not None and design_url is not None:
+                sep = "&" if "?" in design_url else "?"
+                design_url = f"{design_url}{sep}assetsUrl={assets_url}"
+
             map_payload = settings_payload.get("map", {})
             if isinstance(map_payload, dict) and design_url is not None:
                 map_center = map_payload.get("center")
