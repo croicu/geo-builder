@@ -226,7 +226,6 @@ class TestDesignMode:
                 dev_tools=False,
                 log_level=TelemetryLevel.ERROR,
                 noninvasive=False,
-                assets_url=None,
             )
             assert result == 0
 

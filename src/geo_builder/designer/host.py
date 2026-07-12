@@ -809,7 +809,6 @@ def launch(
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
     noninvasive: bool = False,
-    assets_url: str | None = None,
 ) -> None:
     resolved_catalog = catalog if catalog is not None else GeoCatalog()
     resolved_out_dir = out_dir if out_dir is not None else Path("./out")
@@ -860,11 +859,8 @@ def launch(
         if in_dir is not None and not noninvasive:
             head_file = in_dir / _HEAD_FILE
             if not head_file.exists():
-                if assets_url is not None:
-                    pull_origin = assets_url
-                else:
-                    p = urlparse(url)
-                    pull_origin = f"{p.scheme}://{p.netloc}"
+                p = urlparse(url)
+                pull_origin = f"{p.scheme}://{p.netloc}"
                 Logger.info(f"Pulling from {pull_origin} into {in_dir}")
                 in_dir.mkdir(parents=True, exist_ok=True)
                 _pull(pull_origin, in_dir)
