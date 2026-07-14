@@ -212,6 +212,8 @@ def save_area_csv(geo_area: GeoArea, output_dir: Path) -> None:
         if geo_layer.layer.geojson is None:
             continue
         for feature in geo_layer.layer.geojson.features:
+            if feature.geometry.type != "Point":
+                continue
             rows.append((geo_layer.layer.id, feature))
 
     if not rows:

@@ -7,11 +7,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .colors import layer_color
-from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, Task, VoidTask
+from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, SearchTask, Task, VoidTask
 from .entities import GeoArea, GeoCatalog, GeoLayer
 from .errors import GeoError
-from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle, VoidStyle
+from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle, SearchStyle, VoidStyle
 from .workers.factory import WorkerFactory
+
+_FIXED_TAIL_TASK_TYPES = {"aggregation", "deduping", "poi", "void", "search"}
 
 
 @dataclass
@@ -111,8 +113,9 @@ class Builder:
             settings = Settings.current()
             poi_style = self._poi_style_from_template(settings)
             result.append(PoiTask(style=poi_style))
-            void_style = self._void_style_from_template(settings)
-            result.append(VoidTask(style=void_style))
+            result.append(self._void_task_from_template(settings))
+            search_style = self._search_style_from_template(settings)
+            result.append(SearchTask(style=search_style))
         return result
 
     def _poi_style_from_template(self, settings) -> PoiStyle:
@@ -130,25 +133,58 @@ class Builder:
                 )
         return PoiStyle()
 
-    def _void_style_from_template(self, settings) -> VoidStyle:
+    def _void_task_from_template(self, settings) -> VoidTask:
         template = settings.template
         if template is None:
-            return VoidStyle()
+            return VoidTask()
         for tlayer in template.get("layers", []):
             if tlayer.get("id") == "__void__":
                 s = tlayer.get("style", {})
-                return VoidStyle(
+                style = VoidStyle(
                     name=str(tlayer.get("name", "Mundane")),
                     color=str(s["color"]) if s.get("color") is not None else "#1f1f1f",
                     opacity=float(s.get("opacity", 0.9)),
                 )
-        return VoidStyle()
+                default_radius_m = float(s.get("radius", VoidTask().default_radius_m))
+                return VoidTask(style=style, default_radius_m=default_radius_m)
+        return VoidTask()
+
+    def _search_style_from_template(self, settings) -> SearchStyle:
+        template = settings.template
+        if template is None:
+            return SearchStyle()
+        for tlayer in template.get("layers", []):
+            if tlayer.get("id") == "__search__":
+                s = tlayer.get("style", {})
+                return SearchStyle(
+                    name=str(tlayer.get("name", "Search Results")),
+                    color=str(s.get("color", "#00007f")),
+                    opacity=float(s.get("opacity", 0.3)),
+                )
+        return SearchStyle()
 
     def push_task(self, task: JsonObject) -> None:
         self._stack.append(task)
 
     def push_tasks(self, tasks: list[JsonObject]) -> None:
         self._stack.extend(tasks)
+
+    def defer_task(self, task: JsonObject) -> None:
+        """Push a task behind other pending acquisitions, but ahead of the fixed tail.
+
+        Used for rate-limited retries: the task runs again only after every *other* acquisition
+        currently queued has had a chance to run first, giving the rate limit window time to
+        recover — but it still must run before Aggregation/Deduping/Poi/Void/Search, since those
+        read whatever's in the area's layers at the moment they run. Deferring all the way to the
+        bottom of the stack (behind the already-queued fixed tail) would let the fixed tail run
+        first and silently compute void/POI/search without this task's data.
+        """
+        insert_at = len(self._stack)
+        for i, existing in enumerate(self._stack):
+            if getattr(existing, "type", None) not in _FIXED_TAIL_TASK_TYPES:
+                insert_at = i
+                break
+        self._stack.insert(insert_at, task)
 
     def add_area(self, task: AcquisitionTask) -> GeoArea:
         area_id = task.areaId
@@ -235,15 +271,22 @@ class Builder:
             json.dump(asdict(layer.geojson), f, indent=2)
 
         csv_path = task_dir / f"{layer.id}.csv"
-        features = layer.geojson.features
-        if not features:
+        point_features = []
+        for feat in layer.geojson.features:
+            if feat.geometry.type == "Point":
+                point_features.append(feat)
+        if not point_features:
             return
-        property_keys = sorted({key for feat in features for key in feat.properties})
+        property_key_set: set[str] = set()
+        for feat in point_features:
+            for key in feat.properties:
+                property_key_set.add(key)
+        property_keys = sorted(property_key_set)
         fieldnames = ["lon", "lat"] + property_keys
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            for feat in features:
+            for feat in point_features:
                 row: dict[str, object] = {
                     "lon": feat.geometry.coordinates[0],
                     "lat": feat.geometry.coordinates[1],

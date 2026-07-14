@@ -6,7 +6,7 @@ import urllib.request
 
 from ..contracts import AcquisitionTask, Provider
 from ..diagnostics import Logger
-from ..errors import ProviderError
+from ..errors import ProviderError, ProviderErrorReason
 from ..protocols import Feature, GeoJson, Geometry, Layer
 
 _DEFAULT_URL = "https://overpass-api.de/api/interpreter"
@@ -149,15 +149,18 @@ out {out_mode};
             except urllib.error.HTTPError as error:
                 if error.code == 400:
                     Logger.warning("OverpassProvider: HTTP 400 — query rejected, will split bbox")
-                    raise ProviderError("Overpass query rejected (HTTP 400).") from error
+                    raise ProviderError("Overpass query rejected (HTTP 400).", reason=ProviderErrorReason.TOO_LARGE) from error
                 if error.code in (429, 504):
                     if attempt < len(_RETRY_DELAYS):
                         delay = _RETRY_DELAYS[attempt]
                         Logger.warning(f"OverpassProvider: HTTP {error.code} — retry {attempt + 1}/{len(_RETRY_DELAYS)} in {delay}s")
                         time.sleep(delay)
                         continue
-                    Logger.warning(f"OverpassProvider: HTTP {error.code} — retries exhausted, treating as split trigger")
-                    raise ProviderError(f"Overpass rate limited (HTTP {error.code}) after {len(_RETRY_DELAYS)} retries.") from error
+                    Logger.warning(f"OverpassProvider: HTTP {error.code} — retries exhausted, deferring bbox for later retry")
+                    raise ProviderError(
+                        f"Overpass rate limited (HTTP {error.code}) after {len(_RETRY_DELAYS)} retries.",
+                        reason=ProviderErrorReason.RATE_LIMITED,
+                    ) from error
                 Logger.warning(f"OverpassProvider: HTTP {error.code} — unexpected, re-raising")
                 raise
 

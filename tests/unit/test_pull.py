@@ -237,17 +237,22 @@ class TestCatalogUrlNormalization:
         assert saved["catalogUrl"] == "./catalog.json"
 
     @patch("geo_builder.designer.pull.requests.get")
-    def test_catalog_still_fetched_from_absolute_url_after_normalization(self, mock_get, tmp_path):
+    def test_catalog_fetched_from_local_origin_after_normalization(self, mock_get, tmp_path):
+        """A stale absolute catalogUrl (e.g. a head file copied from a production pull) must
+        not redirect the rest of the pull to that host — everything follows the origin pull()
+        was actually called with, matching "point designUrl at X, get everything from X"."""
         head = json.dumps({"version": 1, "catalogUrl": "https://cdn.example.com/catalog.json"}).encode()
         responses = {
             "http://svc/catalog.head.json": _resp(head),
             "http://svc/catalog.head.debug.json": _resp(head),
-            "https://cdn.example.com/catalog.json": _resp(_catalog("../areas/napoli/manifest.json")),
-            "https://cdn.example.com/areas/napoli/manifest.json": _resp(_manifest()),
+            "http://svc/catalog.json": _resp(_catalog("../areas/napoli/manifest.json")),
+            "http://svc/areas/napoli/manifest.json": _resp(_manifest()),
         }
         mock_get.side_effect = lambda url, **kw: responses[url]
         pull("http://svc", tmp_path)
         assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
+        for called_url in mock_get.call_args_list:
+            assert not called_url.args[0].startswith("https://cdn.example.com")
 
 
 class TestIncrementalPull:

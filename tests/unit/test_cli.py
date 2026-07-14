@@ -226,8 +226,17 @@ class TestDesignMode:
                 dev_tools=False,
                 log_level=TelemetryLevel.ERROR,
                 noninvasive=False,
+                assets_url=None,
             )
             assert result == 0
+
+    def test_assets_url_passed_through_to_launch_designer(self):
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli._launch_designer") as mock_launch:
+            MockSettings.load.return_value = StubSettings(design_url="http://localhost:5173/", assets_url="http://localhost:5174/")
+
+            main()
+
+            assert mock_launch.call_args.kwargs["assets_url"] == "http://localhost:5174/"
 
     def test_no_design_url_returns_1(self, capsys):
         with patch("geo_builder.cli.Settings") as MockSettings:

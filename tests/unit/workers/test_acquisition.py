@@ -1,5 +1,6 @@
 from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
 from geo_builder.entities import GeoArea
+from geo_builder.errors import ProviderError, ProviderErrorReason
 from geo_builder.protocols import Area, AreaStyle, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.acquisition import AcquisitionWorker
 from tests.shared.stubs import StubExecutor, StubFactory, StubProvider
@@ -74,47 +75,79 @@ class TestExecute:
 
         assert result == WorkerResult()
 
-    def test_provider_error_pushes_four_child_tasks(self):
-        from geo_builder.errors import ProviderError
-
+    def test_too_large_error_pushes_four_child_tasks(self):
         executor = StubExecutor(make_area())
-        worker = make_worker(StubProvider(raises=ProviderError("too large")))
+        worker = make_worker(StubProvider(raises=ProviderError("too large", reason=ProviderErrorReason.TOO_LARGE)))
 
         worker.execute(executor)
 
         assert len(executor.pushed_tasks) == 4
 
-    def test_provider_error_returns_non_fatal(self):
-        from geo_builder.errors import ProviderError
-
+    def test_too_large_error_returns_non_fatal(self):
         executor = StubExecutor(make_area())
-        worker = make_worker(StubProvider(raises=ProviderError("too large")))
+        worker = make_worker(StubProvider(raises=ProviderError("too large", reason=ProviderErrorReason.TOO_LARGE)))
 
         result = worker.execute(executor)
 
         assert result.fatal is False
 
-    def test_provider_error_does_not_add_layer(self):
-        from geo_builder.errors import ProviderError
-
+    def test_too_large_error_does_not_add_layer(self):
         executor = StubExecutor(make_area())
-        worker = make_worker(StubProvider(raises=ProviderError("too large")))
+        worker = make_worker(StubProvider(raises=ProviderError("too large", reason=ProviderErrorReason.TOO_LARGE)))
 
         worker.execute(executor)
 
         assert executor.added_layers == []
 
-    def test_provider_error_on_degenerate_bbox_is_fatal(self):
-        from geo_builder.errors import ProviderError
-
+    def test_too_large_error_on_degenerate_bbox_is_fatal(self):
         task = make_task(west=1.0, south=1.0, east=1.0, north=1.0)
         executor = StubExecutor(make_area())
-        worker = make_worker(StubProvider(raises=ProviderError("too large")), task=task)
+        worker = make_worker(StubProvider(raises=ProviderError("too large", reason=ProviderErrorReason.TOO_LARGE)), task=task)
 
         result = worker.execute(executor)
 
         assert result.fatal is True
         assert result.error is not None
+
+    def test_rate_limited_error_defers_task_not_split(self):
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(raises=ProviderError("rate limited", reason=ProviderErrorReason.RATE_LIMITED)))
+
+        result = worker.execute(executor)
+
+        assert executor.pushed_tasks == []
+        assert len(executor.deferred_tasks) == 1
+        assert result.fatal is False
+
+    def test_rate_limited_error_increments_attempts(self):
+        task = make_task()
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(raises=ProviderError("rate limited", reason=ProviderErrorReason.RATE_LIMITED)), task=task)
+
+        worker.execute(executor)
+
+        assert executor.deferred_tasks[0].rate_limit_attempts == 1
+
+    def test_rate_limited_error_fatal_after_max_requeues(self):
+        task = make_task()
+        task.rate_limit_attempts = 3
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(raises=ProviderError("rate limited", reason=ProviderErrorReason.RATE_LIMITED)), task=task)
+
+        result = worker.execute(executor)
+
+        assert executor.deferred_tasks == []
+        assert result.fatal is True
+
+    def test_fatal_error_neither_splits_nor_defers(self):
+        executor = StubExecutor(make_area())
+        worker = make_worker(StubProvider(raises=ProviderError("unknown provider")))
+
+        result = worker.execute(executor)
+
+        assert executor.pushed_tasks == []
+        assert executor.deferred_tasks == []
+        assert result.fatal is True
 
 
 class TestLayerIdAssignment:

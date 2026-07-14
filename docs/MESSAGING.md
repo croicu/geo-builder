@@ -423,7 +423,7 @@ A reserved builtin virtual layer with `url: null`. The browser populates it at r
 
 #### `__search__` layer
 
-A reserved builtin virtual layer with `url: null`. Holds ephemeral search results (Nominatim) rendered as temporary markers. The browser synthesizes this layer at runtime if it is absent from the manifest — geo-builder pipelines are not required to emit it. `visible` is always `false` on write; the layer is never shown until a search result arrives.
+A reserved builtin virtual layer with `url: null`. Holds ephemeral search results (Nominatim) rendered as temporary markers. `geo-builder` now emits this layer by default (`SearchWorker`, a static stub copied from `template.json` — no computation). The browser should still synthesize it at runtime if it is absent from the manifest (older/hand-authored data), since emission was never a hard requirement. `visible` is always `false` on write; the layer is never shown until a search result arrives.
 
 ```jsonc
 {

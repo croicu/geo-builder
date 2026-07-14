@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import asdict
+from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -45,13 +46,29 @@ def _child_path(parent: Path, relative_path: str) -> Path:
 # --- GeoJSON loaders ---
 
 
-def _load_geometry(payload: dict) -> Geometry:
-    coordinates = payload["coordinates"]
+def _normalize_coordinates(coordinates: object) -> object:
+    """Recursively cast every leaf number in a GeoJSON coordinates array to float.
+
+    Handles Point ([lon, lat]), Polygon (list of rings), and MultiPolygon (list of Polygons)
+    shapes uniformly, since they only differ in nesting depth.
+    """
     if not isinstance(coordinates, list):
         raise CatalogError("geometry coordinates must be an array.")
+    if len(coordinates) == 0:
+        return []
+    if isinstance(coordinates[0], list):
+        normalized = []
+        for item in coordinates:
+            normalized.append(_normalize_coordinates(item))
+        return normalized
+    return [float(coordinates[0]), float(coordinates[1])]
+
+
+def _load_geometry(payload: dict) -> Geometry:
+    coordinates = payload["coordinates"]
     return Geometry(
         type=str(payload["type"]),
-        coordinates=[float(coordinates[0]), float(coordinates[1])],
+        coordinates=_normalize_coordinates(coordinates),
     )
 
 
@@ -83,6 +100,13 @@ def _load_geojson(payload: dict) -> GeoJson:
 # --- Layer loaders ---
 
 
+def _load_layer_geometry(payload: dict) -> dict | None:
+    geometry = payload.get("geometry")
+    if geometry is not None and not isinstance(geometry, dict):
+        geometry = None
+    return geometry
+
+
 def _load_stub_layer(payload: dict) -> Layer:
     style = payload.get("style", {})
     if not isinstance(style, dict):
@@ -97,6 +121,7 @@ def _load_stub_layer(payload: dict) -> Layer:
         visible=bool(payload["visible"]),
         style=style,
         acquisition=acquisition,
+        geometry=_load_layer_geometry(payload),
     )
 
 
@@ -119,11 +144,12 @@ def _load_layer(geojson_path: Path, payload: dict) -> Layer:
         style=style,
         acquisition=acquisition,
         geojson=_load_geojson(geojson_payload),
+        geometry=_load_layer_geometry(payload),
     )
 
 
 _KNOWN_MANIFEST_KEYS = {"version", "layers", "aggregation", "deduping"}
-_KNOWN_LAYER_KEYS = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson"}
+_KNOWN_LAYER_KEYS = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson", "geometry"}
 
 
 def _load_manifest_layers(manifest_path: Path, payload: dict) -> list[GeoLayer]:
@@ -166,6 +192,8 @@ def _build_manifest_dict(detail: Manifest | None, layers: list[GeoLayer], extras
             entry["url"] = layer.url
         if layer.acquisition is not None:
             entry["acquisition"] = layer.acquisition
+        if layer.geometry is not None:
+            entry["geometry"] = layer.geometry
         layers_payload.append(entry)
 
     result: dict = {}
@@ -179,23 +207,40 @@ def _build_manifest_dict(detail: Manifest | None, layers: list[GeoLayer], extras
     return result
 
 
-def _acquisition_changed(old_layers: list[GeoLayer], new_layers: list[GeoLayer]) -> bool:
-    """Return True if the new layer set requires a rebuild.
+class ManifestChange(Enum):
+    """What a manifest edit requires the pipeline to do."""
 
-    A rebuild is needed when layers are added or removed, when layer IDs change,
-    or when any layer's acquisition block differs from the existing one.
+    NONE = "none"  # only presentational fields changed (style, visibility, name, ...)
+    REPROCESS = "reprocess"  # __void__ geometry changed — rerun Agg/Dedup/Poi/Void/Search only
+    REACQUIRE = "reacquire"  # a layer's acquisition block changed — full rebuild needed
+
+
+def _classify_manifest_change(old_layers: list[GeoLayer], new_layers: list[GeoLayer]) -> ManifestChange:
+    """Classify what the new layer set requires relative to the old one.
+
+    REACQUIRE takes priority over REPROCESS: layers added/removed or any acquisition block
+    changed means a full rebuild is needed regardless of any geometry change elsewhere.
     """
     if len(old_layers) != len(new_layers):
-        return True
-    old_by_id: dict[str, dict | None] = {}
+        return ManifestChange.REACQUIRE
+
+    old_by_id: dict[str, GeoLayer] = {}
     for gl in old_layers:
-        old_by_id[gl.layer.id] = gl.layer.acquisition
+        old_by_id[gl.layer.id] = gl
+
+    reprocess = False
     for gl in new_layers:
-        if gl.layer.id not in old_by_id:
-            return True
-        if gl.layer.acquisition != old_by_id[gl.layer.id]:
-            return True
-    return False
+        old_gl = old_by_id.get(gl.layer.id)
+        if old_gl is None:
+            return ManifestChange.REACQUIRE
+        if gl.layer.acquisition != old_gl.layer.acquisition:
+            return ManifestChange.REACQUIRE
+        if gl.layer.type == "__void__" and gl.layer.geometry != old_gl.layer.geometry:
+            reprocess = True
+
+    if reprocess:
+        return ManifestChange.REPROCESS
+    return ManifestChange.NONE
 
 
 class GeoArea:
@@ -264,11 +309,14 @@ class GeoArea:
     def to_manifest_dict(self) -> dict:
         return _build_manifest_dict(self.detail, self.layers, self._manifest_extras)
 
-    def apply_manifest(self, payload: dict, output_dir: Path) -> bool:
+    def apply_manifest(self, payload: dict, output_dir: Path) -> ManifestChange:
         """Replace this area's layers from a manifest-shaped dict.
 
-        Returns True if acquisition data changed (a rebuild is required), False if only
-        non-acquisition fields (style, visibility, name, …) changed.
+        Returns REACQUIRE if any layer's acquisition block changed (a full rebuild — re-fetch
+        from the provider — is required), REPROCESS if only the __void__ layer's geometry
+        changed (Aggregation/Deduping/Poi/Void/Search need to rerun against existing data, no
+        provider fetch needed), or NONE if only presentational fields (style, visibility,
+        name, …) changed.
         Saves to disk before updating self — if the save fails self is unchanged.
         Raises CatalogError on invalid payload or missing geojson files, OSError on I/O failure.
         """
@@ -292,7 +340,7 @@ class GeoArea:
             if k not in _KNOWN_MANIFEST_KEYS:
                 new_extras[k] = v
 
-        needs_rebuild = _acquisition_changed(self.layers, new_layers)
+        change = _classify_manifest_change(self.layers, new_layers)
 
         _save_json(manifest_path, _build_manifest_dict(new_detail, new_layers, new_extras))
 
@@ -300,7 +348,7 @@ class GeoArea:
         self.detail = new_detail
         self._manifest_extras = new_extras
 
-        return needs_rebuild
+        return change
 
     @property
     def summary(self) -> Area:  # TODO: protocol exposed — revisit

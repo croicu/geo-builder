@@ -88,6 +88,7 @@ def _launch_designer(
     dev_tools: bool = False,
     log_level=None,
     noninvasive: bool = False,
+    assets_url: str | None = None,
 ) -> None:
     from geo_builder.designer.host import launch
 
@@ -101,6 +102,7 @@ def _launch_designer(
         dev_tools=dev_tools,
         log_level=log_level,
         noninvasive=noninvasive,
+        assets_url=assets_url,
     )
 
 
@@ -132,6 +134,7 @@ def main() -> int:
             dev_tools=settings.dev_tools,
             log_level=settings.logging,
             noninvasive=arguments.noninvasive,
+            assets_url=settings.assets_url,
         )
         return 0
 

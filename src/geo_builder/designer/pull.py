@@ -48,6 +48,7 @@ def _pull_head(url: str, name: str, in_dir: Path, seen: set[str]) -> None:
                 dest = in_dir / name
                 dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
                 Logger.info(f"pull: '{name}': normalized absolute catalogUrl to '{local_rel}'")
+                catalog_rel = local_rel
             _pull_catalog(urljoin(url, catalog_rel), in_dir, seen)
     except Exception as exc:
         Logger.warning(f"pull: head parse '{url}': {exc}")

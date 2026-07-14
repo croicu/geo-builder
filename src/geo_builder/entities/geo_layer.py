@@ -22,7 +22,7 @@ class GeoLayer:
 
         Known layer fields are skipped — they are always written from the Layer dataclass on save.
         """
-        _known = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson"}
+        _known = {"id", "name", "type", "url", "visible", "style", "acquisition", "geojson", "geometry"}
         for k, v in payload.items():
             if k not in _known:
                 self._raw[k] = v
