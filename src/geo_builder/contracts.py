@@ -75,7 +75,7 @@ class VoidTask(Task):
     style: VoidStyle
     default_radius_m: float
 
-    def __init__(self, style: VoidStyle | None = None, default_radius_m: float = 200.0) -> None:
+    def __init__(self, style: VoidStyle | None = None, default_radius_m: float = 100.0) -> None:
         super().__init__("void")
         self.style = style if style is not None else VoidStyle()
         self.default_radius_m = default_radius_m
