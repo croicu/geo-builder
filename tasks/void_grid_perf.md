@@ -1,6 +1,6 @@
 # Void Grid Field Construction: Point-Splatting Instead of Corner-Querying
 
-## Status: Ready to Submit
+## Status: Done
 
 ## Problem statement
 

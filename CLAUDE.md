@@ -108,11 +108,6 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
-- **File**: [Void Grid Field Construction Perf](tasks/void_grid_perf.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: `compute_void_feature`'s `grid` stage (distance-field construction) was 90-99% of total runtime — Berlin's bare `__void__` took 145-277s just for `grid`, ~9-13 min total across a 6-area catalog. Root cause: per-corner bucket queries scanned every point in a 3x3 neighborhood, blowing up for dense urban data. Rewrote as point-splatting (`_Grid._splat_point`): each point updates only the grid corners within its own `radius_m + padding` instead of every corner querying nearby points. 387 tests pass unchanged (exact hole-shape assertions confirm equivalence, not just "doesn't crash"). Real re-measurement against the same baseline (`radius_200_baseline.txt` vs `radius_200_improvements.txt`): Berlin bare `__void__` grid 145.4s → 3.9s (37x); whole-catalog VoidWorker pass ~565s → ~48s (~12x end-to-end). Follow-up: `VoidTask.default_radius_m` changed 200→100 (`contracts.py`) — re-measured and confirmed this is *not* a perf lever (grid time is set by the `_MAX_GRID_CELLS_PER_AXIS` cell-size cap, not `radius_m`); kept at 100 anyway as the intended void-circle sizing value.
-
 - **File**: [Default Layers](tasks/default_layers.md)
 - **Status**: Brainstorm
 - **GitHub Issue**: N/A
@@ -139,6 +134,11 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Key Context**: `VoidWorker` now precomputes real `__void__`/`__void__<id>__` GeoJSON `Polygon`/`MultiPolygon` polygons (grid + hand-rolled marching squares, no shapely; padded grid ring for guaranteed contour closure + Sutherland-Hodgman clip back to bbox). Also fixed a latent `DedupingWorker` crash risk on non-Point geometry. 364 tests pass, ruff clean, docs updated. `geo-browser`-side runtime changes from `docs/LAYERS.md` are still outstanding (separate repo).
 
 ## Completed Tasks
+
+- **File**: [Void Grid Field Construction Perf](tasks/void_grid_perf.md)
+- **Status**: Done
+- **GitHub Issue**: N/A
+- **Key Context**: `compute_void_feature`'s `grid` stage (distance-field construction) was 90-99% of total runtime — Berlin's bare `__void__` took 145-277s just for `grid`, ~9-13 min total across a 6-area catalog. Root cause: per-corner bucket queries scanned every point in a 3x3 neighborhood, blowing up for dense urban data. Rewrote as point-splatting (`_Grid._splat_point`): each point updates only the grid corners within its own `radius_m + padding` instead of every corner querying nearby points. 387 tests pass unchanged (exact hole-shape assertions confirm equivalence, not just "doesn't crash"). Real re-measurement against the same baseline (`radius_200_baseline.txt` vs `radius_200_improvements.txt`): Berlin bare `__void__` grid 145.4s → 3.9s (37x); whole-catalog VoidWorker pass ~565s → ~48s (~12x end-to-end). Follow-up: `VoidTask.default_radius_m` changed 200→100 (`contracts.py`) — re-measured and confirmed this is *not* a perf lever (grid time is set by the `_MAX_GRID_CELLS_PER_AXIS` cell-size cap, not `radius_m`); kept at 100 anyway as the intended void-circle sizing value. Committed as 37d923a.
 
 - **File**: [Pull Origin Fix](tasks/pull_origin_fix.md)
 - **Status**: Done
