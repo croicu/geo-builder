@@ -51,6 +51,60 @@ def _acquisition_matches(layer_acq: dict, template_acq: dict | None) -> bool:
     return True
 
 
+def _poi_task_from_template(template: dict):
+    from ..contracts import PoiTask
+    from ..protocols import PoiStyle
+
+    poi_style = PoiStyle()
+    for tlayer in template.get("layers", []):
+        if tlayer.get("id") == "__poi__":
+            s = tlayer.get("style", {})
+            poi_style = PoiStyle(
+                name=str(tlayer.get("name", "POI")),
+                color=str(s["color"]) if s.get("color") is not None else None,
+                opacity=float(s.get("opacity", 0.7)),
+                radius=float(s["radius"]) if s.get("radius") is not None else None,
+            )
+            break
+    return PoiTask(style=poi_style)
+
+
+def _void_task_from_template(template: dict):
+    from ..contracts import VoidTask
+    from ..protocols import VoidStyle
+
+    void_task = VoidTask()
+    for tlayer in template.get("layers", []):
+        if tlayer.get("id") == "__void__":
+            s = tlayer.get("style", {})
+            void_style = VoidStyle(
+                name=str(tlayer.get("name", "Mundane")),
+                color=str(s["color"]) if s.get("color") is not None else "#1f1f1f",
+                opacity=float(s.get("opacity", 0.9)),
+            )
+            default_radius_m = float(s.get("radius", VoidTask().default_radius_m))
+            void_task = VoidTask(style=void_style, default_radius_m=default_radius_m)
+            break
+    return void_task
+
+
+def _search_task_from_template(template: dict):
+    from ..contracts import SearchTask
+    from ..protocols import SearchStyle
+
+    search_style = SearchStyle()
+    for tlayer in template.get("layers", []):
+        if tlayer.get("id") == "__search__":
+            s = tlayer.get("style", {})
+            search_style = SearchStyle(
+                name=str(tlayer.get("name", "Search Results")),
+                color=str(s.get("color", "#00007f")),
+                opacity=float(s.get("opacity", 0.3)),
+            )
+            break
+    return SearchTask(style=search_style)
+
+
 def _build_user_stub(tmpl: dict):
     from ..entities import GeoLayer
     from ..protocols import Layer, UserStyle
@@ -262,35 +316,16 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         SetAreaBboxOutput,
     )
     from ..builder import Builder
-    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, VoidTask
-    from ..entities import GeoArea
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
+    from ..entities import GeoArea, ManifestChange
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog, save_catalog_meta
-    from ..protocols import AreaStyle, PoiStyle, VoidStyle
+    from ..protocols import AreaStyle
     from ..settings import Settings
 
     api.define_event(AREA_CHANGED_ID, AreaChangedData)
 
-    def _rebuild_area(area_id: str, fresh_catalog: GeoCatalog) -> None:
-        """Run the pipeline for area_id, update catalog, and fire AreaChanged on success."""
-        for a in fresh_catalog.areas:
-            if a.id == area_id:
-                for geo_layer in a.layers:
-                    if geo_layer.layer.type not in ("__poi__", "__user__", "__void__"):
-                        geo_layer.layer.geojson = None
-                break
-
-        try:
-            result = Builder(fresh_catalog).run()
-            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
-        except Exception as exc:
-            Logger.error(f"pipeline failed for area '{area_id}': {exc}")
-            return
-
-        catalog.areas[:] = result.areas
-        for a in catalog.areas:
-            a.subscribe_changed(on_area_changed)
-
+    def _fire_area_changed(area_id: str, result: GeoCatalog) -> None:
         updated_area = None
         for a in result.areas:
             if a.id == area_id:
@@ -309,6 +344,57 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             )
             Logger.info(f"AreaChanged: firing for area '{area_id}'.")
             api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
+
+    def _rebuild_area(area_id: str, fresh_catalog: GeoCatalog) -> None:
+        """Run the full pipeline (incl. re-acquisition) for area_id, fire AreaChanged on success."""
+        for a in fresh_catalog.areas:
+            if a.id == area_id:
+                for geo_layer in a.layers:
+                    if geo_layer.layer.type not in ("__poi__", "__user__", "__void__", "__search__"):
+                        geo_layer.layer.geojson = None
+                break
+
+        try:
+            result = Builder(fresh_catalog).run()
+            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+        except Exception as exc:
+            Logger.error(f"pipeline failed for area '{area_id}': {exc}")
+            return
+
+        catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
+
+        _fire_area_changed(area_id, result)
+
+    def _reprocess_area(area_id: str, fresh_catalog: GeoCatalog) -> None:
+        """Rerun Aggregation/Deduping/Poi/Void/Search for area_id without re-acquiring data.
+
+        Used when a manifest edit only changed the __void__ layer's geometry (e.g. its radius
+        override) — no provider fetch is needed, just recomputing from data already present.
+        """
+        settings = Settings.current()
+        template = settings.template or {}
+        tasks = [
+            AggregationTask(),
+            DedupingTask(),
+            _poi_task_from_template(template),
+            _void_task_from_template(template),
+            _search_task_from_template(template),
+        ]
+
+        try:
+            result = Builder(fresh_catalog).run(tasks=tasks)
+            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+        except Exception as exc:
+            Logger.error(f"reprocess failed for area '{area_id}': {exc}")
+            return
+
+        catalog.areas[:] = result.areas
+        for a in catalog.areas:
+            a.subscribe_changed(on_area_changed)
+
+        _fire_area_changed(area_id, result)
 
     def on_area_changed(changed_area: GeoArea) -> None:
         if in_dir is not None:
@@ -411,31 +497,9 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
             )
         tasks.append(AggregationTask())
         tasks.append(DedupingTask())
-
-        poi_style = PoiStyle()
-        for tlayer in template.get("layers", []):
-            if tlayer.get("id") == "__poi__":
-                s = tlayer.get("style", {})
-                poi_style = PoiStyle(
-                    name=str(tlayer.get("name", "POI")),
-                    color=str(s["color"]) if s.get("color") is not None else None,
-                    opacity=float(s.get("opacity", 0.7)),
-                    radius=float(s["radius"]) if s.get("radius") is not None else None,
-                )
-                break
-        tasks.append(PoiTask(style=poi_style))
-
-        void_style = VoidStyle()
-        for tlayer in template.get("layers", []):
-            if tlayer.get("id") == "__void__":
-                s = tlayer.get("style", {})
-                void_style = VoidStyle(
-                    name=str(tlayer.get("name", "Mundane")),
-                    color=str(s["color"]) if s.get("color") is not None else "#1f1f1f",
-                    opacity=float(s.get("opacity", 0.9)),
-                )
-                break
-        tasks.append(VoidTask(style=void_style))
+        tasks.append(_poi_task_from_template(template))
+        tasks.append(_void_task_from_template(template))
+        tasks.append(_search_task_from_template(template))
 
         if in_dir is not None:
             try:
@@ -544,14 +608,14 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         save_dir = in_dir if in_dir is not None else out_dir
         try:
-            needs_rebuild = area.apply_manifest(data.manifest, save_dir)
+            change = area.apply_manifest(data.manifest, save_dir)
         except GeoError as exc:
             return MethodResult(PutAreaJsonOutput(error=ERR_MANIFEST_INVALID, errorDescription=str(exc)))
         except OSError as exc:
             return MethodResult(PutAreaJsonOutput(error=ERR_IO, errorDescription=str(exc)))
 
-        if not needs_rebuild:
-            Logger.info(f"PutAreaJson: no acquisition change for '{data.areaId}'; copying manifest.")
+        if change == ManifestChange.NONE:
+            Logger.info(f"PutAreaJson: no acquisition or geometry change for '{data.areaId}'; copying manifest.")
             if in_dir is not None:
                 from ..persistence import child_path
 
@@ -581,7 +645,11 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         else:
             fresh_catalog = catalog
 
-        _rebuild_area(data.areaId, fresh_catalog)
+        if change == ManifestChange.REPROCESS:
+            Logger.info(f"PutAreaJson: geometry-only change for '{data.areaId}'; reprocessing without re-acquisition.")
+            _reprocess_area(data.areaId, fresh_catalog)
+        else:
+            _rebuild_area(data.areaId, fresh_catalog)
         return MethodResult(PutAreaJsonOutput(error=OK))
 
     api.register(PUT_AREA_JSON_ID, on_put_area_json)
@@ -809,6 +877,7 @@ def launch(
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
     noninvasive: bool = False,
+    assets_url: str | None = None,
 ) -> None:
     resolved_catalog = catalog if catalog is not None else GeoCatalog()
     resolved_out_dir = out_dir if out_dir is not None else Path("./out")
@@ -859,8 +928,11 @@ def launch(
         if in_dir is not None and not noninvasive:
             head_file = in_dir / _HEAD_FILE
             if not head_file.exists():
-                p = urlparse(url)
-                pull_origin = f"{p.scheme}://{p.netloc}"
+                if assets_url is not None:
+                    pull_origin = assets_url
+                else:
+                    p = urlparse(url)
+                    pull_origin = f"{p.scheme}://{p.netloc}"
                 Logger.info(f"Pulling from {pull_origin} into {in_dir}")
                 in_dir.mkdir(parents=True, exist_ok=True)
                 _pull(pull_origin, in_dir)

@@ -113,7 +113,32 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **GitHub Issue**: N/A
 - **Key Context**: Rationalize the default layers created when a new area is being created (template.json). Features reference is located at: https://wiki.openstreetmap.org/wiki/Category:Features
 
+- **File**: [Search Layer Stub](tasks/search_layer_stub.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: N/A
+- **Key Context**: `__search__` template.json entry was completely inert (nothing in `src/` read it). New `SearchTask`/`SearchWorker` copies it into the manifest as a static stub (no computation), mirroring the pre-rework `VoidWorker` pattern. Wired into `Builder._tasks_from_catalog()` and `on_add_area`, matching Poi/Void. 371 tests pass, ruff clean, docs updated. Incidentally fixed a missed `defaultRadiusM` gap in `on_add_area`'s void-style parsing.
+
+- **File**: [Void Radius: Per-Area Geometry Override](tasks/void_radius_geometry_override.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: N/A
+- **Key Context**: `defaultRadiusM` renamed to `radius` everywhere (template.json style + new manifest field); new `Layer.geometry` (sibling to `style`, not in it) carries a per-area `{"radius": ...}` override that `VoidWorker` resolves and persists across reruns (even when the resolved radius blanks out every variant — always keeps a stub bare `__void__` so the override survives). `GeoArea.apply_manifest` now returns a 3-state `ManifestChange` (NONE/REPROCESS/REACQUIRE); geometry-only edits trigger a new `_reprocess_area` path in `host.py` (Agg→Dedup→Poi→Void→Search, no provider fetch) instead of a full rebuild or a no-op. 385 tests pass, ruff clean, docs updated.
+
+- **File**: [Rate-Limit Defer](tasks/rate_limit_defer.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: N/A
+- **Key Context**: `AcquisitionWorker` was splitting the bbox on *any* `ProviderError`, including 429/504-after-retries — wrong, since rate limiting isn't fixed by smaller queries and splitting only multiplies load against the same limit. `ProviderError` now carries a `reason` (`TOO_LARGE`/`RATE_LIMITED`/`FATAL`); rate-limited tasks defer (capped at 3 requeues) instead of splitting. Follow-up fix from a real geo-places build: `defer_task` was landing deferred tasks *after* the fixed tail (Agg/Dedup/Poi/Void/Search), causing them to silently run without the deferred layer's data — now inserts just ahead of the fixed tail instead of at the absolute bottom. 379 tests pass, ruff clean.
+
+- **File**: [Void Layer Precompute](tasks/void_layer_precompute.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: N/A
+- **Key Context**: `VoidWorker` now precomputes real `__void__`/`__void__<id>__` GeoJSON `Polygon`/`MultiPolygon` polygons (grid + hand-rolled marching squares, no shapely; padded grid ring for guaranteed contour closure + Sutherland-Hodgman clip back to bbox). Also fixed a latent `DedupingWorker` crash risk on non-Point geometry. 364 tests pass, ruff clean, docs updated. `geo-browser`-side runtime changes from `docs/LAYERS.md` are still outstanding (separate repo).
+
 ## Completed Tasks
+
+- **File**: [Pull Origin Fix](tasks/pull_origin_fix.md)
+- **Status**: Done
+- **GitHub Issue**: N/A
+- **Key Context**: Two related fixes. (1) `pull.py` normalized an absolute `catalogUrl` for the *saved* head file but kept fetching from the original absolute URL anyway, silently redirecting the pull to production even when `designUrl` pointed elsewhere; reversed a previously-deliberate test expectation after confirming the "intentionally different data host" scenario isn't real here. (2) Follow-up: fixing (1) exposed that `assetsUrl` had been wrongly removed as a pull-origin candidate earlier in this same session — in local dev, `designUrl` (Vite) can't serve `catalog.json` at all (SPA fallback returns `text/html`), only a separate `assetsUrl` static server can. Restored `assetsUrl` as the preferred pull origin when set. 386 tests pass.
 
 - **File**: [User Layer](tasks/user_layer.md)
 - **Status**: Done
@@ -141,12 +166,18 @@ Task[]
 - AcquisitionTask
 - DedupingTask
 - AggregationTask
+- PoiTask
+- VoidTask
+- SearchTask
 
 ## Worker Responsibilities
 
 - AcquisitionWorker: provider fetch + area creation + layer insertion
-- DedupingWorker: remove near-duplicates within each layer (10 m Haversine threshold)
+- DedupingWorker: remove near-duplicates within each layer (10 m Haversine threshold); skips `__void__` layers (non-`Point` geometry)
 - AggregationWorker: merge compatible layers within an area (grouped by `mergeKey`)
+- PoiWorker: derive `__poi__` stub visibility from sibling layers' `hasDetails` features
+- VoidWorker: precompute the `__void__*` fog-of-war polygons (see `docs/LAYERS.md`, `tasks/void_layer_precompute.md`)
+- SearchWorker: copy the `__search__` stub from `template.json` into the manifest if missing; never recomputed
 
 ## Provider Strategy
 
@@ -168,7 +199,7 @@ See `docs/IMPLEMENTATION.md` for designer-specific implementation rules (handler
 
 **Coordinate conventions** — Area `center` is `[lat, lon]`; GeoJSON `coordinates` are `[lon, lat]`. The conversion happens at provider boundaries (`overpass.py`).
 
-**Bbox decomposition** — When OverpassProvider receives HTTP 400 (query rejected / data too large), AcquisitionWorker splits the bbox into four quadrants and pushes them back onto the executor stack. HTTP 429 (rate limited) and 504 (timeout) trigger a retry-with-backoff inside `_execute_query` (delays: 5 s, 15 s, 45 s) before the split path is reached.
+**Bbox decomposition vs. rate-limit deferral** — `ProviderError` carries a `reason` (`TOO_LARGE`, `RATE_LIMITED`, or `FATAL`), and `AcquisitionWorker` branches on it. HTTP 400 (query rejected / data too large) → `TOO_LARGE`: split the bbox into four quadrants and push them back onto the executor stack — a smaller query may fit. HTTP 429/504, after `_execute_query`'s in-process retry-with-backoff (delays: 5 s, 15 s, 45 s) is exhausted → `RATE_LIMITED`: do **not** split (splitting a rate-limited request into four just multiplies load against the same limit); instead `defer_task` it behind every other currently-pending acquisition, but still strictly ahead of the fixed tail (Aggregation/Deduping/Poi/Void/Search — deferring behind *those* would let them run without this task's data, since they were queued as part of the original task list before any acquisition started), up to `_MAX_RATE_LIMIT_REQUEUES` (3) deferrals before giving up fatally. Any other `ProviderError` defaults to `FATAL` — neither splits nor defers, fails immediately (e.g. misconfigured provider).
 
 **AreaStyle** — Each filter key in an acquisition task carries an `AreaStyle(values, color, scale)` record. `color` overrides the auto-assigned layer color; `scale` overrides `radiusScale` in the heatmap style (useful for sparse layers like historic places). Both are optional.
 

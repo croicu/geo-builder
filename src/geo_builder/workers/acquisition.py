@@ -3,8 +3,10 @@ import time
 from ..contracts import AcquisitionTask, Executor, Worker, WorkerResult
 from ..diagnostics import Logger
 from ..entities import GeoArea, GeoLayer
-from ..errors import ProviderError
+from ..errors import ProviderError, ProviderErrorReason
 from ..providers.factory import ProviderFactory
+
+_MAX_RATE_LIMIT_REQUEUES = 3
 
 
 class AcquisitionWorker(Worker):
@@ -35,15 +37,12 @@ class AcquisitionWorker(Worker):
         try:
             layer = provider.fetch(task)
         except ProviderError as error:
-            child_tasks = self._split_task(task)
-
-            if len(child_tasks) == 0:
-                Logger.warning(f"AcquisitionWorker [{task.areaId}] depth={task.depth} bbox too small to split further — giving up")
-                return self._result(fatal=True, error=str(error))
-
-            Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} → {len(child_tasks)} quadrants at depth={task.depth + 1}")
-            executor.push_tasks(child_tasks)
-            return self._result()
+            if error.reason == ProviderErrorReason.RATE_LIMITED:
+                return self._handle_rate_limited(executor, task, error)
+            if error.reason == ProviderErrorReason.TOO_LARGE:
+                return self._handle_too_large(executor, task, error)
+            Logger.warning(f"AcquisitionWorker [{task.areaId}] depth={task.depth} unrecoverable provider error — giving up")
+            return self._result(fatal=True, error=str(error))
 
         filters_dict = {}
         for key, style in task.filters.items():
@@ -67,6 +66,32 @@ class AcquisitionWorker(Worker):
         layer.url = f"./layers/{layer.id}.geojson"
 
         executor.add_layer(area, layer)
+        return self._result()
+
+    def _handle_too_large(self, executor: Executor, task: AcquisitionTask, error: ProviderError) -> WorkerResult:
+        child_tasks = self._split_task(task)
+
+        if len(child_tasks) == 0:
+            Logger.warning(f"AcquisitionWorker [{task.areaId}] depth={task.depth} bbox too small to split further — giving up")
+            return self._result(fatal=True, error=str(error))
+
+        Logger.info(f"AcquisitionWorker [{task.areaId}] depth={task.depth} → {len(child_tasks)} quadrants at depth={task.depth + 1}")
+        executor.push_tasks(child_tasks)
+        return self._result()
+
+    def _handle_rate_limited(self, executor: Executor, task: AcquisitionTask, error: ProviderError) -> WorkerResult:
+        if task.rate_limit_attempts >= _MAX_RATE_LIMIT_REQUEUES:
+            Logger.warning(
+                f"AcquisitionWorker [{task.areaId}] depth={task.depth} still rate limited after {task.rate_limit_attempts} deferred retries — giving up"
+            )
+            return self._result(fatal=True, error=str(error))
+
+        task.rate_limit_attempts += 1
+        Logger.warning(
+            f"AcquisitionWorker [{task.areaId}] depth={task.depth} rate limited — deferring bbox "
+            f"(attempt {task.rate_limit_attempts}/{_MAX_RATE_LIMIT_REQUEUES})"
+        )
+        executor.defer_task(task)
         return self._result()
 
     def _result(self, fatal: bool = False, error: str | None = None) -> WorkerResult:

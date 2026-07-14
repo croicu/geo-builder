@@ -199,5 +199,19 @@ When `--noninvasive` is passed (only meaningful together with `--edit`):
 - Not requesting a change to default (non-`--noninvasive`) behavior — this needs to be strictly opt-in so nothing about the existing "pull real data for a full interactive preview" workflow changes for other designer-mode use cases.
 
 **Also worth fixing regardless of the flag above** (both are real bugs independent of this feature request):
-1. **Resolved.** `pull.py`'s head-file handling now normalizes any absolute `catalogUrl` to a relative local path (`"./catalog.json"`) before saving.
-2. **Resolved (by not wiring it up).** `assetsUrl` in `settings.json` is not read for the pull origin — the pull origin is always derived from `designUrl`'s own origin. `assetsUrl` has one job: the `assetsBase` query parameter appended to `designUrl` for the browser's own asset-loading chain (see `MESSAGING.md`). A separate data-source setting for the pull origin was considered and rejected — the browser's `WebResourceRequested` interception resolves by URL path only once `--in` has content (see `data_pipeline.py`), so the pull origin only matters for the very first, empty-`--in` fetch, which should always hit the canonical service at `designUrl`.
+1. **Resolved.** `pull.py`'s head-file handling now normalizes any absolute `catalogUrl` to a relative local path (`"./catalog.json"`) before saving. Also fixed a follow-on bug: the actual catalog fetch used to still follow the original absolute URL even after normalizing the saved copy, so a head file with a stale absolute `catalogUrl` (e.g. copied from a production pull) would silently redirect the rest of the pull to that host — defeating `designUrl` when it pointed at something else, like a local dev server. Now the fetch follows the same local origin the head file was itself fetched from.
+2. **Resolved — `assetsUrl` *is* used as the pull origin when set** (reversed from an earlier
+   decision in this doc that removed it; see below). `host.launch()` pulls from `assetsUrl` when
+   configured, falling back to `designUrl`'s own origin otherwise. `assetsUrl` still does its
+   other job too: the `assetsBase` query parameter appended to `designUrl` for the browser's own
+   asset-loading chain (see `MESSAGING.md`).
+
+   **Why the reversal:** a prior pass here reasoned that the pull origin didn't matter beyond the
+   very first, empty-`--in` fetch, since `WebResourceRequested` interception resolves by path
+   once `--in` has content (see `data_pipeline.py`) — true, but it missed that *that first fetch*
+   is a plain `requests.get()` in `pull.py`, entirely outside the WebView/interception layer, so
+   it only ever succeeds if the origin it hits can actually serve the catalog JSON. In local dev,
+   `designUrl` (Vite on e.g. `:5173`) serves the SPA only — any unmatched path falls back to
+   `index.html` (`Content-Type: text/html`), so pulling from `designUrl`'s origin when a separate
+   `assetsUrl` static server (e.g. `:5174`) is configured fails outright. Confirmed against a real
+   run before reverting.

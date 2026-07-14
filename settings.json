@@ -1,17 +1,28 @@
 {
   "settings": {
     "devTools": false,
-    "_designUrl_localhost": "http://localhost:5173/?design=1",
-    "_assetsUrl_localhost": "http://localhost:5174/",
-    "designUrl": "https://geo-browser.croicu.com/?design=1",
-    "assetsUrl": "https://geo-places.croicu.com/",
     "break": false,
-    "logLevel": "info"
+    "logLevel": "info",
+    "prod": {
+      "designUrl": "https://geo-browser.croicu.com/?design=1",
+      "assetsUrl": "https://geo-places.croicu.com/"
+    },
+    "local": {
+      "designUrl": "http://localhost:5173/?design=1",
+      "assetsUrl": "http://localhost:5174/"
+    },
+    "designUrl": "http://localhost:5173/?design=1",
+    "assetsUrl": "http://localhost:5174/"
   },
   "providers": {
     "overpass": {
-      "url": "https://overpass-api.de/api/interpreter",
-      "_dataPath_local": "tests/data/providers/fake.json"
+      "prod": {
+        "url": "https://geo-browser.croicu.com/?design=1"
+      },
+      "local": {
+        "dataPath": "tests/data/providers/fake.json"
+      },
+      "url": "https://overpass-api.de/api/interpreter"
     }
   }
 }

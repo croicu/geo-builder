@@ -6,6 +6,15 @@ JsonObject = dict[str, object]
 
 JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
+# GeoJSON coordinate shapes. Point: [lon, lat]. Polygon: list of linear rings (each a list of
+# [lon, lat] positions, first ring is the exterior, remaining rings are holes). MultiPolygon: a
+# list of Polygon coordinate arrays.
+PointCoordinates = list[float]
+Ring = list[PointCoordinates]
+PolygonCoordinates = list[Ring]
+MultiPolygonCoordinates = list[PolygonCoordinates]
+GeometryCoordinates = PointCoordinates | PolygonCoordinates | MultiPolygonCoordinates
+
 
 @dataclass
 class AreaStyle:
@@ -44,6 +53,13 @@ class VoidStyle:
 
 
 @dataclass
+class SearchStyle:
+    name: str = "Search Results"
+    color: str = "#00007f"
+    opacity: float = 0.3
+
+
+@dataclass
 class Area:
     id: str
     name: str
@@ -72,6 +88,7 @@ class Layer:
     url: str | None = None
     acquisition: dict | None = None
     geojson: GeoJson | None = None
+    geometry: dict[str, JsonValue] | None = None
 
 
 @dataclass
@@ -90,4 +107,4 @@ class Feature:
 @dataclass
 class Geometry:
     type: str
-    coordinates: list[float]
+    coordinates: GeometryCoordinates

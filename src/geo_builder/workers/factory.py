@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from ..contracts import AcquisitionTask, AggregationTask, DedupingTask, PoiTask, Task, VoidTask, Worker
+from ..contracts import AcquisitionTask, AggregationTask, DedupingTask, PoiTask, SearchTask, Task, VoidTask, Worker
 from ..errors import WorkerError
 from .acquisition import AcquisitionWorker
 from .aggregation import AggregationWorker
 from .deduping import DedupingWorker
 from .poi import PoiWorker
+from .search import SearchWorker
 from .void import VoidWorker
 
 
@@ -26,5 +27,8 @@ class WorkerFactory:
 
         if isinstance(task, VoidTask):
             return VoidWorker(task)
+
+        if isinstance(task, SearchTask):
+            return SearchWorker(task)
 
         raise WorkerError(f"Unknown task type: {task.type}")

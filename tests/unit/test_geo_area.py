@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from geo_builder.entities import GeoArea, GeoLayer
+from geo_builder.entities import GeoArea, GeoLayer, ManifestChange
 from geo_builder.errors import CatalogError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 
@@ -55,6 +55,41 @@ def _make_geo_area() -> GeoArea:
         manifestUrl="./areas/rome/manifest.json",
     )
     return GeoArea(summary=summary, layers=[GeoLayer(_make_layer())])
+
+
+def _make_void_layer(radius: float = 50.0) -> Layer:
+    return Layer(
+        id="__void__",
+        name="Mundane",
+        type="__void__",
+        visible=False,
+        style={"opacity": 0.5, "color": "#3f3f3f"},
+        url="./void/void.geojson",
+        geometry={"radius": radius},
+        geojson=GeoJson(
+            type="FeatureCollection",
+            features=[
+                Feature(
+                    type="Feature",
+                    properties={},
+                    geometry=Geometry(type="Polygon", coordinates=[[[12.40, 41.85], [12.55, 41.85], [12.55, 41.95], [12.40, 41.95], [12.40, 41.85]]]),
+                )
+            ],
+        ),
+    )
+
+
+def _make_geo_area_with_void(radius: float = 50.0) -> GeoArea:
+    summary = Area(
+        id="rome",
+        name="Rome",
+        bbox=[12.40, 41.85, 12.55, 41.95],
+        minRadiusPx=32,
+        maxRadiusPx=512,
+        liveMapRadiusPx=640,
+        manifestUrl="./areas/rome/manifest.json",
+    )
+    return GeoArea(summary=summary, layers=[GeoLayer(_make_layer()), GeoLayer(_make_void_layer(radius))])
 
 
 def _manifest_path(tmp_path: Path) -> Path:
@@ -402,7 +437,7 @@ class TestGeoAreaApplyManifest:
             "deduping": {},
         }
 
-        assert area.apply_manifest(new_manifest, out_dir) is True
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.REACQUIRE
 
     def test_returns_true_when_layer_added(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
@@ -431,14 +466,14 @@ class TestGeoAreaApplyManifest:
             "deduping": {},
         }
 
-        assert area.apply_manifest(new_manifest, out_dir) is True
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.REACQUIRE
 
     def test_returns_true_when_layer_removed(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
 
         new_manifest = {"version": 1, "layers": [], "aggregation": {}, "deduping": {}}
 
-        assert area.apply_manifest(new_manifest, out_dir) is True
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.REACQUIRE
 
     def test_returns_false_when_only_style_changes(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
@@ -460,7 +495,7 @@ class TestGeoAreaApplyManifest:
             "deduping": {},
         }
 
-        assert area.apply_manifest(new_manifest, out_dir) is False
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.NONE
 
     def test_returns_false_when_only_name_changes(self, tmp_path):
         area, out_dir = self._save_and_load(tmp_path, _make_geo_area())
@@ -482,4 +517,36 @@ class TestGeoAreaApplyManifest:
             "deduping": {},
         }
 
-        assert area.apply_manifest(new_manifest, out_dir) is False
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.NONE
+
+    def test_returns_reprocess_when_only_void_geometry_changes(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area_with_void(radius=50.0))
+
+        new_manifest = area.to_manifest_dict()
+        for layer_payload in new_manifest["layers"]:
+            if layer_payload["id"] == "__void__":
+                layer_payload["geometry"] = {"radius": 150.0}
+
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.REPROCESS
+
+    def test_reacquire_takes_priority_over_geometry_change(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area_with_void(radius=50.0))
+
+        new_manifest = area.to_manifest_dict()
+        for layer_payload in new_manifest["layers"]:
+            if layer_payload["id"] == "__void__":
+                layer_payload["geometry"] = {"radius": 150.0}
+            if layer_payload["id"] == "1":
+                layer_payload["acquisition"] = {"provider": "overpass", "filters": {"amenity": ["restaurant"]}}
+
+        assert area.apply_manifest(new_manifest, out_dir) == ManifestChange.REACQUIRE
+
+    def test_geometry_round_trips_through_save_and_load(self, tmp_path):
+        area, out_dir = self._save_and_load(tmp_path, _make_geo_area_with_void(radius=75.0))
+
+        void_layer = None
+        for gl in area.layers:
+            if gl.layer.id == "__void__":
+                void_layer = gl.layer
+        assert void_layer is not None
+        assert void_layer.geometry == {"radius": 75.0}

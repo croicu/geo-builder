@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .entities import GeoArea
-from .protocols import AreaStyle, Layer, PoiStyle, VoidStyle
+from .protocols import AreaStyle, Layer, PoiStyle, SearchStyle, VoidStyle
 
 
 @dataclass
@@ -27,6 +27,7 @@ class AcquisitionTask(Task):
     bbox: BoundingBox
     filters: dict[str, AreaStyle]
     depth: int
+    rate_limit_attempts: int
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class AcquisitionTask(Task):
         bbox: BoundingBox,
         filters: dict[str, AreaStyle],
         depth: int = 0,
+        rate_limit_attempts: int = 0,
     ) -> None:
         super().__init__("acquisition")
         self.areaId = areaId
@@ -44,6 +46,7 @@ class AcquisitionTask(Task):
         self.bbox = bbox
         self.filters = filters
         self.depth = depth
+        self.rate_limit_attempts = rate_limit_attempts
 
 
 class AggregationTask(Task):
@@ -70,10 +73,20 @@ class PoiTask(Task):
 
 class VoidTask(Task):
     style: VoidStyle
+    default_radius_m: float
 
-    def __init__(self, style: VoidStyle | None = None) -> None:
+    def __init__(self, style: VoidStyle | None = None, default_radius_m: float = 200.0) -> None:
         super().__init__("void")
         self.style = style if style is not None else VoidStyle()
+        self.default_radius_m = default_radius_m
+
+
+class SearchTask(Task):
+    style: SearchStyle
+
+    def __init__(self, style: SearchStyle | None = None) -> None:
+        super().__init__("search")
+        self.style = style if style is not None else SearchStyle()
 
 
 class Map(Protocol):
@@ -84,6 +97,7 @@ class Map(Protocol):
 class Executor(Map, Protocol):
     def push_task(self, task: Task) -> None: ...
     def push_tasks(self, tasks: list[Task]) -> None: ...
+    def defer_task(self, task: Task) -> None: ...
 
 
 @dataclass

@@ -30,6 +30,7 @@ class StubExecutor:
         self.catalog = catalog
         self.added_layers: list[Layer] = []
         self.pushed_tasks: list[AcquisitionTask] = []
+        self.deferred_tasks: list[AcquisitionTask] = []
 
     def add_area(self, task: AcquisitionTask) -> GeoArea:
         return self._area
@@ -42,3 +43,6 @@ class StubExecutor:
 
     def push_tasks(self, tasks: list[AcquisitionTask]) -> None:
         self.pushed_tasks.extend(tasks)
+
+    def defer_task(self, task: AcquisitionTask) -> None:
+        self.deferred_tasks.append(task)

@@ -36,6 +36,8 @@ class DedupingWorker(Worker):
             for geo_layer in area.layers:
                 if geo_layer.layer.geojson is None:
                     continue
+                if geo_layer.layer.type == "__void__":
+                    continue
                 before = len(geo_layer.layer.geojson.features)
                 geo_layer.layer.geojson.features = self._dedupe_features(geo_layer.layer.geojson.features)
                 area_removed += before - len(geo_layer.layer.geojson.features)

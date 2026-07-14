@@ -1,7 +1,16 @@
 import pytest
 
 from geo_builder.builder import Builder
-from geo_builder.contracts import AcquisitionTask, BoundingBox, WorkerResult
+from geo_builder.contracts import (
+    AcquisitionTask,
+    AggregationTask,
+    BoundingBox,
+    DedupingTask,
+    PoiTask,
+    SearchTask,
+    VoidTask,
+    WorkerResult,
+)
 from geo_builder.entities import GeoArea
 from geo_builder.errors import GeoError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
@@ -221,3 +230,58 @@ class TestBuilderAddLayer:
         builder.add_layer(area, make_layer("1", 1))
 
         assert area.layers[0].layer.style["color"] == color_before
+
+
+def _pop_all_types(builder: Builder) -> list[str]:
+    order = []
+    while builder._stack:
+        order.append(builder._stack.pop().type)
+    return order
+
+
+class TestDeferTask:
+    def test_deferred_task_runs_before_fixed_tail_not_after(self):
+        # Mirrors a real mid-build stack: two acquisitions still pending (popped first),
+        # then the fixed tail queued at the very start of the build (popped last).
+        builder = Builder()
+        pending_acq_1 = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        pending_acq_2 = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        deferred = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        builder._stack = [SearchTask(), VoidTask(), PoiTask(), DedupingTask(), AggregationTask(), pending_acq_2, pending_acq_1]
+
+        builder.defer_task(deferred)
+        order = _pop_all_types(builder)
+
+        assert order == ["acquisition", "acquisition", "acquisition", "aggregation", "deduping", "poi", "void", "search"]
+        assert builder._stack == []
+
+    def test_deferred_task_runs_after_other_pending_acquisitions(self):
+        builder = Builder()
+        pending_acq = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        deferred = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        builder._stack = [AggregationTask(), pending_acq]
+
+        builder.defer_task(deferred)
+
+        assert builder._stack.pop() is pending_acq
+        assert builder._stack.pop() is deferred
+        assert builder._stack.pop().type == "aggregation"
+
+    def test_defer_with_only_fixed_tail_pending_runs_before_it(self):
+        builder = Builder()
+        deferred = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        builder._stack = [SearchTask(), VoidTask(), PoiTask(), DedupingTask(), AggregationTask()]
+
+        builder.defer_task(deferred)
+        order = _pop_all_types(builder)
+
+        assert order == ["acquisition", "aggregation", "deduping", "poi", "void", "search"]
+
+    def test_defer_on_empty_stack(self):
+        builder = Builder()
+        deferred = AcquisitionTask(areaId="a", areaName="A", provider="fake", bbox=BoundingBox(0, 0, 1, 1), filters={})
+        builder._stack = []
+
+        builder.defer_task(deferred)
+
+        assert builder._stack == [deferred]
