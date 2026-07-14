@@ -11,8 +11,8 @@ from geo_builder.contracts import (
     VoidTask,
     WorkerResult,
 )
-from geo_builder.entities import GeoArea
-from geo_builder.errors import GeoError
+from geo_builder.entities import GeoArea, GeoLayer
+from geo_builder.errors import GeoError, TaskError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.settings import Settings
 
@@ -28,6 +28,35 @@ def make_area() -> GeoArea:
         manifestUrl="./areas/napoli/manifest.json",
     )
     return GeoArea(summary=summary)
+
+
+def make_area_with_layers(area_id: str, layers: list[Layer]) -> GeoArea:
+    summary = Area(
+        id=area_id,
+        name=area_id.title(),
+        bbox=[14.20, 40.80, 14.33, 40.90],
+        minRadiusPx=32,
+        maxRadiusPx=512,
+        liveMapRadiusPx=640,
+        manifestUrl=f"./areas/{area_id}/manifest.json",
+    )
+    geo_layers = []
+    for layer in layers:
+        geo_layers.append(GeoLayer(layer))
+    return GeoArea(summary=summary, layers=geo_layers)
+
+
+def make_layer_no_data(layer_id: str) -> Layer:
+    return Layer(
+        id=layer_id,
+        name="Overpass",
+        type="heatmap",
+        url=None,
+        visible=True,
+        style={},
+        acquisition={"provider": "fake", "filters": {"amenity": ["restaurant"]}},
+        geojson=None,
+    )
 
 
 def make_layer(layer_id: str, feature_count: int) -> Layer:
@@ -285,3 +314,69 @@ class TestDeferTask:
         builder.defer_task(deferred)
 
         assert builder._stack == [deferred]
+
+
+class TestTasksFromCatalog:
+    def _area_ids_with_acquisition_tasks(self, tasks: list) -> set[str]:
+        area_ids: set[str] = set()
+        for task in tasks:
+            if task.type == "acquisition":
+                area_ids.add(task.areaId)
+        return area_ids
+
+    def test_no_rebuild_flag_skips_area_with_data(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+
+        tasks = builder._tasks_from_catalog()
+
+        assert self._area_ids_with_acquisition_tasks(tasks) == set()
+
+    def test_no_rebuild_flag_acquires_area_without_data(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer_no_data("1")]))
+
+        tasks = builder._tasks_from_catalog()
+
+        assert self._area_ids_with_acquisition_tasks(tasks) == {"napoli"}
+
+    def test_rebuild_forces_area_that_already_has_data(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+
+        tasks = builder._tasks_from_catalog(rebuild_areas=["napoli"])
+
+        assert self._area_ids_with_acquisition_tasks(tasks) == {"napoli"}
+
+    def test_rebuild_skips_area_with_data_not_listed(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer_no_data("1")]))
+
+        tasks = builder._tasks_from_catalog(rebuild_areas=["roma"])
+
+        assert self._area_ids_with_acquisition_tasks(tasks) == {"roma"}
+
+    def test_rebuild_unknown_area_id_raises_task_error(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+
+        with pytest.raises(TaskError, match="foo"):
+            builder._tasks_from_catalog(rebuild_areas=["foo"])
+
+    def test_rebuild_unlisted_area_without_data_raises_task_error(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer_no_data("1")]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer_no_data("1")]))
+
+        with pytest.raises(TaskError, match="roma"):
+            builder._tasks_from_catalog(rebuild_areas=["napoli"])
+
+    def test_rebuild_all_forces_every_area_regardless_of_data(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer_no_data("1")]))
+
+        tasks = builder._tasks_from_catalog(rebuild_areas=["all"])
+
+        assert self._area_ids_with_acquisition_tasks(tasks) == {"napoli", "roma"}

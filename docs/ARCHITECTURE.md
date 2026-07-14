@@ -97,7 +97,9 @@ Workers receive the builder as their `executor: Executor` parameter and mutate s
 
 **Explicit tasks** — `Builder.run(tasks=[...])`: used for a fresh build. The caller supplies the full task list (e.g. from a template or from the designer's `AddArea` handler).
 
-**Catalog-driven** — `Builder.run()` (no argument): used for an incremental build. `_tasks_from_catalog()` scans the loaded catalog and generates an `AcquisitionTask` for every area whose `acquisition` is set but whose `layers` list is empty. Aggregation and deduping tasks are appended once at the end if any acquisition tasks were generated.
+**Catalog-driven** — `Builder.run()` (no `tasks` argument): used for an incremental build. `_tasks_from_catalog()` scans the loaded catalog and generates an `AcquisitionTask` for every area whose non-`__poi__`/`__void__` layers have no `geojson` loaded yet. Aggregation, deduping, poi, void, and search tasks are appended once at the end if any acquisition tasks were generated.
+
+An optional `rebuild_areas: list[str] | None` argument (CLI: `--rebuild <id>`, repeatable; build mode only) overrides this implicit skip logic: areas whose id is listed are force-acquired regardless of existing data, `["all"]` forces every loaded area, and any other loaded area is expected to already have data — an unknown id or an unlisted no-data area raises `TaskError` (caught by `cli.py`'s existing `GeoError` handling, exit 1). Omitting `rebuild_areas` preserves the implicit behavior exactly.
 
 ## Workers
 
