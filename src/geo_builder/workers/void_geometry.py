@@ -14,6 +14,18 @@ that overfits to individual points rather than reading as a single coherent "far
 region. Contours are extracted with marching squares, linked into rings, classified into
 exterior/hole by containment, clipped back down to the true bbox with Sutherland-Hodgman, and
 simplified with Douglas-Peucker.
+
+Field construction is point-splatting, not corner-querying: for each source point, only the grid
+corners within that point's own exclusion radius (plus a small padding margin) are visited and
+updated with the exact distance-minus-radius value; every other corner starts at (and, if never
+touched by any point, stays at) a large "definitely void" constant. This is deliberately the
+opposite of the earlier "for each corner, find nearby points" approach, which degraded badly on
+dense real-world data (a spatial bucket index still means every corner scans every point in its
+neighborhood — for a dense urban core this can be thousands of points per corner, over tens of
+thousands of corners). Splatting instead does one bounded pass per point over just the corners it
+can actually influence, which is the correct complexity for "many points, most of them irrelevant
+to any given far-away corner." See tasks/void_grid_perf.md for the measurements that motivated
+this and the reasoning for why it's still exact where it matters (see _splat_point's docstring).
 """
 
 from __future__ import annotations
@@ -63,57 +75,10 @@ def _meters_per_degree_lon(center_lat: float) -> float:
     return _METERS_PER_DEGREE_LAT * math.cos(math.radians(center_lat))
 
 
-# --- Spatial bucket index for the distance field ---
-
-
-class _BucketIndex:
-    def __init__(self, points: list[SourcePoint]) -> None:
-        max_radius_m = 0.0
-        for point in points:
-            if point.radius_m > max_radius_m:
-                max_radius_m = point.radius_m
-        self.cutoff_m = max(max_radius_m * 4.0, 300.0)
-        self.fallback_field = self.cutoff_m - max_radius_m
-
-        self._bucket_size_lon_deg = self.cutoff_m / _meters_per_degree_lon(_center_lat(points))
-        self._bucket_size_lat_deg = self.cutoff_m / _METERS_PER_DEGREE_LAT
-        self._buckets: dict[tuple[int, int], list[SourcePoint]] = {}
-        for point in points:
-            key = self._bucket_key(point.lon, point.lat)
-            if key not in self._buckets:
-                self._buckets[key] = []
-            self._buckets[key].append(point)
-
-    def _bucket_key(self, lon: float, lat: float) -> tuple[int, int]:
-        bx = int(math.floor(lon / self._bucket_size_lon_deg))
-        by = int(math.floor(lat / self._bucket_size_lat_deg))
-        return (bx, by)
-
-    def field_at(self, lon: float, lat: float) -> float:
-        bx, by = self._bucket_key(lon, lat)
-        best: float | None = None
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                candidates = self._buckets.get((bx + dx, by + dy))
-                if candidates is None:
-                    continue
-                for point in candidates:
-                    d = _distance_m(lat, lon, point.lat, point.lon) - point.radius_m
-                    if best is None or d < best:
-                        best = d
-        if best is None:
-            return self.fallback_field
-        return best
-
-
-def _center_lat(points: list[SourcePoint]) -> float:
-    total = 0.0
-    for point in points:
-        total += point.lat
-    return total / len(points)
-
-
 # --- Grid ---
+
+_UNTOUCHED_FIELD = 1.0e6
+_SPLAT_PADDING_FACTOR = 2.0
 
 
 class _Grid:
@@ -142,22 +107,64 @@ class _Grid:
         self.interior_rows = interior_rows
         self.padded_cols = interior_cols + 2
         self.padded_rows = interior_rows + 2
+        self._meters_per_deg_lon = meters_per_deg_lon
 
-        index = _BucketIndex(points)
-        self._field: list[list[float]] = []
-        for i in range(self.padded_cols + 1):
-            column: list[float] = []
-            for j in range(self.padded_rows + 1):
-                if i == 0 or i == self.padded_cols or j == 0 or j == self.padded_rows:
-                    column.append(_EXCLUDED_SENTINEL)
-                else:
-                    lon = self.lon_of(i)
-                    lat = self.lat_of(j)
-                    value = index.field_at(lon, lat)
-                    if value == 0.0:
-                        value = -1.0e-9
-                    column.append(value)
+        corner_cols = self.padded_cols + 1
+        corner_rows = self.padded_rows + 1
+        self._field = []
+        for _ in range(corner_cols):
+            column = []
+            for _ in range(corner_rows):
+                column.append(_UNTOUCHED_FIELD)
             self._field.append(column)
+
+        cell_lon_m = self.cell_lon_deg * meters_per_deg_lon
+        cell_lat_m = self.cell_lat_deg * _METERS_PER_DEGREE_LAT
+        padding_m = max(cell_lon_m, cell_lat_m) * _SPLAT_PADDING_FACTOR
+
+        for point in points:
+            self._splat_point(point, padding_m)
+
+        for i in range(corner_cols):
+            for j in range(corner_rows):
+                if i == 0 or i == self.padded_cols or j == 0 or j == self.padded_rows:
+                    self._field[i][j] = _EXCLUDED_SENTINEL
+                elif self._field[i][j] == 0.0:
+                    self._field[i][j] = -1.0e-9
+
+    def _splat_point(self, point: SourcePoint, padding_m: float) -> None:
+        """Update every grid corner within (point.radius_m + padding_m) of this point.
+
+        padding_m is chosen (in __init__) to be at least a couple of grid cells wide, which
+        guarantees both corners of any edge that could actually cross zero — i.e. any edge
+        marching squares needs an accurate interpolated position for — get their exact,
+        individually-computed value from whichever point is responsible for the crossing.
+        Corners this never reaches are, by construction, farther than every point's own
+        radius+padding, so their true field value is positive by more than padding_m; using the
+        flat _UNTOUCHED_FIELD constant there instead of the real (larger) value is safe because
+        only the sign matters that far from any boundary, not the magnitude.
+        """
+        search_m = point.radius_m + padding_m
+        lat_span_deg = search_m / _METERS_PER_DEGREE_LAT
+        lon_span_deg = search_m / self._meters_per_deg_lon
+
+        i_center = 1.0 + (point.lon - self.west) / self.cell_lon_deg
+        j_center = 1.0 + (point.lat - self.south) / self.cell_lat_deg
+        i_span = lon_span_deg / self.cell_lon_deg
+        j_span = lat_span_deg / self.cell_lat_deg
+
+        i_min = max(0, int(math.floor(i_center - i_span)))
+        i_max = min(self.padded_cols, int(math.ceil(i_center + i_span)))
+        j_min = max(0, int(math.floor(j_center - j_span)))
+        j_max = min(self.padded_rows, int(math.ceil(j_center + j_span)))
+
+        for i in range(i_min, i_max + 1):
+            lon = self.lon_of(i)
+            for j in range(j_min, j_max + 1):
+                lat = self.lat_of(j)
+                distance = _distance_m(lat, lon, point.lat, point.lon) - point.radius_m
+                if distance < self._field[i][j]:
+                    self._field[i][j] = distance
 
     def lon_of(self, i: int) -> float:
         return self.west + (i - 1) * self.cell_lon_deg
