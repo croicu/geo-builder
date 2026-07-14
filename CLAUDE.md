@@ -108,6 +108,11 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
+- **File**: [`--rebuild` flag for selective acquisition](tasks/rebuild_flag.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: [geo-builder#32](https://github.com/croicu/geo-builder/issues/32)
+- **Key Context**: New build-mode-only `--rebuild <id>` flag (repeatable) forces re-acquisition of listed areas regardless of existing `--in` data; `--rebuild all` forces every area (rejects combination with specific ids); unknown ids or unlisted no-data areas are hard errors (`TaskError`, exit 1); `--edit` + `--rebuild` rejected; omitting the flag preserves today's implicit behavior exactly. 400 tests pass, ruff clean, `docs/CLI.md`/`docs/PROTOCOL.md`/`docs/ARCHITECTURE.md` updated.
+
 - **File**: [Default Layers](tasks/default_layers.md)
 - **Status**: Brainstorm
 - **GitHub Issue**: N/A

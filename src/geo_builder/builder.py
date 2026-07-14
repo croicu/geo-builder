@@ -9,9 +9,11 @@ from pathlib import Path
 from .colors import layer_color
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, SearchTask, Task, VoidTask
 from .entities import GeoArea, GeoCatalog, GeoLayer
-from .errors import GeoError
+from .errors import GeoError, TaskError
 from .protocols import Area, AreaStyle, JsonObject, Layer, PoiStyle, SearchStyle, VoidStyle
 from .workers.factory import WorkerFactory
+
+_REBUILD_ALL = "all"
 
 _FIXED_TAIL_TASK_TYPES = {"aggregation", "deduping", "poi", "void", "search"}
 
@@ -24,7 +26,7 @@ class Builder:
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def run(self, tasks: list[Task] | None = None) -> GeoCatalog:
+    def run(self, tasks: list[Task] | None = None, rebuild_areas: list[str] | None = None) -> GeoCatalog:
         from .settings import Settings
 
         settings = Settings.current()
@@ -34,7 +36,7 @@ class Builder:
         if tasks is not None:
             self._stack = list(reversed(tasks))
         else:
-            self._stack = list(reversed(self._tasks_from_catalog()))
+            self._stack = list(reversed(self._tasks_from_catalog(rebuild_areas)))
 
         if debug:
             build_dir = Path("./build")
@@ -67,8 +69,19 @@ class Builder:
 
         return self.catalog
 
-    def _tasks_from_catalog(self) -> list[Task]:
+    def _tasks_from_catalog(self, rebuild_areas: list[str] | None = None) -> list[Task]:
         from .settings import Settings
+
+        force_all = rebuild_areas == [_REBUILD_ALL]
+        forced_ids: set[str] = set()
+        if rebuild_areas is not None and not force_all:
+            forced_ids = set(rebuild_areas)
+            catalog_ids: set[str] = set()
+            for area in self.catalog.areas:
+                catalog_ids.add(area.id)
+            for rebuild_id in forced_ids:
+                if rebuild_id not in catalog_ids:
+                    raise TaskError(f"--rebuild area '{rebuild_id}' not found in catalog")
 
         result: list[Task] = []
         for area in self.catalog.areas:
@@ -77,7 +90,12 @@ class Builder:
                 if geo_layer.layer.type not in ("__poi__", "__void__") and geo_layer.layer.geojson is not None:
                     has_data_layers = True
                     break
-            if not has_data_layers:
+
+            forced = force_all or area.id in forced_ids
+            if rebuild_areas is not None and not forced and not has_data_layers:
+                raise TaskError(f"--rebuild given but area '{area.id}' has no data and is not listed in --rebuild")
+
+            if forced or not has_data_layers:
                 for geo_layer in area.layers:
                     acq = geo_layer.layer.acquisition
                     if acq is None:

@@ -34,8 +34,10 @@ class StubBuilder:
         self.errors = errors or []
         self._raises = raises
         self.catalog = GeoCatalog()
+        self.run_rebuild_areas: list[str] | None = None
 
-    def run(self) -> GeoCatalog:
+    def run(self, rebuild_areas: list[str] | None = None) -> GeoCatalog:
+        self.run_rebuild_areas = rebuild_areas
         if self._raises:
             raise self._raises
         return self.catalog
@@ -89,6 +91,21 @@ class TestParseArgs:
 
     def test_returns_cli_arguments(self):
         assert isinstance(parse_args(["template.json"]), CliArguments)
+
+    def test_rebuild_areas_defaults_to_none(self):
+        args = parse_args(["template.json"])
+
+        assert args.rebuild_areas is None
+
+    def test_rebuild_areas_single(self):
+        args = parse_args(["template.json", "--rebuild", "prague"])
+
+        assert args.rebuild_areas == ["prague"]
+
+    def test_rebuild_areas_repeated_flag(self):
+        args = parse_args(["template.json", "--rebuild", "prague", "--rebuild", "berlin"])
+
+        assert args.rebuild_areas == ["prague", "berlin"]
 
 
 class TestMain:
@@ -199,6 +216,27 @@ class TestMain:
             with pytest.raises(GeoError):
                 main()
 
+    def test_rebuild_areas_passed_through_to_builder_run(self):
+        sys.argv = ["geo-builder", "template.json", "--in", "/tmp/in", "--out", "/tmp/out", "--rebuild", "prague", "--rebuild", "berlin"]
+        builder = StubBuilder()
+
+        with patch("geo_builder.cli.Settings") as MockSettings, patch("geo_builder.cli.Builder", return_value=builder), patch("geo_builder.cli.save_catalog"):
+            MockSettings.load.return_value = StubSettings()
+
+            assert main() == 0
+
+        assert builder.run_rebuild_areas == ["prague", "berlin"]
+
+    def test_rebuild_all_combined_with_specific_id_returns_1(self, capsys):
+        sys.argv = ["geo-builder", "template.json", "--in", "/tmp/in", "--out", "/tmp/out", "--rebuild", "all", "--rebuild", "prague"]
+
+        with patch("geo_builder.cli.Settings") as MockSettings:
+            MockSettings.load.return_value = StubSettings()
+
+            assert main() == 1
+
+        assert "--rebuild all" in capsys.readouterr().err
+
 
 class TestDesignMode:
     @pytest.fixture(autouse=True)
@@ -245,3 +283,13 @@ class TestDesignMode:
             assert main() == 1
 
         assert "designUrl" in capsys.readouterr().err
+
+    def test_rebuild_with_edit_returns_1(self, capsys):
+        sys.argv = ["geo-builder", "template.json", "--edit", "--rebuild", "prague"]
+
+        with patch("geo_builder.cli.Settings") as MockSettings:
+            MockSettings.load.return_value = StubSettings(design_url="http://localhost:5173/")
+
+            assert main() == 1
+
+        assert "--rebuild" in capsys.readouterr().err
