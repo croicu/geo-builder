@@ -70,26 +70,18 @@ queries (e.g. `?group=a,b` is out of scope). *(Superseded — see note above.)*
 
 ## Context Changes
 
-Replace:
+> **Superseded 2026-07-15:** this section originally proposed replacing `Context.debug:
+> boolean` with `Context.groupFilter`, treating `debug` as redundant once grouping existed.
+> That's no longer right — `debug` was decoupled from area grouping entirely (see Builder-Side
+> Decisions). `Context.debug` stays as its own field for pure browser-side diagnostics
+> (unrelated to area selection); `groupFilter` (now `string[] | null`, see the Query String
+> Filtering supersession note above) is added *alongside* it, not in place of it. Do not merge
+> or derive one from the other.
 
-```ts
-readonly debug: boolean;
-```
-
-with:
-
-```ts
-readonly groupFilter: string | null;
-```
-
-If existing code branches on a boolean, derive it locally:
-
-```ts
-const isDebug = context.groupFilter === "debug";
-```
-
-Do not keep both `debug` and `groupFilter` as separate stored fields —
-`groupFilter` is the single source of truth.
+~~Replace `readonly debug: boolean;` with `readonly groupFilter: string | null;`. Do not keep
+both `debug` and `groupFilter` as separate stored fields — `groupFilter` is the single source
+of truth.~~ *(Superseded — see note above. Add `groupFilter: string[] | null` as a new field;
+keep `debug: boolean` as-is.)*
 
 ## Out of Scope (V2)
 
@@ -200,10 +192,12 @@ Do not keep both `debug` and `groupFilter` as separate stored fields —
 - [x] geo-builder appends `?group=<all of settings.group, comma-joined>` to `designUrl`
       when `group` is non-empty (e.g. `?group=debug,Europe`), independent of `?debug=1`.
 - [x] `docs/MESSAGING.md`, `docs/PROTOCOL.md`, `docs/ARCHITECTURE.md` updated.
-- [x] 411 tests pass (`test_settings.py` new; `test_builder.py`,
-      `test_geo_area.py`, `test_persistence.py` extended for `group`;
+- [x] 414 tests pass (`test_settings.py` new; `test_builder.py`,
+      `test_geo_area.py`, `test_persistence.py` extended for `group`,
+      including the "not re-stamped on rebuild" regression;
       `test_pull.py`/`test_persistence.py`/`test_cli.py` de-debug-catalog'd).
-      `ruff format` / `ruff check` clean.
+      `ruff format` / `ruff check` clean. Committed and pushed (f9ff202,
+      ebc9475) on `working`.
 
 **geo-browser (separate repo) — not started here:**
 
@@ -212,9 +206,13 @@ Do not keep both `debug` and `groupFilter` as separate stored fields —
       geo-browser/geo-places' concern, not geo-builder's (see Builder-Side
       Decisions: no migration needed on this side).
 - [ ] No query string → all areas render, including debug-tagged ones.
-- [ ] `?debug=1` → only areas with `"debug"` in `group` render.
-- [ ] `?group=<name>` → only areas with `<name>` in `group` render.
-- [ ] `?group=<name>&debug=1` → `group` wins, `debug` ignored.
-- [ ] `Context.debug: boolean` replaced with `Context.groupFilter: string | null`.
-- [ ] Unit tests updated: no network, no Leaflet, cover all four filter cases
-      above.
+- [ ] `?group=<name>` (or `<a,b,...>`, AND semantics) → only matching areas render.
+- [ ] `?debug=1` has **no role in area selection** (superseded — see the note under Query
+      String Filtering above; this replaces the original "`?debug=1` → only debug-tagged
+      areas render" and "`group` wins over `debug`" checklist items, since `debug` was
+      decoupled from grouping entirely on the geo-builder side).
+- [ ] `Context.debug: boolean` stays as its own field (pure diagnostics, e.g.
+      `GeoLocationWidget` heading, debug-only toolbar buttons) — it is **not** replaced by
+      `groupFilter`; the two are independent, matching how geo-builder emits `?debug=1` and
+      `?group=` as independent query params.
+- [ ] Unit tests updated: no network, no Leaflet, cover the filter cases above.
