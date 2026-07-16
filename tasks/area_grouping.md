@@ -4,8 +4,17 @@
 
 Replace the separate debug catalog files with a single `catalog.json` containing
 all areas. Areas gain an optional `group` attribute. A query-string filter
-narrows which areas are shown; with no filter, all areas show (including
-debug-tagged ones).
+narrows which areas are shown.
+
+> **Note:** the browser-side filtering spec below (Query String Filtering, Context
+> Changes) is the *original* design draft and has been superseded piecemeal as the
+> geo-browser-side implementation actually progressed (see the inline Superseded
+> notes) — most recently, `"debug"` became opt-in-only (hidden unless explicitly
+> requested via `?group=debug,...` or `?debug=1`, unlike every other group which
+> shows by default). **`docs/MESSAGING.md` in this repo is the actively-maintained,
+> up-to-date source of truth for the browser-side contract** — geo-builder's own
+> behavior (Builder-Side Decisions below) is unaffected by any of this since it's
+> agnostic to filtering semantics.
 
 ## Data Model
 
@@ -49,6 +58,10 @@ Apply when building the area list for Summary:
   else.
 - `groupFilter !== null` → include only areas whose `group` array contains
   `groupFilter` (exact string match).
+
+> **Superseded again:** `"debug"` is no longer visible by default under
+> `groupFilter === null` — it's opt-in-only, unlike every other group value. See
+> `docs/MESSAGING.md`'s Static Artifacts section for the exact current rule.
 
 > **Superseded 2026-07-15:** the single-filter-value constraint above no longer holds —
 > geo-builder always emits *every* configured group as a comma-separated `?group=` value
@@ -118,11 +131,17 @@ keep `debug: boolean` as-is.)*
   exceptions instead of printing them (`cli.py`), (2) per-worker debug snapshots under
   `./build/` (`builder.py`), (3) WebView2 remote-debugging port (`host.py`), and (4) appending
   `?debug=1` to `designUrl` when `true` — this was originally removed and then restored: `debug`
-  stays in the query string, in sync with the setting, but its role there is purely browser-side
-  diagnostics. It has **no role in area selection** — that's `group`'s job exclusively, and the
-  two params are independent (both can appear together, e.g.
-  `?design=1&debug=1&group=debug,Europe`). `debug` has no effect on catalog file layout (that
-  mechanism is deleted outright, see below).
+  stays in the query string, in sync with the setting. **Correction:** an earlier version of
+  this note claimed `?debug=1` has "no role in area selection" on the geo-browser side — that's
+  wrong and has been walked back. `settings.debug` (the geo-builder Python flag) itself has no
+  role in area selection, correct — it only controls whether `?debug=1` gets auto-appended. But
+  once that param is in the URL, geo-browser's own filtering logic still treats it as a
+  back-compat shorthand for `groupFilter = ["debug"]` (see `docs/MESSAGING.md`, which is
+  authoritative for that part — geo-builder doesn't implement or verify it, just emits the
+  param). `?debug=1` and `?group=` are independent *inputs* geo-builder appends (both can appear
+  together, e.g. `?design=1&debug=1&group=debug,Europe`); what geo-browser does with them is its
+  own concern. `debug` has no effect on catalog file layout (that mechanism is deleted outright,
+  see below).
 - **Multi-group query string**: geo-builder appends `?group=<all of settings.group,
   comma-joined>` to `designUrl` when `settings.group` is non-empty (e.g. `group: ["debug",
   "Europe"]` → `?group=debug,Europe`) — every configured group, not just the first. This
@@ -199,20 +218,19 @@ keep `debug: boolean` as-is.)*
       `ruff format` / `ruff check` clean. Committed and pushed (f9ff202,
       ebc9475) on `working`.
 
-**geo-browser (separate repo) — not started here:**
+**geo-browser (separate repo) — in progress there, not tracked in detail here:**
+
+The exact filtering rules (query-string parsing, `"debug"` opt-in-only semantics,
+`Context.groupFilter` vs. `Context.debug`) are evolving directly in `docs/MESSAGING.md`'s
+Static Artifacts section as the geo-browser implementation actually happens — treat that file
+as the current source of truth rather than the historical draft earlier in this task file, which
+is now stale in multiple places (marked inline as Superseded rather than rewritten). Remaining
+open items, at a level this repo can actually verify:
 
 - [ ] `catalog.json` includes all areas (formerly-debug-only areas now
       present with `group: ["debug"]` or similar) — real data migration is
       geo-browser/geo-places' concern, not geo-builder's (see Builder-Side
       Decisions: no migration needed on this side).
-- [ ] No query string → all areas render, including debug-tagged ones.
-- [ ] `?group=<name>` (or `<a,b,...>`, AND semantics) → only matching areas render.
-- [ ] `?debug=1` has **no role in area selection** (superseded — see the note under Query
-      String Filtering above; this replaces the original "`?debug=1` → only debug-tagged
-      areas render" and "`group` wins over `debug`" checklist items, since `debug` was
-      decoupled from grouping entirely on the geo-builder side).
-- [ ] `Context.debug: boolean` stays as its own field (pure diagnostics, e.g.
-      `GeoLocationWidget` heading, debug-only toolbar buttons) — it is **not** replaced by
-      `groupFilter`; the two are independent, matching how geo-builder emits `?debug=1` and
-      `?group=` as independent query params.
-- [ ] Unit tests updated: no network, no Leaflet, cover the filter cases above.
+- [ ] geo-browser's filtering logic implemented per whatever `docs/MESSAGING.md` says
+      at merge time.
+- [ ] Unit tests updated on the geo-browser side: no network, no Leaflet.
