@@ -279,6 +279,13 @@ class GeoArea:
         if not isinstance(bbox, list) or len(bbox) != 4:
             raise CatalogError("area bbox must be an array of four numbers.")
 
+        group_payload = area_payload.get("group", [])
+        if not isinstance(group_payload, list):
+            group_payload = []
+        group = []
+        for group_name in group_payload:
+            group.append(str(group_name))
+
         summary = Area(
             id=str(area_payload["id"]),
             name=str(area_payload["name"]),
@@ -287,6 +294,7 @@ class GeoArea:
             maxRadiusPx=int(area_payload["maxRadiusPx"]),
             liveMapRadiusPx=int(area_payload["liveMapRadiusPx"]),
             manifestUrl=str(area_payload["manifestUrl"]),
+            group=group,
         )
 
         detail = Manifest(version=manifest_version, aggregation=aggregation, deduping=deduping)
@@ -385,3 +393,7 @@ class GeoArea:
     @property
     def liveMapRadiusPx(self) -> int:
         return self._summary.liveMapRadiusPx
+
+    @property
+    def group(self) -> list[str]:
+        return self._summary.group

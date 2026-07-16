@@ -169,22 +169,20 @@ class TestSaveCatalog:
 
         assert (tmp_path / "catalog.head.json").exists()
 
-    def test_catalog_head_debug_json_always_written(self, tmp_path):
+    def test_catalog_head_debug_json_not_written(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
-        assert (tmp_path / "catalog.head.debug.json").exists()
+        assert not (tmp_path / "catalog.head.debug.json").exists()
+
+    def test_catalog_debug_json_not_written(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+
+        assert not (tmp_path / "catalog.debug.json").exists()
 
     def test_catalog_head_json_points_to_catalog(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)
 
         payload = json.loads((tmp_path / "catalog.head.json").read_text())
-
-        assert payload["catalogUrl"] == "./catalog.json"
-
-    def test_catalog_head_debug_json_points_to_same_catalog(self, tmp_path):
-        save_catalog(make_catalog(), tmp_path)
-
-        payload = json.loads((tmp_path / "catalog.head.debug.json").read_text())
 
         assert payload["catalogUrl"] == "./catalog.json"
 
@@ -243,6 +241,21 @@ class TestRoundTrip:
         assert area.id == "napoli"
         assert area.name == "Napoli"
         assert area.bbox == pytest.approx([14.20, 40.80, 14.33, 40.90])
+
+    def test_area_group_empty_by_default(self, tmp_path):
+        save_catalog(make_catalog(), tmp_path)
+        area = load_catalog(tmp_path).areas[0]
+
+        assert area.group == []
+
+    def test_area_group_preserved(self, tmp_path):
+        catalog = make_catalog()
+        catalog.areas[0].summary.group = ["debug", "Europe"]
+
+        save_catalog(catalog, tmp_path)
+        area = load_catalog(tmp_path).areas[0]
+
+        assert area.group == ["debug", "Europe"]
 
     def test_layer_fields(self, tmp_path):
         save_catalog(make_catalog(), tmp_path)

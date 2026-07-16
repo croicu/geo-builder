@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
@@ -16,6 +16,7 @@ _LOCAL_PATH = Path("./settings.local.json")
 class Settings:
     debug: bool
     providers: dict[str, dict[str, object]]
+    group: list[str] = field(default_factory=list)
     template: dict | None = None
     break_on_load: bool = False
     dev_tools: bool = False
@@ -36,6 +37,7 @@ class Settings:
         dev_tools = False
         design_url: str | None = None
         assets_url: str | None = None
+        group: list[str] = []
         providers: dict[str, dict[str, object]] = {}
         log_level = TelemetryLevel.ERROR
         window_left: int | None = None
@@ -87,6 +89,17 @@ class Settings:
                 sep = "&" if "?" in design_url else "?"
                 design_url = f"{design_url}{sep}debug=1"
 
+            group_payload = settings_payload.get("group", [])
+            if not isinstance(group_payload, list):
+                raise TaskError("'settings.group' in settings.json must be an array of strings.")
+            group = []
+            for group_name in group_payload:
+                group.append(str(group_name))
+
+            if group and design_url is not None:
+                sep = "&" if "?" in design_url else "?"
+                design_url = f"{design_url}{sep}group={','.join(group)}"
+
             assets_url = str(settings_payload["assetsUrl"]) if "assetsUrl" in settings_payload else None
             if assets_url is not None and design_url is not None:
                 sep = "&" if "?" in design_url else "?"
@@ -128,6 +141,7 @@ class Settings:
             dev_tools=dev_tools,
             design_url=design_url,
             assets_url=assets_url,
+            group=group,
             template=template,
             providers=providers,
             logging=log_level,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Shared API definitions — mirrored as TypeScript interfaces in api.ts.
 # Only plain dataclasses with primitive / list / dict fields belong here.
@@ -80,6 +80,7 @@ class AreaSummary:
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
+    group: list[str] = field(default_factory=list)
 
 
 @dataclass

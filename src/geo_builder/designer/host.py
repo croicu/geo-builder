@@ -341,6 +341,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 maxRadiusPx=updated_area.maxRadiusPx,
                 liveMapRadiusPx=updated_area.liveMapRadiusPx,
                 manifestUrl=updated_area.manifestUrl,
+                group=updated_area.group,
             )
             Logger.info(f"AreaChanged: firing for area '{area_id}'.")
             api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
@@ -356,7 +357,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         try:
             result = Builder(fresh_catalog).run()
-            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+            save_catalog(result, out_dir, in_dir=in_dir)
         except Exception as exc:
             Logger.error(f"pipeline failed for area '{area_id}': {exc}")
             return
@@ -385,7 +386,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         try:
             result = Builder(fresh_catalog).run(tasks=tasks)
-            save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+            save_catalog(result, out_dir, in_dir=in_dir)
         except Exception as exc:
             Logger.error(f"reprocess failed for area '{area_id}': {exc}")
             return
@@ -399,7 +400,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     def on_area_changed(changed_area: GeoArea) -> None:
         if in_dir is not None:
             try:
-                fresh_catalog = load_catalog(in_dir, debug=debug)
+                fresh_catalog = load_catalog(in_dir)
             except GeoError as exc:
                 Logger.warning(f"AreaChanged: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
@@ -431,9 +432,9 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         area.bbox = _normalize_bbox(list(data.bbox))
 
         if in_dir is not None:
-            save_catalog_meta(catalog, in_dir, debug=debug)
+            save_catalog_meta(catalog, in_dir)
             try:
-                fresh_catalog = load_catalog(in_dir, debug=debug)
+                fresh_catalog = load_catalog(in_dir)
             except GeoError as exc:
                 Logger.warning(f"SetAreaBbox: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
@@ -503,7 +504,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         if in_dir is not None:
             try:
-                fresh_catalog = load_catalog(in_dir, debug=debug)
+                fresh_catalog = load_catalog(in_dir)
             except GeoError as exc:
                 Logger.warning(f"AddArea: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
@@ -538,7 +539,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                     a.layers.append(_build_user_stub(template))
                 break
 
-        save_catalog(result, out_dir, debug=debug, in_dir=in_dir)
+        save_catalog(result, out_dir, in_dir=in_dir)
 
         if in_dir is not None:
             from ..persistence import save_area_to_catalog, save_catalog_meta
@@ -549,8 +550,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                     new_area_obj = a
                     break
             if new_area_obj is not None:
-                save_area_to_catalog(new_area_obj, in_dir, debug=debug)
-            save_catalog_meta(result, in_dir, debug=debug)
+                save_area_to_catalog(new_area_obj, in_dir)
+            save_catalog_meta(result, in_dir)
 
         catalog.areas[:] = result.areas
         for a in catalog.areas:
@@ -572,6 +573,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 maxRadiusPx=new_area.maxRadiusPx,
                 liveMapRadiusPx=new_area.liveMapRadiusPx,
                 manifestUrl=new_area.manifestUrl,
+                group=new_area.group,
             )
 
         return MethodResult(AddAreaOutput(error=OK, area=area_summary))
@@ -631,6 +633,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 maxRadiusPx=area.maxRadiusPx,
                 liveMapRadiusPx=area.liveMapRadiusPx,
                 manifestUrl=area.manifestUrl,
+                group=area.group,
             )
             Logger.info(f"AreaChanged: firing for area '{data.areaId}'.")
             api.call(AREA_CHANGED_ID, AreaChangedData(area=area_summary))
@@ -638,7 +641,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         if in_dir is not None:
             try:
-                fresh_catalog = load_catalog(in_dir, debug=debug)
+                fresh_catalog = load_catalog(in_dir)
             except GeoError as exc:
                 Logger.warning(f"PutAreaJson: failed to reload catalog: {exc}; using in-memory catalog.")
                 fresh_catalog = catalog
@@ -940,7 +943,7 @@ def launch(
                 from ..persistence import load_catalog
 
                 try:
-                    resolved_catalog = load_catalog(in_dir, debug=debug)
+                    resolved_catalog = load_catalog(in_dir)
                 except GeoError as exc:
                     Logger.warning(f"launch: failed to load catalog after pull: {exc}")
 

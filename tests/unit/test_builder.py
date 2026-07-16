@@ -11,7 +11,7 @@ from geo_builder.contracts import (
     VoidTask,
     WorkerResult,
 )
-from geo_builder.entities import GeoArea, GeoLayer
+from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
 from geo_builder.errors import GeoError, TaskError
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.settings import Settings
@@ -149,6 +149,29 @@ class TestAddArea:
         area = Builder().add_area(TASK)
 
         assert area.manifestUrl == "./areas/napoli/manifest.json"
+
+    def test_group_empty_by_default(self):
+        area = Builder().add_area(TASK)
+
+        assert area.group == []
+
+    def test_group_stamped_from_settings(self):
+        Settings._instance = Settings(debug=False, providers={}, group=["debug", "Europe"])
+
+        area = Builder().add_area(TASK)
+
+        assert area.group == ["debug", "Europe"]
+
+    def test_existing_area_group_not_restamped_on_rebuild(self):
+        existing = make_area()
+        existing.summary.group = ["Sept_2026_Trip"]
+        builder = Builder(catalog=GeoCatalog(areas=[existing]))
+        Settings._instance = Settings(debug=False, providers={}, group=["debug"])
+
+        area = builder.add_area(TASK)
+
+        assert area is existing
+        assert area.group == ["Sept_2026_Trip"]
 
 
 class TestRun:
