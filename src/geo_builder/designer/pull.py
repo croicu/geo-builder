@@ -8,11 +8,8 @@ import requests
 
 from ..diagnostics import Logger
 
-_HEAD_FILES = ("catalog.head.json", "catalog.head.debug.json")
-_HEAD_DEFAULTS = {
-    "catalog.head.json": {"version": 1, "catalogUrl": "./catalog.json"},
-    "catalog.head.debug.json": {"version": 1, "catalogUrl": "./catalog.json"},
-}
+_HEAD_FILE = "catalog.head.json"
+_HEAD_DEFAULT = {"version": 1, "catalogUrl": "./catalog.json"}
 _TIMEOUT = 30
 
 
@@ -20,20 +17,18 @@ def pull(base_url: str, in_dir: Path) -> None:
     """Fetch all service artifacts into in_dir. Overwrites existing files."""
     base = base_url.rstrip("/") + "/"
     seen: set[str] = set()
-    for name in _HEAD_FILES:
-        _pull_head(urljoin(base, name), name, in_dir, seen)
+    _pull_head(urljoin(base, _HEAD_FILE), in_dir, seen)
 
 
-def _pull_head(url: str, name: str, in_dir: Path, seen: set[str]) -> None:
+def _pull_head(url: str, in_dir: Path, seen: set[str]) -> None:
     data = _fetch_and_save(url, in_dir, seen)
     if data is None:
-        dest = in_dir / name
+        dest = in_dir / _HEAD_FILE
         if not dest.exists():
-            default = _HEAD_DEFAULTS.get(name, {})
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(json.dumps(default, indent=2), encoding="utf-8")
-            Logger.info(f"pull: '{name}' not on service, wrote default.")
-            catalog_rel = str(default.get("catalogUrl", ""))
+            dest.write_text(json.dumps(_HEAD_DEFAULT, indent=2), encoding="utf-8")
+            Logger.info(f"pull: '{_HEAD_FILE}' not on service, wrote default.")
+            catalog_rel = str(_HEAD_DEFAULT.get("catalogUrl", ""))
             if catalog_rel:
                 _pull_catalog(urljoin(url, catalog_rel), in_dir, seen)
         return
@@ -45,9 +40,9 @@ def _pull_head(url: str, name: str, in_dir: Path, seen: set[str]) -> None:
             if parsed_catalog.scheme:
                 local_rel = "./" + parsed_catalog.path.lstrip("/")
                 payload["catalogUrl"] = local_rel
-                dest = in_dir / name
+                dest = in_dir / _HEAD_FILE
                 dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-                Logger.info(f"pull: '{name}': normalized absolute catalogUrl to '{local_rel}'")
+                Logger.info(f"pull: '{_HEAD_FILE}': normalized absolute catalogUrl to '{local_rel}'")
                 catalog_rel = local_rel
             _pull_catalog(urljoin(url, catalog_rel), in_dir, seen)
     except Exception as exc:

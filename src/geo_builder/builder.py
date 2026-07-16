@@ -205,6 +205,8 @@ class Builder:
         self._stack.insert(insert_at, task)
 
     def add_area(self, task: AcquisitionTask) -> GeoArea:
+        from .settings import Settings
+
         area_id = task.areaId
 
         for area in self.catalog.areas:
@@ -213,6 +215,8 @@ class Builder:
 
         bbox = task.bbox
 
+        # settings.group is stamped only at first creation, not on rebuild/re-acquisition —
+        # existing areas keep whatever group they already have (see the early return above).
         summary = Area(
             id=area_id,
             name=task.areaName,
@@ -221,6 +225,7 @@ class Builder:
             maxRadiusPx=512,
             liveMapRadiusPx=640,
             manifestUrl=f"./areas/{area_id}/manifest.json",
+            group=list(Settings.current().group),
         )
 
         geo_area = GeoArea(summary=summary)

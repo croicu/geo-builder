@@ -140,7 +140,7 @@ def main() -> int:
             return 1
         in_dir = arguments.in_directory or Path("./in")
         try:
-            catalog = load_catalog(in_dir, debug=settings.debug)
+            catalog = load_catalog(in_dir)
         except GeoError:
             catalog = GeoCatalog(is_default=True)
         _launch_designer(
@@ -164,7 +164,7 @@ def main() -> int:
     Logger.set_logger(ConsoleLogSink(min_level=settings.logging))
     try:
         try:
-            catalog = load_catalog(arguments.in_directory, debug=settings.debug)
+            catalog = load_catalog(arguments.in_directory)
             executor = Builder(catalog)
         except GeoError:
             executor = Builder()
@@ -176,7 +176,7 @@ def main() -> int:
                 print(f"geo-builder: error: {error}", file=sys.stderr)
             return 1
 
-        save_catalog(geo_catalog, arguments.out_directory, debug=settings.debug, in_dir=arguments.in_directory)
+        save_catalog(geo_catalog, arguments.out_directory, in_dir=arguments.in_directory)
         return 0
     except GeoError as error:
         if settings.debug:

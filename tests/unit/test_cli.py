@@ -136,7 +136,7 @@ class TestMain:
 
             main()
 
-            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"), debug=False, in_dir=Path("/tmp/in"))
+            mock_save.assert_called_once_with(builder.catalog, Path("/tmp/out"), in_dir=Path("/tmp/in"))
 
     def test_settings_load_error_returns_1(self, capsys):
         with patch("geo_builder.cli.Settings") as MockSettings:

@@ -28,6 +28,7 @@ Configuration is split across two files:
 {
   "settings": {
     "debug": false,
+    "group": ["debug"],
     "logging": "error",
     "designUrl": "http://localhost:5173/?design=1",
     "map": {
@@ -44,7 +45,11 @@ Configuration is split across two files:
 ```
 
 At designer launch, `settings.py` appends query parameters to `designUrl` in this order:
-- `debug=1` — when `debug` is `true`
+- `debug=1` — when `debug` is `true`. Pure browser-side diagnostics flag; has no role in area
+  selection.
+- `group=<group joined by comma>` — when `group` is non-empty (e.g. `group: ["debug", "Europe"]`
+  → `?group=debug,Europe`; a single entry has no trailing comma)
+- `assetsBase=<value>` — from `assetsUrl` if present
 - `center=<value>` — from `map.center` if present
 - `zoom=<value>` — from `map.zoom` if present
 
@@ -117,7 +122,9 @@ A `"type": "acquisition"` entry without a `bbox` field is a **template** — it 
 
 The `"acquisition"` key is the default template name referenced by the `AddArea` designer API. Any number of named templates may coexist with concrete (bbox-bearing) tasks in the same file.
 
-`settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. It also writes per-task snapshots to `./build/{task_type}/{counter:03d}/` (see **Debug Output** below).
+`settings.debug: true` disables all `GeoError` catch blocks so exceptions propagate with full tracebacks. It also writes per-task snapshots to `./build/{task_type}/{counter:03d}/` (see **Debug Output** below), opens a WebView2 remote-debugging port in designer mode, and appends `?debug=1` to `designUrl` as a pure browser-side diagnostics flag. It has no effect on the catalog file layout and no role in area selection — those are unrelated to `debug`.
+
+`settings.group` is a list of group names (e.g. `["debug"]` or `["Europe", "Sept_2026_Trip"]`) stamped onto an area **the first time it's created** during a `geo-builder` invocation — either a new `areaId` newly acquired from `template.json` in build mode, or a new area added via the designer's `AddArea`. It is stamped once and never again: an area that already exists in the catalog keeps its original `group` even when a later run re-acquires its data (e.g. `--rebuild <id>`, or a normal build that fills in previously-missing data), regardless of what `settings.group` says at that later point. `settings.group` also has no filtering effect on which areas a build processes — every existing area is built/rebuilt as usual irrespective of its `group`. `"debug"` is not a special value; it's a convention for areas that only make sense during development/testing, filtered client-side by geo-browser via a `?group=` query string (see `docs/MESSAGING.md`).
 
 `settings.logging` controls the minimum log level printed to stdout during a designer session. Accepted values: `verbose`, `info`, `warning`, `error`, `critical`. Default: `error`.
 

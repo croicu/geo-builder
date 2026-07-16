@@ -168,6 +168,7 @@ interface AreaSummary {
   maxRadiusPx: number;
   liveMapRadiusPx: number;
   manifestUrl: string;
+  group: string[];  // omitted or empty = ungrouped; "debug" is a convention, not a special type
 }
 interface AddAreaOutput {
   error: number;
@@ -288,15 +289,15 @@ http://localhost:5173/?design=1&assetsBase=http://localhost:5174/
 |---------------------|-----------------|---------------|-------------|
 | `assetsUrl` | `assetsBase` | `http://localhost:5174/` | Base URL for all geo asset fetches. Overrides the default origin for the entire loading chain (head → catalog → manifests → geojson). Trailing slash is optional — the browser normalizes it. |
 
-When `assetsUrl` is set the browser resolves the head URL as `{assetsUrl}catalog.head.json` (or the debug variant when `?debug` is also present). All downstream URLs inherit the override automatically because they are resolved relative to the head URL via the standard `resolveUrl` chain.
+When `assetsUrl` is set the browser resolves the head URL as `{assetsUrl}catalog.head.json`. All downstream URLs inherit the override automatically because they are resolved relative to the head URL via the standard `resolveUrl` chain.
 
 Omit `assetsUrl` from settings.json in production builds — the browser defaults to its own origin.
 
-> **Open issue for geo-browser team:** in local dev (`localhost:5173` via Vite), catalog updates produced by geo-builder were observed not to reach the browser at all. Root-caused on the geo-builder side by instrumenting every WebView2 request (`host.py`'s `WebResourceRequested` filter intercepts 100% of outgoing requests, logged via `DataPipeline._resolve`): across a full session there was **no request whatsoever** for `catalog.head.json` / `catalog.head.debug.json` / `catalog.json` / `catalog.debug.json` — confirming the page never issued the fetch described in the loading chain above. Manually copying the updated file into geo-browser's `public/` folder made it appear immediately. This points to the catalog being loaded via a static import (`import catalog from './public/catalog.json'`) rather than a runtime `fetch()` against the loading chain — bundlers inline statically-imported JSON at build/transform time, independent of dev vs. production and independent of host/port. If a static import is in fact happening anywhere in the catalog-loading path, it should be replaced with a runtime fetch per the contract above, otherwise rebuilt catalogs will never be reflected without a manual file copy.
+> **Open issue for geo-browser team:** in local dev (`localhost:5173` via Vite), catalog updates produced by geo-builder were observed not to reach the browser at all. Root-caused on the geo-builder side by instrumenting every WebView2 request (`host.py`'s `WebResourceRequested` filter intercepts 100% of outgoing requests, logged via `DataPipeline._resolve`): across a full session there was **no request whatsoever** for `catalog.head.json` / `catalog.json` — confirming the page never issued the fetch described in the loading chain above. Manually copying the updated file into geo-browser's `public/` folder made it appear immediately. This points to the catalog being loaded via a static import (`import catalog from './public/catalog.json'`) rather than a runtime `fetch()` against the loading chain — bundlers inline statically-imported JSON at build/transform time, independent of dev vs. production and independent of host/port. If a static import is in fact happening anywhere in the catalog-loading path, it should be replaced with a runtime fetch per the contract above, otherwise rebuilt catalogs will never be reflected without a manual file copy.
 
 ### `catalog.head.json`
 
-Entry point. Tells the browser where the catalog file lives.
+Entry point. Tells the browser where the catalog file lives. There is a single head file — no separate debug variant; debug-only areas live in the same catalog, distinguished by `group: ["debug"]` (see below) and filtered client-side via query string.
 
 ```jsonc
 {
@@ -306,8 +307,6 @@ Entry point. Tells the browser where the catalog file lives.
 ```
 
 The `catalogUrl` is a relative URL resolved against the head file's location. The default points to `./catalog.json` (flat layout alongside the head file). Services may use a different layout; geo-builder mirrors whatever `catalogUrl` the service declares.
-
-`catalog.head.debug.json` is an alternate entry point for debug builds — same shape, default `catalogUrl` is `"./catalog.debug.json"`.
 
 ### `catalog.json`
 
@@ -323,13 +322,39 @@ The `catalogUrl` is a relative URL resolved against the head file's location. Th
       "minRadiusPx": 32,
       "maxRadiusPx": 512,
       "liveMapRadiusPx": 640,
-      "manifestUrl": "./areas/napoli/manifest.json"
+      "manifestUrl": "./areas/napoli/manifest.json",
+      "group": []
     }
   ]
 }
 ```
 
 `bbox` is `[west, south, east, north]` — longitude first, matching GeoJSON convention.
+
+`group` is an optional list of arbitrary group names (empty/omitted = ungrouped, the default). `"debug"` is not a special type — it's just a conventional group name for areas that only make sense during development/testing. An area may belong to multiple groups. New areas are stamped with the `group` array from geo-builder's `settings.json`/`settings.local.json` **once, at creation time only** (both CLI build mode and the designer's `AddArea`) — an area that already exists in the catalog is never re-stamped, even when a later build re-acquires its data (e.g. via `--rebuild <id>`, or because it lacked data on a prior run). Changing `settings.json`'s `group` therefore only affects areas created *after* the change; it has no effect on existing areas and never filters which areas get (re)built. geo-builder only produces and persists the field — filtering is entirely geo-browser's concern.
+
+**Client-side group filtering (geo-browser):** applied after the catalog is fetched, when building the Summary area list — not a server/build-time concern. `Context.groupFilter: string[] | null` is parsed from the query string:
+
+1. `?group=<a,b,...>` present → split on `,` → `groupFilter = [a, b, ...]`.
+2. Else `?debug=<truthy>` present → `groupFilter = ["debug"]` (back-compat shorthand; `Context.debug` itself is unaffected — see below).
+3. Neither present → `groupFilter = null`.
+
+If both `group` and `debug` are present, `group` wins **outright** — its presence disables the `debug`-shorthand rule entirely rather than merging with it. `"debug"` is only ever injected into `groupFilter` when `?group=` is absent; it is never implicitly added to an explicit `?group=` list. Concretely:
+
+| Query string | `groupFilter` | `Context.debug` |
+|---|---|---|
+| *(none)* | `null` | `false` |
+| `?debug=1` | `["debug"]` | `true` |
+| `?group=Europe` | `["Europe"]` | `false` |
+| `?group=debug,Europe` | `["debug", "Europe"]` | `false` |
+| `?debug=1&group=Europe` | `["Europe"]` — **not** `["debug", "Europe"]` | `true` |
+| `?debug=1&group=debug,Europe` | `["debug", "Europe"]` | `true` |
+
+So `?debug=1&group=Europe` shows only `Europe`-tagged areas — a `debug`-only-tagged area stays hidden even though `debug=1` is in the URL — while `Context.debug`'s own diagnostics (synthetic heading, debug-only toolbar buttons) stay on regardless, since they don't consult `groupFilter` at all.
+
+An area is included when `groupFilter === null` (no filtering — every area shows, including debug-tagged ones by default) or when the area's `group` array is a **superset** of `groupFilter` (AND, not OR — an area must belong to every listed group to show, not just one).
+
+`Context.debug` (pure browser-side diagnostics flag — synthetic heading in `GeoLocationWidget`, debug-only buttons in the image overlay toolbar) is unrelated and unchanged; it is not replaced by `groupFilter`, the two are independent flags, matching how geo-builder treats `settings.debug` and `settings.group` as independent inputs to the query string it emits (`?debug=1&group=debug,Europe` can both be present).
 
 > **Breaking change:** `center: [lat, lon]` and `radiusMeters: number` have been replaced by `bbox`. These fields no longer appear in the catalog JSON.
 
@@ -408,16 +433,21 @@ A reserved builtin virtual layer with `url: null`. The browser derives its conte
 
 #### `__void__` layer
 
-A reserved builtin virtual layer with `url: null`. The browser populates it at runtime with a density grid derived from loaded feature data — no builder content, pure client-side computation. Always present in the manifest; `visible` is always `false` on write (the builder never has data to show).
+A reserved builtin virtual layer type. Precomputed by the builder (`VoidWorker`) and shipped as
+one or more ordinary `Layer` entries with a real `url`, distinguished by an `id` naming
+convention (`__void__`, `__void__2__`, `__void__2_3__`, ...) — see `docs/LAYERS.md` for the full
+contract. The browser resolves which variant to show at runtime and renders it as a plain
+GeoJSON polygon; no client-side geometry computation. `visible` is always `false` on write —
+the browser decides when to show it and which variant backs the single "Mundane" toggle.
 
 ```jsonc
 {
-  "id": "__void__",
-  "name": "Mundane",
+  "id": "__void__2__",
+  "name": "No Restaurants, Food",
   "type": "__void__",
-  "url": null,
+  "url": "./void/layer-2.geojson",
   "visible": false,
-  "style": { "opacity": 0.9, "color": "#000000" }
+  "style": { "opacity": 0.80, "color": "#4a5568" }
 }
 ```
 
@@ -673,8 +703,9 @@ class AddAreaOutput:
 **Notes:**
 - `areaId` is derived server-side from `areaName`: lowercased, non-alphanumeric runs replaced by `_`, leading/trailing underscores stripped. Example: `"New York"` → `"new_york"`.
 - `template` is reserved for future multi-template support and is currently unused. `template.json` is a flat manifest-shaped document; the builder uses all data layers in it to create `AcquisitionTask`s for the new area.
-- On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`.
+- On success the builder returns the full `AreaSummary` for the new area; the browser appends it to its in-memory catalog without re-fetching `catalog.head.json`. This bypasses `Context.groupFilter` — a newly added area always appears immediately regardless of the active filter, even if it wouldn't match on a later reload.
 - `bbox` is always `[west, south, east, north]` with longitude first (matching GeoJSON convention).
+- `group` on the new area is stamped from geo-builder's `settings.json`/`settings.local.json` `group` array for the current session — there is no per-call input for it on this API.
 
 ---
 

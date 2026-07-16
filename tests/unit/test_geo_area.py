@@ -116,6 +116,22 @@ class TestGeoAreaLoad:
         assert loaded.maxRadiusPx == 512
         assert loaded.liveMapRadiusPx == 640
 
+    def test_group_defaults_empty_when_absent(self, tmp_path):
+        manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
+
+        loaded = GeoArea.load(manifest_path, _make_area_payload())
+
+        assert loaded.group == []
+
+    def test_group_loaded_from_payload(self, tmp_path):
+        manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
+        payload = _make_area_payload()
+        payload["group"] = ["debug", "Europe"]
+
+        loaded = GeoArea.load(manifest_path, payload)
+
+        assert loaded.group == ["debug", "Europe"]
+
     def test_loads_layers(self, tmp_path):
         manifest_path = _write_area_to_disk(tmp_path, _make_geo_area())
 

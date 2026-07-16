@@ -68,6 +68,7 @@ class Area:
     maxRadiusPx: int
     liveMapRadiusPx: int
     manifestUrl: str
+    group: list[str] = field(default_factory=list)
 
 
 @dataclass

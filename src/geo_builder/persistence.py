@@ -27,9 +27,7 @@ def save_json(path: Path, payload: JsonValue) -> None:
 
 
 _CATALOG_HEAD = "catalog.head.json"
-_CATALOG_HEAD_DEBUG = "catalog.head.debug.json"
 _DEFAULT_CATALOG_URL = "./catalog.json"
-_DEFAULT_CATALOG_URL_DEBUG = "./catalog.debug.json"
 
 
 def child_path(parent: Path, relative_path: str) -> Path:
@@ -41,28 +39,23 @@ def child_path(parent: Path, relative_path: str) -> Path:
     return parent / path
 
 
-def _default_catalog_url(debug: bool) -> str:
-    return _DEFAULT_CATALOG_URL_DEBUG if debug else _DEFAULT_CATALOG_URL
-
-
-def _resolve_catalog_url(directory: Path, debug: bool) -> str:
-    head_name = _CATALOG_HEAD_DEBUG if debug else _CATALOG_HEAD
-    head_path = directory / head_name
+def _resolve_catalog_url(directory: Path) -> str:
+    head_path = directory / _CATALOG_HEAD
     if not head_path.exists():
-        return _default_catalog_url(debug)
+        return _DEFAULT_CATALOG_URL
     payload = read_json(head_path)
     if not isinstance(payload, dict):
-        raise CatalogError(f"{head_name} must contain an object.")
+        raise CatalogError(f"{_CATALOG_HEAD} must contain an object.")
     url = str(payload.get("catalogUrl", ""))
     if not url:
-        raise CatalogError(f"{head_name} must contain a catalogUrl.")
+        raise CatalogError(f"{_CATALOG_HEAD} must contain a catalogUrl.")
     return url
 
 
-def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
+def load_catalog(input_dir: str | Path) -> GeoCatalog:
     input_dir = Path(input_dir)
 
-    catalog_url = _resolve_catalog_url(input_dir, debug)
+    catalog_url = _resolve_catalog_url(input_dir)
 
     catalog_path = child_path(input_dir, catalog_url)
     payload = read_json(catalog_path)
@@ -92,14 +85,13 @@ def load_catalog(input_dir: str | Path, debug: bool = False) -> GeoCatalog:
 def save_catalog(
     geo_catalog: GeoCatalog,
     output_dir: str | Path,
-    debug: bool = False,
     in_dir: str | Path | None = None,
 ) -> None:
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
     source_dir = Path(in_dir) if in_dir is not None else None
-    catalog_url = _resolve_catalog_url(source_dir, debug) if source_dir is not None else _default_catalog_url(debug)
+    catalog_url = _resolve_catalog_url(source_dir) if source_dir is not None else _DEFAULT_CATALOG_URL
 
     areas_payload = []
     for geo_area in geo_catalog.areas:
@@ -114,7 +106,6 @@ def save_catalog(
     _clean_dir(output_dir)
     head_payload = {"version": 1, "catalogUrl": catalog_url}
     save_json(output_dir / _CATALOG_HEAD, head_payload)
-    save_json(output_dir / _CATALOG_HEAD_DEBUG, head_payload)
     catalog_path = child_path(output_dir, catalog_url)
     save_json(catalog_path, catalog_payload)
 
@@ -124,21 +115,21 @@ def save_catalog(
         save_area_csv(geo_area, catalog_base)
 
 
-def save_area_to_catalog(geo_area: GeoArea, output_dir: str | Path, debug: bool = False) -> None:
+def save_area_to_catalog(geo_area: GeoArea, output_dir: str | Path) -> None:
     """Write one area's manifest, geojson, and CSV into a catalog directory without touching other areas."""
     output_dir = Path(output_dir)
-    catalog_url = _resolve_catalog_url(output_dir, debug)
+    catalog_url = _resolve_catalog_url(output_dir)
     catalog_base = child_path(output_dir, catalog_url).parent
     geo_area.save(catalog_base)
     save_area_csv(geo_area, catalog_base)
 
 
-def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bool = False) -> None:
+def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path) -> None:
     """Write head + catalog.json only; does not touch area directories."""
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    catalog_url = _resolve_catalog_url(output_dir, debug)
+    catalog_url = _resolve_catalog_url(output_dir)
 
     areas_payload = []
     for geo_area in geo_catalog.areas:
@@ -152,7 +143,6 @@ def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, debug: bo
 
     head_payload = {"version": 1, "catalogUrl": catalog_url}
     save_json(output_dir / _CATALOG_HEAD, head_payload)
-    save_json(output_dir / _CATALOG_HEAD_DEBUG, head_payload)
     catalog_path = child_path(output_dir, catalog_url)
     save_json(catalog_path, catalog_payload)
 

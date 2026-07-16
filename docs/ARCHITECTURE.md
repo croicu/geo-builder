@@ -148,7 +148,7 @@ In normal mode `Builder` catches `GeoError`, records the message in `Builder.err
 
 - `Settings.load(path)` — parses `settings.json`, optionally loads the template file, stores the singleton
 - `Settings.current()` — returns the active instance (raises if not loaded)
-- Fields: `debug: bool`, `template: dict | None`, `providers: dict[str, dict]`
+- Fields: `debug: bool`, `group: list[str]`, `template: dict | None`, `providers: dict[str, dict]`
 - Tests set up the singleton directly via `Settings._instance = Settings(...)`
 
 ## Debug Output
