@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from copy import deepcopy
 
-from ..contracts import Executor, Task, Worker, WorkerResult
+from ..contracts import DedupingTask, Executor, Task, Worker, WorkerResult
 from ..diagnostics import Logger
 
 # Points farther apart in latitude than this cannot be within 10 m of each other
@@ -31,7 +31,10 @@ class DedupingWorker(Worker):
 
         total_removed = 0
 
+        area_ids = self._task.area_ids if isinstance(self._task, DedupingTask) else None
         for area in executor.catalog.areas:
+            if area_ids is not None and area.id not in area_ids:
+                continue
             area_removed = 0
             for geo_layer in area.layers:
                 if geo_layer.layer.geojson is None:

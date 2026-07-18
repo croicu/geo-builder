@@ -30,8 +30,12 @@ class VoidWorker(Worker):
             style = default_task.style
             default_radius_m = default_task.default_radius_m
 
+        area_ids = self._task.area_ids if isinstance(self._task, VoidTask) else None
+
         variant_count = 0
         for area in list(catalog.areas):
+            if area_ids is not None and area.id not in area_ids:
+                continue
             variant_count += self._process_area(area, style, default_radius_m)
 
         Logger.info(f"VoidWorker: completed. {variant_count} void variant(s) computed across {len(catalog.areas)} area(s).")

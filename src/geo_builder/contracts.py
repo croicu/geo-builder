@@ -50,43 +50,62 @@ class AcquisitionTask(Task):
 
 
 class AggregationTask(Task):
+    area_ids: list[str] | None
+
     def __init__(
         self,
+        area_ids: list[str] | None = None,
     ) -> None:
         super().__init__("aggregation")
+        self.area_ids = area_ids
 
 
 class DedupingTask(Task):
+    area_ids: list[str] | None
+
     def __init__(
         self,
+        area_ids: list[str] | None = None,
     ) -> None:
         super().__init__("deduping")
+        self.area_ids = area_ids
 
 
 class PoiTask(Task):
     style: PoiStyle
+    area_ids: list[str] | None
 
-    def __init__(self, style: PoiStyle | None = None) -> None:
+    def __init__(self, style: PoiStyle | None = None, area_ids: list[str] | None = None) -> None:
         super().__init__("poi")
         self.style = style if style is not None else PoiStyle()
+        self.area_ids = area_ids
 
 
 class VoidTask(Task):
     style: VoidStyle
     default_radius_m: float
+    area_ids: list[str] | None
 
-    def __init__(self, style: VoidStyle | None = None, default_radius_m: float = 100.0) -> None:
+    def __init__(
+        self,
+        style: VoidStyle | None = None,
+        default_radius_m: float = 100.0,
+        area_ids: list[str] | None = None,
+    ) -> None:
         super().__init__("void")
         self.style = style if style is not None else VoidStyle()
         self.default_radius_m = default_radius_m
+        self.area_ids = area_ids
 
 
 class SearchTask(Task):
     style: SearchStyle
+    area_ids: list[str] | None
 
-    def __init__(self, style: SearchStyle | None = None) -> None:
+    def __init__(self, style: SearchStyle | None = None, area_ids: list[str] | None = None) -> None:
         super().__init__("search")
         self.style = style if style is not None else SearchStyle()
+        self.area_ids = area_ids
 
 
 class Map(Protocol):

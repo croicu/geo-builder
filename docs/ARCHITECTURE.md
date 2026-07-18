@@ -101,6 +101,12 @@ Workers receive the builder as their `executor: Executor` parameter and mutate s
 
 An optional `rebuild_areas: list[str] | None` argument (CLI: `--rebuild <id>`, repeatable; build mode only) overrides this implicit skip logic: areas whose id is listed are force-acquired regardless of existing data, `["all"]` forces every loaded area, and any other loaded area is expected to already have data — an unknown id or an unlisted no-data area raises `TaskError` (caught by `cli.py`'s existing `GeoError` handling, exit 1). Omitting `rebuild_areas` preserves the implicit behavior exactly.
 
+### Area-scoped tail tasks
+
+Areas are isolated (see `CLAUDE.md`'s Core Invariants), so the fixed-tail tasks (Aggregation, Deduping, Poi, Void, Search) each carry an `area_ids: list[str] | None` field. `None` means unscoped — process every area, the default for a full build. When set, each worker skips any `catalog.areas` entry whose id isn't in the list, instead of reprocessing the whole catalog.
+
+`_tasks_from_catalog()` derives this automatically: it collects the ids of every area that actually got an `AcquisitionTask` this run (forced via `--rebuild`, or simply missing data) and stamps that list onto the tail tasks it appends — `None` only for `--rebuild all`, which is explicitly "every area." The designer's single-area entry points (`AddArea`, `SetAreaBbox`, and the void-geometry-only reprocess path in `host.py`) build their own tail task list directly and pass `area_ids=[area_id]` explicitly, since they bypass `_tasks_from_catalog` entirely.
+
 ## Workers
 
 ### AcquisitionWorker
@@ -201,6 +207,8 @@ The `DataPipeline` (`designer/data_pipeline.py`) intercepts every WebView HTTP r
 - `load_geojson`, `load_feature`, `load_geometry`
 - `read_json`, `save_json`, `child_path` utilities
 
+`save_catalog` cleans the entire output directory (`shutil.rmtree` + recreate) and rewrites every area's manifest/geojson/CSV plus `catalog.json`/head — the right choice for the plain CLI build path, where the set of areas can grow or shrink between runs and stale directories for removed areas need purging. For a known single-area change, use `save_area_to_catalog(geo_area, directory)` (writes just that area's manifest/geojson/CSV, no clean) together with `save_catalog_meta(catalog, directory, in_dir=...)` (head + `catalog.json` only) instead — this is what the designer's `AddArea`/`SetAreaBbox`/reprocess flows do, so a single-area edit never touches any other area's files on disk. `save_catalog_meta`'s optional `in_dir` mirrors `save_catalog`'s `in_dir`-based `catalogUrl` resolution when writing to `--out` for the first time.
+
 `save_area_csv` writes `{areaId}.csv` into each area directory combining all features across all layers. Columns: `lon`, `lat`, `layer_id`, then all unique property keys (sorted). Missing properties are written as empty strings.
 
 `child_path(parent, relative_path)` resolves a URL relative to a parent directory. If `relative_path` contains a scheme (e.g. `https://cdn.example.com/catalog.json`), the scheme and host are stripped and only the path component is used, so the result is always under `parent`. This allows catalog and manifest files to reference layers hosted on a different origin without breaking local resolution.
@@ -213,7 +221,7 @@ The `DataPipeline` (`designer/data_pipeline.py`) intercepts every WebView HTTP r
 - `BoundingBox` — west/south/east/north floats
 - `AreaStyle` — per-filter-key style record: `values: list[str]`, `color: str | None`, `scale: float | None`
 - `AcquisitionTask` — carries `filters: dict[str, AreaStyle]` (one entry per OSM tag key)
-- `AggregationTask`, `DedupingTask`
+- `AggregationTask`, `DedupingTask`, `PoiTask`, `VoidTask`, `SearchTask` — the fixed-tail tasks; each carries `area_ids: list[str] | None` (see "Area-scoped tail tasks" above)
 - `Map` — protocol for catalog mutation: `add_area`, `add_layer`
 - `Executor` — protocol extending `Map`, adds `push_task`, `push_tasks`; passed to all workers
 - `Worker` — protocol: `execute(executor: Executor) → WorkerResult`

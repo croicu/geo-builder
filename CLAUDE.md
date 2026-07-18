@@ -108,6 +108,11 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
+- **File**: [Area-Scoped Rebuild](tasks/area_scoped_rebuild.md)
+- **Status**: Ready to Submit
+- **GitHub Issue**: N/A
+- **Key Context**: Designer-triggered single-area changes (`SetAreaBbox`, `AddArea`, void-geometry-only reprocess) were reprocessing and re-persisting *every* area, not just the changed one, violating the "areas are isolated" invariant. Fix has two parts: (1) `area_ids: list[str] | None` on the five fixed-tail tasks (Aggregation/Deduping/Poi/Void/Search), workers filter their per-area loop by it; `Builder._tasks_from_catalog` derives the scoped id list from whichever areas actually got acquisition tasks (so `--rebuild <id>` is scoped for free), `host.py`'s `on_add_area`/`_reprocess_area` pass it explicitly. (2) Swap the designer's three `save_catalog(...)` (full `--out` clean + rewrite-everything) calls for a new `_save_area_only` helper built on the existing `save_area_to_catalog` + `save_catalog_meta` pair, so only the changed area's files touch disk; `save_catalog_meta` gained an optional `in_dir` param to preserve `save_catalog`'s catalog-URL mirroring on first write. Plain CLI build path intentionally keeps full `save_catalog` (needs to purge areas removed from the catalog between runs). 438 tests pass (+24), ruff clean, `docs/ARCHITECTURE.md` updated.
+
 - **File**: [Area Grouping](tasks/area_grouping.md)
 - **Status**: Ready to Submit
 - **GitHub Issue**: N/A

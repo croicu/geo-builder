@@ -21,9 +21,12 @@ class PoiWorker(Worker):
             return WorkerResult()
 
         style = self._task.style if isinstance(self._task, PoiTask) else PoiStyle()
+        area_ids = self._task.area_ids if isinstance(self._task, PoiTask) else None
 
         stub_count = 0
         for area in list(catalog.areas):
+            if area_ids is not None and area.id not in area_ids:
+                continue
             had_details = self._process_area(area, style)
             if had_details:
                 stub_count += 1

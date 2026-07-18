@@ -1,6 +1,6 @@
 import pytest
 
-from geo_builder.contracts import WorkerResult
+from geo_builder.contracts import DedupingTask, WorkerResult
 from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.deduping import DedupingWorker
@@ -134,6 +134,30 @@ class TestExecute:
         run([area])
 
         assert area.layers[0].layer.geojson.features == []
+
+
+class TestAreaScoping:
+    def test_area_not_in_area_ids_is_skipped(self):
+        napoli = make_area([make_layer([make_feature(BASE_LON, BASE_LAT), make_feature(NEAR_LON, NEAR_LAT)])])
+        roma = make_area([make_layer([make_feature(BASE_LON, BASE_LAT), make_feature(NEAR_LON, NEAR_LAT)])])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        DedupingWorker(task=DedupingTask(area_ids=["napoli"])).execute(executor)
+
+        assert len(napoli.layers[0].layer.geojson.features) == 1
+        assert len(roma.layers[0].layer.geojson.features) == 2
+
+    def test_none_area_ids_processes_every_area(self):
+        napoli = make_area([make_layer([make_feature(BASE_LON, BASE_LAT), make_feature(NEAR_LON, NEAR_LAT)])])
+        roma = make_area([make_layer([make_feature(BASE_LON, BASE_LAT), make_feature(NEAR_LON, NEAR_LAT)])])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        DedupingWorker(task=DedupingTask(area_ids=None)).execute(executor)
+
+        assert len(napoli.layers[0].layer.geojson.features) == 1
+        assert len(roma.layers[0].layer.geojson.features) == 1
 
 
 class TestDedupeFeatures:

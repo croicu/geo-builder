@@ -51,7 +51,7 @@ def _acquisition_matches(layer_acq: dict, template_acq: dict | None) -> bool:
     return True
 
 
-def _poi_task_from_template(template: dict):
+def _poi_task_from_template(template: dict, area_ids: list[str] | None = None):
     from ..contracts import PoiTask
     from ..protocols import PoiStyle
 
@@ -66,14 +66,14 @@ def _poi_task_from_template(template: dict):
                 radius=float(s["radius"]) if s.get("radius") is not None else None,
             )
             break
-    return PoiTask(style=poi_style)
+    return PoiTask(style=poi_style, area_ids=area_ids)
 
 
-def _void_task_from_template(template: dict):
+def _void_task_from_template(template: dict, area_ids: list[str] | None = None):
     from ..contracts import VoidTask
     from ..protocols import VoidStyle
 
-    void_task = VoidTask()
+    void_task = VoidTask(area_ids=area_ids)
     for tlayer in template.get("layers", []):
         if tlayer.get("id") == "__void__":
             s = tlayer.get("style", {})
@@ -83,12 +83,12 @@ def _void_task_from_template(template: dict):
                 opacity=float(s.get("opacity", 0.9)),
             )
             default_radius_m = float(s.get("radius", VoidTask().default_radius_m))
-            void_task = VoidTask(style=void_style, default_radius_m=default_radius_m)
+            void_task = VoidTask(style=void_style, default_radius_m=default_radius_m, area_ids=area_ids)
             break
     return void_task
 
 
-def _search_task_from_template(template: dict):
+def _search_task_from_template(template: dict, area_ids: list[str] | None = None):
     from ..contracts import SearchTask
     from ..protocols import SearchStyle
 
@@ -102,7 +102,26 @@ def _search_task_from_template(template: dict):
                 opacity=float(s.get("opacity", 0.3)),
             )
             break
-    return SearchTask(style=search_style)
+    return SearchTask(style=search_style, area_ids=area_ids)
+
+
+def _save_area_only(geo_catalog: GeoCatalog, area_id: str, directory, mirror_from=None) -> None:
+    """Persist only area_id's manifest/geojson/CSV plus catalog.json/head into directory.
+
+    Areas are isolated (see CLAUDE.md), so a single-area change never needs the full-tree
+    clean-and-rewrite that save_catalog does — every other area's files stay untouched on disk.
+    mirror_from mirrors save_catalog's in_dir catalog_url convention when writing to out_dir.
+    """
+    from ..persistence import save_area_to_catalog, save_catalog_meta
+
+    target = None
+    for a in geo_catalog.areas:
+        if a.id == area_id:
+            target = a
+            break
+    if target is not None:
+        save_area_to_catalog(target, directory)
+    save_catalog_meta(geo_catalog, directory, in_dir=mirror_from)
 
 
 def _build_user_stub(tmpl: dict):
@@ -319,7 +338,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
     from ..entities import GeoArea, ManifestChange
     from ..errors import GeoError
-    from ..persistence import load_catalog, save_catalog, save_catalog_meta
+    from ..persistence import load_catalog, save_catalog_meta
     from ..protocols import AreaStyle
     from ..settings import Settings
 
@@ -357,7 +376,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
         try:
             result = Builder(fresh_catalog).run()
-            save_catalog(result, out_dir, in_dir=in_dir)
+            _save_area_only(result, area_id, out_dir, mirror_from=in_dir)
         except Exception as exc:
             Logger.error(f"pipeline failed for area '{area_id}': {exc}")
             return
@@ -376,17 +395,18 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         """
         settings = Settings.current()
         template = settings.template or {}
+        area_ids = [area_id]
         tasks = [
-            AggregationTask(),
-            DedupingTask(),
-            _poi_task_from_template(template),
-            _void_task_from_template(template),
-            _search_task_from_template(template),
+            AggregationTask(area_ids=area_ids),
+            DedupingTask(area_ids=area_ids),
+            _poi_task_from_template(template, area_ids=area_ids),
+            _void_task_from_template(template, area_ids=area_ids),
+            _search_task_from_template(template, area_ids=area_ids),
         ]
 
         try:
             result = Builder(fresh_catalog).run(tasks=tasks)
-            save_catalog(result, out_dir, in_dir=in_dir)
+            _save_area_only(result, area_id, out_dir, mirror_from=in_dir)
         except Exception as exc:
             Logger.error(f"reprocess failed for area '{area_id}': {exc}")
             return
@@ -496,11 +516,12 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                     filters=filters,
                 )
             )
-        tasks.append(AggregationTask())
-        tasks.append(DedupingTask())
-        tasks.append(_poi_task_from_template(template))
-        tasks.append(_void_task_from_template(template))
-        tasks.append(_search_task_from_template(template))
+        area_ids = [area_id]
+        tasks.append(AggregationTask(area_ids=area_ids))
+        tasks.append(DedupingTask(area_ids=area_ids))
+        tasks.append(_poi_task_from_template(template, area_ids=area_ids))
+        tasks.append(_void_task_from_template(template, area_ids=area_ids))
+        tasks.append(_search_task_from_template(template, area_ids=area_ids))
 
         if in_dir is not None:
             try:
@@ -539,19 +560,10 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                     a.layers.append(_build_user_stub(template))
                 break
 
-        save_catalog(result, out_dir, in_dir=in_dir)
+        _save_area_only(result, area_id, out_dir, mirror_from=in_dir)
 
         if in_dir is not None:
-            from ..persistence import save_area_to_catalog, save_catalog_meta
-
-            new_area_obj = None
-            for a in result.areas:
-                if a.id == area_id:
-                    new_area_obj = a
-                    break
-            if new_area_obj is not None:
-                save_area_to_catalog(new_area_obj, in_dir)
-            save_catalog_meta(result, in_dir)
+            _save_area_only(result, area_id, in_dir)
 
         catalog.areas[:] = result.areas
         for a in catalog.areas:

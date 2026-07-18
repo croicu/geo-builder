@@ -98,3 +98,27 @@ class TestSearchWorker:
         assert layers[0].name == "Custom Name"
         assert layers[0].visible is True
         assert layers[0].style == {"opacity": 0.9, "color": "#ffffff"}
+
+
+class TestAreaScoping:
+    def test_area_not_in_area_ids_is_skipped(self):
+        napoli = make_area([])
+        roma = make_area([])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        SearchWorker(task=SearchTask(area_ids=["napoli"])).execute(executor)
+
+        assert len(search_layers(napoli)) == 1
+        assert len(search_layers(roma)) == 0
+
+    def test_none_area_ids_processes_every_area(self):
+        napoli = make_area([])
+        roma = make_area([])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        SearchWorker(task=SearchTask(area_ids=None)).execute(executor)
+
+        assert len(search_layers(napoli)) == 1
+        assert len(search_layers(roma)) == 1

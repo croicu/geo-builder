@@ -124,12 +124,17 @@ def save_area_to_catalog(geo_area: GeoArea, output_dir: str | Path) -> None:
     save_area_csv(geo_area, catalog_base)
 
 
-def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path) -> None:
-    """Write head + catalog.json only; does not touch area directories."""
+def save_catalog_meta(geo_catalog: GeoCatalog, output_dir: str | Path, in_dir: str | Path | None = None) -> None:
+    """Write head + catalog.json only; does not touch area directories.
+
+    When in_dir is given, catalog_url mirrors its structure (matching save_catalog's convention)
+    instead of resolving from output_dir's own existing head file.
+    """
     from dataclasses import asdict
 
     output_dir = Path(output_dir)
-    catalog_url = _resolve_catalog_url(output_dir)
+    source_dir = Path(in_dir) if in_dir is not None else output_dir
+    catalog_url = _resolve_catalog_url(source_dir)
 
     areas_payload = []
     for geo_area in geo_catalog.areas:
