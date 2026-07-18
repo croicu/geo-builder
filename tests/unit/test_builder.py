@@ -403,3 +403,53 @@ class TestTasksFromCatalog:
         tasks = builder._tasks_from_catalog(rebuild_areas=["all"])
 
         assert self._area_ids_with_acquisition_tasks(tasks) == {"napoli", "roma"}
+
+    def _tail_tasks(self, tasks: list) -> list:
+        tail_types = {"aggregation", "deduping", "poi", "void", "search"}
+        result = []
+        for task in tasks:
+            if task.type in tail_types:
+                result.append(task)
+        return result
+
+    def test_tail_tasks_scoped_to_only_area_that_needed_acquisition(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer_no_data("1")]))
+
+        tasks = builder._tasks_from_catalog()
+
+        tail = self._tail_tasks(tasks)
+        assert len(tail) == 5
+        for task in tail:
+            assert task.area_ids == ["roma"]
+
+    def test_tail_tasks_scoped_to_multiple_rebuild_ids(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer("1", 1)]))
+
+        tasks = builder._tasks_from_catalog(rebuild_areas=["napoli", "roma"])
+
+        tail = self._tail_tasks(tasks)
+        for task in tail:
+            assert set(task.area_ids) == {"napoli", "roma"}
+
+    def test_rebuild_all_leaves_tail_tasks_unscoped(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+        builder.catalog.areas.append(make_area_with_layers("roma", [make_layer_no_data("1")]))
+
+        tasks = builder._tasks_from_catalog(rebuild_areas=["all"])
+
+        tail = self._tail_tasks(tasks)
+        for task in tail:
+            assert task.area_ids is None
+
+    def test_no_areas_need_acquisition_produces_no_tail_tasks(self):
+        builder = Builder()
+        builder.catalog.areas.append(make_area_with_layers("napoli", [make_layer("1", 1)]))
+
+        tasks = builder._tasks_from_catalog()
+
+        assert self._tail_tasks(tasks) == []

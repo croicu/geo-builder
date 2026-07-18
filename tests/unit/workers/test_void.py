@@ -246,3 +246,29 @@ class TestVoidWorker:
                 bare = candidate
         assert bare is not None
         assert bare.geometry == {"radius": 42.0}
+
+
+class TestAreaScoping:
+    def test_area_not_in_area_ids_is_skipped(self):
+        napoli = make_area([])
+        roma = make_area([])
+        roma.summary.id = "roma"
+        roma.summary.manifestUrl = "./areas/roma/manifest.json"
+
+        executor = make_executor([napoli, roma])
+        VoidWorker(task=VoidTask(area_ids=["napoli"])).execute(executor)
+
+        assert variant_ids(napoli) == ["__void__"]
+        assert variant_ids(roma) == []
+
+    def test_none_area_ids_processes_every_area(self):
+        napoli = make_area([])
+        roma = make_area([])
+        roma.summary.id = "roma"
+        roma.summary.manifestUrl = "./areas/roma/manifest.json"
+
+        executor = make_executor([napoli, roma])
+        VoidWorker(task=VoidTask(area_ids=None)).execute(executor)
+
+        assert variant_ids(napoli) == ["__void__"]
+        assert variant_ids(roma) == ["__void__"]

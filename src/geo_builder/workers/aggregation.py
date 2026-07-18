@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from ..contracts import Executor, Task, Worker, WorkerResult
+from ..contracts import AggregationTask, Executor, Task, Worker, WorkerResult
 from ..diagnostics import Logger
 from ..entities import GeoLayer
 from ..protocols import GeoJson
@@ -20,7 +20,10 @@ class AggregationWorker(Worker):
         if catalog is None:
             return WorkerResult()
 
+        area_ids = self._task.area_ids if isinstance(self._task, AggregationTask) else None
         for area in list(catalog.areas):
+            if area_ids is not None and area.id not in area_ids:
+                continue
             self._aggregate_area(area)
 
         Logger.info("AggregationWorker: completed.")

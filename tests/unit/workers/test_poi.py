@@ -1,3 +1,4 @@
+from geo_builder.contracts import PoiTask
 from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.poi import PoiWorker
@@ -145,3 +146,31 @@ class TestPoiWorker:
         executor = StubExecutor(area=area, catalog=None)
         result = PoiWorker(task=None).execute(executor)
         assert not result.fatal
+
+
+class TestAreaScoping:
+    def test_area_not_in_area_ids_is_skipped(self):
+        napoli = make_area([make_layer("1", [make_feature(has_details=True)])])
+        roma = make_area([make_layer("1", [make_feature(has_details=True)])])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        PoiWorker(task=PoiTask(area_ids=["napoli"])).execute(executor)
+
+        napoli_poi = [gl.layer for gl in napoli.layers if gl.layer.id == "__poi__"]
+        roma_poi = [gl.layer for gl in roma.layers if gl.layer.id == "__poi__"]
+        assert len(napoli_poi) == 1
+        assert len(roma_poi) == 0
+
+    def test_none_area_ids_processes_every_area(self):
+        napoli = make_area([make_layer("1", [make_feature(has_details=True)])])
+        roma = make_area([make_layer("1", [make_feature(has_details=True)])])
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        PoiWorker(task=PoiTask(area_ids=None)).execute(executor)
+
+        napoli_poi = [gl.layer for gl in napoli.layers if gl.layer.id == "__poi__"]
+        roma_poi = [gl.layer for gl in roma.layers if gl.layer.id == "__poi__"]
+        assert len(napoli_poi) == 1
+        assert len(roma_poi) == 1

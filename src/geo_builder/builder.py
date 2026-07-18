@@ -84,6 +84,7 @@ class Builder:
                     raise TaskError(f"--rebuild area '{rebuild_id}' not found in catalog")
 
         result: list[Task] = []
+        acquired_area_ids: list[str] = []
         for area in self.catalog.areas:
             has_data_layers = False
             for geo_layer in area.layers:
@@ -96,6 +97,7 @@ class Builder:
                 raise TaskError(f"--rebuild given but area '{area.id}' has no data and is not listed in --rebuild")
 
             if forced or not has_data_layers:
+                acquired_area_ids.append(area.id)
                 for geo_layer in area.layers:
                     acq = geo_layer.layer.acquisition
                     if acq is None:
@@ -126,14 +128,17 @@ class Builder:
                         )
                     )
         if result:
-            result.append(AggregationTask())
-            result.append(DedupingTask())
+            tail_area_ids = None if force_all else acquired_area_ids
+            result.append(AggregationTask(area_ids=tail_area_ids))
+            result.append(DedupingTask(area_ids=tail_area_ids))
             settings = Settings.current()
             poi_style = self._poi_style_from_template(settings)
-            result.append(PoiTask(style=poi_style))
-            result.append(self._void_task_from_template(settings))
+            result.append(PoiTask(style=poi_style, area_ids=tail_area_ids))
+            void_task = self._void_task_from_template(settings)
+            void_task.area_ids = tail_area_ids
+            result.append(void_task)
             search_style = self._search_style_from_template(settings)
-            result.append(SearchTask(style=search_style))
+            result.append(SearchTask(style=search_style, area_ids=tail_area_ids))
         return result
 
     def _poi_style_from_template(self, settings) -> PoiStyle:

@@ -1,4 +1,4 @@
-from geo_builder.contracts import WorkerResult
+from geo_builder.contracts import AggregationTask, WorkerResult
 from geo_builder.entities import GeoArea, GeoCatalog, GeoLayer
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
 from geo_builder.workers.aggregation import AggregationWorker
@@ -140,3 +140,47 @@ class TestExecute:
 
         layer_ids = [gl.layer.id for gl in area.layers]
         assert "__poi__" in layer_ids
+
+
+class TestAreaScoping:
+    def test_area_not_in_area_ids_is_skipped(self):
+        napoli = make_area(
+            [
+                make_layer("1", _ACQ_RESTAURANT, feature_count=3),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=2),
+            ]
+        )
+        roma = make_area(
+            [
+                make_layer("1", _ACQ_RESTAURANT, feature_count=3),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=2),
+            ]
+        )
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        AggregationWorker(task=AggregationTask(area_ids=["napoli"])).execute(executor)
+
+        assert len(napoli.layers) == 1
+        assert len(roma.layers) == 2
+
+    def test_none_area_ids_processes_every_area(self):
+        napoli = make_area(
+            [
+                make_layer("1", _ACQ_RESTAURANT, feature_count=3),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=2),
+            ]
+        )
+        roma = make_area(
+            [
+                make_layer("1", _ACQ_RESTAURANT, feature_count=3),
+                make_layer("2", _ACQ_RESTAURANT, feature_count=2),
+            ]
+        )
+        roma.summary.id = "roma"
+
+        executor = make_executor([napoli, roma])
+        AggregationWorker(task=AggregationTask(area_ids=None)).execute(executor)
+
+        assert len(napoli.layers) == 1
+        assert len(roma.layers) == 1

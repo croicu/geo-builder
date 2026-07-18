@@ -21,9 +21,12 @@ class SearchWorker(Worker):
             return WorkerResult()
 
         style = self._task.style if isinstance(self._task, SearchTask) else SearchStyle()
+        area_ids = self._task.area_ids if isinstance(self._task, SearchTask) else None
 
         stub_count = 0
         for area in list(catalog.areas):
+            if area_ids is not None and area.id not in area_ids:
+                continue
             if self._process_area(area, style):
                 stub_count += 1
 

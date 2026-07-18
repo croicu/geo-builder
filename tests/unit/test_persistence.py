@@ -14,7 +14,9 @@ from geo_builder.persistence import (
     load_geometry,
     read_json,
     save_area_csv,
+    save_area_to_catalog,
     save_catalog,
+    save_catalog_meta,
     save_json,
 )
 from geo_builder.protocols import Area, Feature, GeoJson, Geometry, Layer
@@ -56,6 +58,27 @@ def make_area() -> GeoArea:
 
 def make_catalog() -> GeoCatalog:
     return GeoCatalog(version="1.0", created_at="2026-01-01T00:00:00+00:00", areas=[make_area()])
+
+
+def make_area_named(area_id: str) -> GeoArea:
+    summary = Area(
+        id=area_id,
+        name=area_id.title(),
+        bbox=[14.20, 40.80, 14.33, 40.90],
+        minRadiusPx=32,
+        maxRadiusPx=512,
+        liveMapRadiusPx=640,
+        manifestUrl=f"./areas/{area_id}/manifest.json",
+    )
+    return GeoArea(summary=summary, layers=[GeoLayer(make_layer())])
+
+
+def make_catalog_with_two_areas() -> GeoCatalog:
+    return GeoCatalog(
+        version="1.0",
+        created_at="2026-01-01T00:00:00+00:00",
+        areas=[make_area_named("napoli"), make_area_named("roma")],
+    )
 
 
 class TestChildPath:
@@ -434,6 +457,102 @@ class TestSaveAreaCsv:
         save_catalog(make_catalog(), tmp_path)
 
         assert (tmp_path / "areas" / "napoli" / "napoli.csv").exists()
+
+
+class TestSaveAreaToCatalog:
+    def test_writes_target_area_manifest(self, tmp_path):
+        catalog = make_catalog_with_two_areas()
+        save_catalog(catalog, tmp_path)
+
+        assert (tmp_path / "areas" / "napoli" / "manifest.json").exists()
+
+    def test_does_not_touch_other_areas_files(self, tmp_path):
+        catalog = make_catalog_with_two_areas()
+        save_catalog(catalog, tmp_path)
+        roma_manifest = tmp_path / "areas" / "roma" / "manifest.json"
+        before = roma_manifest.read_text()
+
+        napoli = catalog.areas[0]
+        napoli.layers[0].layer.style["color"] = "#ff00ff"
+        save_area_to_catalog(napoli, tmp_path)
+
+        assert roma_manifest.read_text() == before
+
+    def test_updates_target_area_content(self, tmp_path):
+        catalog = make_catalog_with_two_areas()
+        save_catalog(catalog, tmp_path)
+
+        napoli = catalog.areas[0]
+        napoli.layers[0].layer.style["color"] = "#ff00ff"
+        save_area_to_catalog(napoli, tmp_path)
+
+        payload = json.loads((tmp_path / "areas" / "napoli" / "manifest.json").read_text())
+        assert payload["layers"][0]["style"]["color"] == "#ff00ff"
+
+    def test_does_not_clean_output_dir(self, tmp_path):
+        catalog = make_catalog_with_two_areas()
+        save_catalog(catalog, tmp_path)
+        stale = tmp_path / "stale.txt"
+        stale.write_text("keep me")
+
+        save_area_to_catalog(catalog.areas[0], tmp_path)
+
+        assert stale.exists()
+
+
+class TestSaveCatalogMeta:
+    def test_writes_head_and_catalog_json(self, tmp_path):
+        save_catalog_meta(make_catalog(), tmp_path)
+
+        assert (tmp_path / "catalog.head.json").exists()
+        assert (tmp_path / "catalog.json").exists()
+
+    def test_does_not_touch_area_directories(self, tmp_path):
+        assert not (tmp_path / "areas").exists()
+
+        save_catalog_meta(make_catalog(), tmp_path)
+
+        assert not (tmp_path / "areas").exists()
+
+    def test_reflects_updated_area_summary(self, tmp_path):
+        catalog = make_catalog()
+        save_catalog(catalog, tmp_path)
+
+        catalog.areas[0].bbox = [1.0, 2.0, 3.0, 4.0]
+        save_catalog_meta(catalog, tmp_path)
+
+        payload = json.loads((tmp_path / "catalog.json").read_text())
+        assert payload["areas"][0]["bbox"] == pytest.approx([1.0, 2.0, 3.0, 4.0])
+
+    def test_default_catalog_url_when_no_in_dir_given(self, tmp_path):
+        save_catalog_meta(make_catalog(), tmp_path)
+
+        head = json.loads((tmp_path / "catalog.head.json").read_text())
+        assert head["catalogUrl"] == "./catalog.json"
+
+    def test_mirrors_in_dir_catalog_url_when_given(self, tmp_path):
+        in_dir = tmp_path / "in"
+        out_dir = tmp_path / "out"
+        save_json(in_dir / "catalog.head.json", {"version": 1, "catalogUrl": "./release/catalog.json"})
+
+        save_catalog_meta(make_catalog(), out_dir, in_dir=in_dir)
+
+        head = json.loads((out_dir / "catalog.head.json").read_text())
+        assert head["catalogUrl"] == "./release/catalog.json"
+
+    def test_in_dir_mirror_matches_save_catalog_behavior(self, tmp_path):
+        """save_catalog_meta(out_dir, in_dir=X) must resolve catalog_url identically to save_catalog(out_dir, in_dir=X)."""
+        in_dir = tmp_path / "in"
+        out_a = tmp_path / "out_a"
+        out_b = tmp_path / "out_b"
+        save_json(in_dir / "catalog.head.json", {"version": 1, "catalogUrl": "./nested/catalog.json"})
+
+        save_catalog(make_catalog(), out_a, in_dir=in_dir)
+        save_catalog_meta(make_catalog(), out_b, in_dir=in_dir)
+
+        head_a = json.loads((out_a / "catalog.head.json").read_text())
+        head_b = json.loads((out_b / "catalog.head.json").read_text())
+        assert head_a["catalogUrl"] == head_b["catalogUrl"] == "./nested/catalog.json"
 
 
 class TestLoadCatalogErrors:
