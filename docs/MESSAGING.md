@@ -409,7 +409,7 @@ So `?debug=1&group=Europe` shows only `Europe`-tagged areas — a `debug`-only-t
 | `style.color` | `string` | Primary fill/gradient color (e.g. `"#ff0000"`) |
 | `style.strokeColor` | `string` | Border/stroke color; defaults to `color` if absent |
 | `style.strokeWidth` | `number` | Border width in pixels; `0` = no border |
-| `style.enhancedColor` | `string` | `__poi__` only — border color for enriched POI markers (those with `wikipedia`, `wikidata`, `stars`, or `outdoor_seating="yes"`); defaults to `"#003380"` |
+| `style.enhancedColor` | `string` | `__poi__` only — border color for enriched POI markers (those with `wikipedia`, `wikidata`, `stars`, or `outdoor_seating="yes"`); defaults to `"#20b7dd"` |
 | `style.outdoorColor` | `string` | `__poi__` only — border color for POI markers with `outdoor_seating="yes"`; overrides `enhancedColor` for those markers; defaults to `"#f5c518"` |
 | `style.surface` | `boolean` | `circle` only — treat feature as an area rather than a point |
 | `style.minZoom` | `number` | Layer is visible only when the map zoom level is ≥ this value; absent = always shown |
@@ -879,7 +879,7 @@ class AddUserPointOutput:
 **Notes:**
 - `pressure` is 0.0–1.0. The builder stores it verbatim; all rendering decisions stay in the browser.
 - `name` is optional — pass `null` for an unnamed point.
-- `properties` carries the full POI property bag (name, amenity, cuisine, address, website, opening_hours, wikidata, wikipedia, stars, outdoor_seating, etc.) when the point was added near a known POI. Internal flags (`weight`, `hasDetails`) are stripped before sending. Omit the field entirely when there is no nearby POI.
+- `properties` carries the full POI property bag (name, amenity, cuisine, address, website, opening_hours, wikidata, wikipedia, stars, outdoor_seating, etc.) when the point was added near a known POI, plus the browser's own `stars` (1–5, overwriting any POI-sourced value if the user rated it) and `bookmarked` (`true`) when the point was created via a star selection or bookmark toggle. Internal flags (`weight`, `hasDetails`) are stripped before sending. Omit the field entirely when there is no nearby POI and no rating/bookmark.
 - Points are persisted in `{in_dir}/areas/{areaId}/user.geojson` — a file the browser never fetches directly.
 - The builder writes the file and does **not** fire `AreaChanged` — the browser renders the marker immediately on the client side and needs no refresh.
 

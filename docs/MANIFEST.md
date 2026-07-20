@@ -184,12 +184,12 @@ provider fetch entirely. See `ManifestChange` (`entities/geo_area.py`).
 its own runtime state. The user only ever sees one "Mundane" toggle, regardless of how many
 variants exist in the manifest.
 
-**Current status:** `geo-builder` precomputes `__void__` (this section's schema is now live —
-`VoidWorker` regenerates the full `__void__*` set on every build). v1 coverage: the bare
-`__void__` (union of all non-virtual, point-bearing layers) plus one `__void__<id>__` per such
-layer — no curated multi-layer combinations yet. `geo-browser` still needs the runtime changes
-described in `docs/LAYERS.md` (minimal-superset resolution between variants,
-deleting the live grid computation) — those are unchanged/not yet shipped on that side.
+**Current status:** shipped on both sides. `geo-builder` precomputes `__void__` (this section's
+schema is live — `VoidWorker` regenerates the full `__void__*` set on every build). v1 coverage:
+the bare `__void__` (union of all non-virtual, point-bearing layers) plus one `__void__<id>__`
+per such layer — no curated multi-layer combinations yet. `geo-browser` resolves which variant to
+show via minimal-superset resolution (`VoidVariantResolver`) — see `docs/LAYERS.md` for the full
+runtime contract.
 
 ---
 
@@ -259,7 +259,9 @@ Virtual layer — `url` is absent. Points are loaded via the `GetUserPoints` API
   "properties": {
     "timestamp": "2026-05-29T14:00:00Z",
     "pressure": 0.6,
-    "name": null
+    "name": null,
+    "stars": 4,
+    "bookmarked": true
   }
 }
 ```
@@ -271,6 +273,12 @@ Virtual layer — `url` is absent. Points are loaded via the `GetUserPoints` API
 | `timestamp` | `string` | ISO 8601 UTC timestamp of when the point was added. |
 | `pressure` | `number` | Touch force at add time, 0.0–1.0. Browser decides visual encoding. |
 | `name` | `string \| null` | Optional label. `null` = unnamed. |
+| `stars` | `number` (1–5) | Optional. User star rating; renders as a colored ring around the point. Absent = unrated. |
+| `bookmarked` | `boolean` | Optional. `true` = bookmarked (blue ring, takes visual priority over the star ring). Absent/`false` = not bookmarked. |
+
+A point may carry a POI's baked metadata as well (name, amenity, cuisine, address, etc. — the same
+fields as "POI enrichment" below) when it was created by tapping an enriched POI marker; see
+`docs/MESSAGING.md`'s `AddUserPoint` for the full property bag passed at creation time.
 
 ---
 
