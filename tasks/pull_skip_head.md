@@ -10,7 +10,7 @@ by the user: `catalog.head.json` is never actually served by geo-places — its 
 location is geo-browser (the frontend), not the data host. Beyond that, geo-builder shouldn't need
 to consult it at all: on every fresh pull it already falls back to writing its own default
 (`{"version": 1, "catalogUrl": "./catalog.json"}`) whenever the fetch 404s (see
-[Catalog Head Defaults & Path Mirroring](catalog_head_defaults.md)), and `save_catalog`/
+[geo-builder#44](https://github.com/croicu/geo-builder/issues/44), Catalog Head Defaults & Path Mirroring), and `save_catalog`/
 `save_catalog_meta` always write flat, default-shaped head files on the way back out regardless of
 what an upstream head said. So the HTTP round-trip only ever ends in the same fallback it would
 have used anyway — it's dead weight that also generates a `Logger.warning` noise entry
@@ -29,7 +29,7 @@ Skip fetching `catalog.head.json` over HTTP entirely. `pull()` should:
 ## Implementation-stage considerations (not yet resolved)
 
 - `_pull_head`'s current absolute-`catalogUrl` normalization branch (lines ~35-49 in `pull.py`)
-  exists because of a prior fix ([Pull Origin Fix](pull_origin_fix.md)) for a real bug: a fetched
+  exists because of a prior fix ([geo-builder#46](https://github.com/croicu/geo-builder/issues/46), Pull Origin Fix) for a real bug: a fetched
   head file could carry an absolute `catalogUrl` pointing at a *different* host than the one being
   pulled from, and needed rewriting to a local-relative path before being saved. If the head is
   never fetched, this whole branch becomes unreachable and should be deleted, not just dead-coded —
@@ -47,6 +47,6 @@ Skip fetching `catalog.head.json` over HTTP entirely. `pull()` should:
 
 Advance to Implementation: simplify `pull()`/remove `_pull_head`'s fetch attempt and the
 now-unreachable normalization branch, update/rewrite affected tests, confirm no regression against
-the `assetsUrl`-preferred-origin behavior from [Pull Origin Fix](pull_origin_fix.md) (that fix's
+the `assetsUrl`-preferred-origin behavior from [geo-builder#46](https://github.com/croicu/geo-builder/issues/46) (Pull Origin Fix) (that fix's
 core concern — preferring `assetsUrl` as the pull origin over `designUrl`'s host — is orthogonal
 to this change and should be preserved).

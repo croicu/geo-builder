@@ -1,7 +1,7 @@
 # Void Layer — Move to Precompute (geo-builder ↔ geo-browser contract)
 
 Status: **shipped on both sides.** `geo-builder` precomputes the polygons (`VoidWorker`, see
-`tasks/void_layer_precompute.md` for the algorithm); `geo-browser` renders them via the runtime
+[geo-builder#54](https://github.com/croicu/geo-builder/issues/54) for the algorithm); `geo-browser` renders them via the runtime
 changes in the "`geo-browser` runtime changes" section below (minimal-superset resolution via
 `VoidVariantResolver`, live grid computation deleted). See CLAUDE.md's "Mundane (Void) Layer"
 completed-task entry. Kept in sync the same way `MESSAGING.md` is.
@@ -10,7 +10,7 @@ geo-builder's v1 coverage (see "What geo-builder produces" below): the bare `__v
 `__void__<id>__` per non-virtual point-bearing layer — no curated multi-layer combinations yet
 (open question 1 below, still open). Algorithm used: a signed distance-field grid + hand-rolled
 marching squares (no external geometry library) — full design detail in
-`tasks/void_layer_precompute.md`.
+[geo-builder#54](https://github.com/croicu/geo-builder/issues/54).
 
 ## Why
 
