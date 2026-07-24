@@ -13,13 +13,15 @@ Build a simple, deterministic Python application that creates static geographic 
 
 ### Task workflow
 
+Tasks are tracked as GitHub issues in this repo (`croicu/geo-builder`), status via labels: `status:brainstorm`, `status:implementation`, `status:testing`, `status:ready-to-submit`. There is no `status:done` label — reaching Done means closing the issue.
+
 For any non-trivial feature or change, follow these stages:
 
-1. **Brainstorm** — create a `Current Task` entry in `CLAUDE.md` with `Status: Brainstorm`. Create `tasks/<task-name>.md` with the problem statement. Update `tasks/<task-name>.md` with conclusions as the design discussion progresses.
-2. **Implementation** — advance status to `Implementation`. Add an implementation plan to `tasks/<task-name>.md`. Write the code.
-3. **Testing** — advance status to `Testing`. Verify correctness; update task file with test results and any open issues.
-4. **Ready to Submit** — advance status to `Ready to Submit`. Run lint + tests; confirm docs are up to date.
-5. **Done** — advance status to `Done` after merge/close.
+1. **Brainstorm** — copy `tasks/new_task.md` to `tasks/<task-name>.md` with the problem statement; update it with conclusions as the design discussion progresses. This is scratch space for live back-and-forth — an issue isn't required at this stage, but a lightweight tracking issue labeled `status:brainstorm` can be opened for backlog visibility if wanted; either way, `tasks/<task-name>.md` (not the issue) stays the working document until the design converges.
+2. **Implementation** — open a GitHub issue (`gh issue create`) with the converged problem statement + conclusions as the body, labeled `status:implementation`. Write the code. `tasks/<task-name>.md` is no longer the source of truth once the issue exists — trim it to a one-line pointer at the issue (or delete it) rather than maintaining both.
+3. **Testing** — relabel the issue `status:testing`. Verify correctness; post test results and any open issues as an issue comment.
+4. **Ready to Submit** — relabel `status:ready-to-submit`. Run lint + tests; confirm docs are up to date; post a closing summary comment.
+5. **Done** — close the issue after merge. Delete `tasks/<task-name>.md` once the issue is closed — the issue (body + comments) is the sole source of truth from that point on, so there's no reason to keep a stale duplicate on disk. (Only applies when a real issue holds the full history; a Done task with no issue keeps its local file.)
 
 ## Before committing
 
@@ -98,7 +100,7 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
   - `Logger.info` — normal notable events (start, end, success, counts)
   - `Logger.warning` — recoverable problems (retries, splits, skipped items)
   - `Logger.error` / `Logger.fatal` — unrecoverable failures
-- **Categories** — every `Logger` method takes an optional `category: str = "general"` (e.g. `Logger.warning(msg, category=CATEGORY_DATA_PIPELINE)`), filterable via `settings.json`'s `logCategories` (see `docs/CLI.md`). Existing call sites are not required to pass one — untagged calls stay in `"general"`. Console output is `[LEVEL][category] message` (e.g. `[WARNING][data_pipeline] ...`). Deliberately **not** a closed enum: `diagnostics.py` only consolidates geo-builder's own known values as plain string constants (`CATEGORY_GENERAL`, `CATEGORY_DATA_PIPELINE`, `CATEGORY_API`) so call sites don't repeat string literals, but the field stays an open `str` — `WriteTelemetryRecord` forwards geo-browser's own arbitrary category values (e.g. `"AreaLifecycle"`) straight through unmodified, so `logCategories` can filter on those too without geo-builder having to track geo-browser's category set in sync. Established geo-builder-side categories: `CATEGORY_DATA_PIPELINE` (`designer/data_pipeline.py`, plus two related lines in `host.py`'s `WebResourceRequested` handler), `CATEGORY_API` (`designer/gateway.py`'s dispatch logging, `host.py`'s `WebMessageReceived`). Note: a browser-originated `"general"`-category record and a geo-builder-originated one print identically — no origin marker, by design (see `tasks/write_telemetry_record.md`). **Effective default depends on `debug`**: if `settings.json`'s `logCategories` is left empty/absent, `debug: false` resolves it to `["general"]` (only `general` shown — matches geo-browser's own default), `debug: true` resolves it to `[]` (unfiltered, show everything); an explicit non-empty `logCategories` always overrides this regardless of `debug` (`settings.py`'s `Settings.load()`) — except that `debug: true` additionally unions `CATEGORY_GENERAL` into an explicit list if not already present (e.g. `{"debug": true, "logCategories": ["overpass"]}` → `["general", "overpass"]`), so debug mode's baseline info never disappears just because you narrowed to one other category; `debug: false` does not do this. **Query-string propagation**: an explicit non-empty `logCategories` (after the debug/general union above) is also appended to `designUrl` as `?logCategory=<comma-joined>` — the implicit debug-gated *default* (not an explicit setting) is console-only and never sent, since geo-browser's own defaults already match it without any param. See `docs/MESSAGING.md`'s `WriteTelemetryRecord` → Categories section for the full precedence rules with `?debug=1` and the "unrecognized category is not an error" contract. **`excludedCategories`** — complementary deny-list, only in effect when the *resolved* `logCategories` is `[]` (the true unfiltered state, i.e. `debug: true` with no explicit `logCategories`); inert against an explicit non-empty `logCategories` or the plain `debug: false` default of `["general"]` — a category named in both `logCategories` and `excludedCategories` is not a conflict, since exclusion simply never gets a chance to apply in that case. Forwarded to geo-browser as `?logCategoryExclude=<comma-joined>` whenever non-empty, independent of whether `logCategories` itself was explicit (see `tasks/logging_excluded_categories.md`, `docs/MESSAGING.md`).
+- **Categories** — every `Logger` method takes an optional `category: str = "general"` (e.g. `Logger.warning(msg, category=CATEGORY_DATA_PIPELINE)`), filterable via `settings.json`'s `logCategories` (see `docs/CLI.md`). Existing call sites are not required to pass one — untagged calls stay in `"general"`. Console output is `[LEVEL][category] message` (e.g. `[WARNING][data_pipeline] ...`). Deliberately **not** a closed enum: `diagnostics.py` only consolidates geo-builder's own known values as plain string constants (`CATEGORY_GENERAL`, `CATEGORY_DATA_PIPELINE`, `CATEGORY_API`) so call sites don't repeat string literals, but the field stays an open `str` — `WriteTelemetryRecord` forwards geo-browser's own arbitrary category values (e.g. `"AreaLifecycle"`) straight through unmodified, so `logCategories` can filter on those too without geo-builder having to track geo-browser's category set in sync. Established geo-builder-side categories: `CATEGORY_DATA_PIPELINE` (`designer/data_pipeline.py`, plus two related lines in `host.py`'s `WebResourceRequested` handler), `CATEGORY_API` (`designer/gateway.py`'s dispatch logging, `host.py`'s `WebMessageReceived`). Note: a browser-originated `"general"`-category record and a geo-builder-originated one print identically — no origin marker, by design (see [geo-builder#49](https://github.com/croicu/geo-builder/issues/49)). **Effective default depends on `debug`**: if `settings.json`'s `logCategories` is left empty/absent, `debug: false` resolves it to `["general"]` (only `general` shown — matches geo-browser's own default), `debug: true` resolves it to `[]` (unfiltered, show everything); an explicit non-empty `logCategories` always overrides this regardless of `debug` (`settings.py`'s `Settings.load()`) — except that `debug: true` additionally unions `CATEGORY_GENERAL` into an explicit list if not already present (e.g. `{"debug": true, "logCategories": ["overpass"]}` → `["general", "overpass"]`), so debug mode's baseline info never disappears just because you narrowed to one other category; `debug: false` does not do this. **Query-string propagation**: an explicit non-empty `logCategories` (after the debug/general union above) is also appended to `designUrl` as `?logCategory=<comma-joined>` — the implicit debug-gated *default* (not an explicit setting) is console-only and never sent, since geo-browser's own defaults already match it without any param. See `docs/MESSAGING.md`'s `WriteTelemetryRecord` → Categories section for the full precedence rules with `?debug=1` and the "unrecognized category is not an error" contract. **`excludedCategories`** — complementary deny-list, only in effect when the *resolved* `logCategories` is `[]` (the true unfiltered state, i.e. `debug: true` with no explicit `logCategories`); inert against an explicit non-empty `logCategories` or the plain `debug: false` default of `["general"]` — a category named in both `logCategories` and `excludedCategories` is not a conflict, since exclusion simply never gets a chance to apply in that case. Forwarded to geo-browser as `?logCategoryExclude=<comma-joined>` whenever non-empty, independent of whether `logCategories` itself was explicit (see [geo-builder#56](https://github.com/croicu/geo-builder/issues/56), `docs/MESSAGING.md`).
 
 ## Coding Style
 
@@ -109,87 +111,75 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
-- **File**: [Logging: excludedCategories](tasks/logging_excluded_categories.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: New `settings.json` `excludedCategories` deny-list, complementing `logCategories`. Scope narrowed via clarifying questions: only has effect when resolved `log_categories` is empty (the true unfiltered `debug: true` + no explicit `logCategories` case) — inert against an explicit allow-list or the plain `debug: false` default of `["general"]`. Forwarded to geo-browser unconditionally (whenever non-empty) as `?logCategoryExclude=`, independent of whether `logCategories` was explicit. Implemented: `Settings.excluded_categories` field + parsing + query-string emission, `ConsoleLogSink(excluded_categories=...)` two-branch filter, threaded through `cli.py`/`designer/host.py`. Docs updated (`CLAUDE.md`, `docs/CLI.md`, `docs/MESSAGING.md` — geo-browser interpretation left open/agnostic, matching the `group` precedent). 477 tests pass (+8), ruff clean, live-tested and confirmed working by user. `docs/MESSAGING.md` about to be handed to the geo-browser team for their side.
-
 - **File**: [Pull: Skip catalog.head.json Fetch](tasks/pull_skip_head.md)
 - **Status**: Brainstorm
-- **GitHub Issue**: N/A
-- **Key Context**: `pull.py` always HTTP-fetches `catalog.head.json` against the production data host (geo-places) before falling back to a local default — but geo-places never serves that file (its real location is geo-browser, not the data host), and geo-builder's own default/fallback always wins anyway, so the round-trip is dead weight that also spams a 404 warning on every pull. Confirmed fix direction with user: skip the fetch entirely, always write the local default, go straight to `catalog.json`. Flagged for a pre-implementation check: the existing absolute-`catalogUrl` normalization branch in `_pull_head` (from [Pull Origin Fix](tasks/pull_origin_fix.md)) becomes unreachable and should be deleted, but verify no real deployment depends on it first. Not yet implemented.
-
-- **File**: [Logging Categories](tasks/logging_categories.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: Added `category: str = "general"` as a first-class field on `Logger`/`DiagnosticsLogSink`/`TelemetryRecord` (open string, no retrofit of existing call sites) plus a new `logCategories` `settings.json` filter on `ConsoleLogSink` (default = show all, unlike geo-browser's own default-to-`"general"`-only), threaded through `cli.py`/`designer/host.py`. Triggered by [WriteTelemetryRecord](tasks/write_telemetry_record.md)'s forwarded browser records already carrying `category`; this resolves that task's open message-formatting question by giving `category` a structured home instead of folding it into the message string. 450 tests pass (+10), ruff clean, `CLAUDE.md`/`docs/CLI.md` updated; `docs/MESSAGING.md` intentionally untouched (no wire-protocol surface). `WriteTelemetryRecord`'s builder side can now resume.
-
-- **File**: [WriteTelemetryRecord](tasks/write_telemetry_record.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: geo-browser proposed and implemented the browser side of a new method (`__geo_write_telemetry_record__`) forwarding the browser's `Logger` output — plus new global `window.onerror`/`onunhandledrejection` handlers — to geo-builder in design mode, so browser logs are visible without devtools; `docs/MESSAGING.md` fully documents it. Builder side implemented after [Logging Categories](tasks/logging_categories.md) landed: `WriteTelemetryRecordInput`/`Output` in `api.py`, handler registered in `designer/host.py`'s `_register_designer_handlers` — maps the browser's `level` string to the matching `Logger` method, passes the browser's own `category` value straight through to `Logger` (final design, after two iterations post-test-drive: tried folding into message text, then a fixed `category="browser"`, before settling on pass-through so `logCategories` can filter on geo-browser's own category values like `"AreaLifecycle"` directly), folds `props`/`errorDetail` into the message string (no structured `Logger` slot for either). Trade-off accepted: no origin marker distinguishes a browser-forwarded `"general"` record from geo-builder's own. `ConsoleLogSink`'s print format is `[LEVEL][category] message` universally (from Logging Categories), and `data_pipeline`/`api` categories were retrofitted onto `data_pipeline.py`, `gateway.py`, and two related lines in `host.py`, consolidated as plain string constants in `diagnostics.py` (`CATEGORY_DATA_PIPELINE`/`CATEGORY_API`/`CATEGORY_GENERAL` — deliberately not a closed enum). 457 tests pass, ruff clean. Handler closure itself isn't unit-tested — matches the pre-existing gap for every other `host.py` handler (`on_set_area_bbox`, `on_add_area`, etc.), not a new regression.
-
-- **File**: [Area-Scoped Rebuild](tasks/area_scoped_rebuild.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: Designer-triggered single-area changes (`SetAreaBbox`, `AddArea`, void-geometry-only reprocess) were reprocessing and re-persisting *every* area, not just the changed one, violating the "areas are isolated" invariant. Fix has two parts: (1) `area_ids: list[str] | None` on the five fixed-tail tasks (Aggregation/Deduping/Poi/Void/Search), workers filter their per-area loop by it; `Builder._tasks_from_catalog` derives the scoped id list from whichever areas actually got acquisition tasks (so `--rebuild <id>` is scoped for free), `host.py`'s `on_add_area`/`_reprocess_area` pass it explicitly. (2) Swap the designer's three `save_catalog(...)` (full `--out` clean + rewrite-everything) calls for a new `_save_area_only` helper built on the existing `save_area_to_catalog` + `save_catalog_meta` pair, so only the changed area's files touch disk; `save_catalog_meta` gained an optional `in_dir` param to preserve `save_catalog`'s catalog-URL mirroring on first write. Plain CLI build path intentionally keeps full `save_catalog` (needs to purge areas removed from the catalog between runs). 438 tests pass (+24), ruff clean, `docs/ARCHITECTURE.md` updated.
-
-- **File**: [Area Grouping](tasks/area_grouping.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: Replaced the separate debug catalog (`catalog.debug.json` / `catalog.head.debug.json`) with a single catalog plus an optional per-area `group: list[str]` field (`Area`/`AreaSummary`); `"debug"` is just a conventional group name, filtered client-side by geo-browser via query string (that half is a separate geo-browser repo task, not started here). New `settings.json`/`settings.local.json` array field `"group": [...]` (same literal name as the `Area`/`AreaSummary` field and the `?group=` query param — no `groups`/`group` mismatch; independent of the existing `debug: bool`, which keeps its unrelated jobs — exception re-raise, worker debug snapshots, WebView2 remote-debug port) drives `Builder.add_area()` to stamp every newly created area with the current session's groups. `debug` still appends `?debug=1` to the designer's `designUrl` in sync with the setting (settings.debug itself has no role in area selection or stamping — that's `group`'s job); `?group=<all of settings.group, comma-joined>` (e.g. `?group=debug,Europe`) is appended independently when `group` is non-empty. geo-builder is agnostic to how geo-browser interprets these params (multi-group AND vs. OR, and whether `?debug=1` still acts as filtering back-compat shorthand) — it only emits them; that logic lives and evolves in geo-browser, actively tracked in `docs/MESSAGING.md` (treat that file, not this note, as current). 414 tests pass (new `test_settings.py` plus extended coverage in `test_builder.py`/`test_geo_area.py`/`test_persistence.py`), ruff clean, `docs/MESSAGING.md`/`docs/PROTOCOL.md`/`docs/ARCHITECTURE.md` updated. Group is stamped once at area-creation time only — never re-stamped on rebuild/re-acquisition, and never filters which areas a build processes. Committed and pushed (f9ff202, ebc9475, b145831) on `working`. geo-browser side is being implemented directly in that repo, not tracked in detail here.
-
-- **File**: [`--rebuild` flag for selective acquisition](tasks/rebuild_flag.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: [geo-builder#32](https://github.com/croicu/geo-builder/issues/32)
-- **Key Context**: New build-mode-only `--rebuild <id>` flag (repeatable) forces re-acquisition of listed areas regardless of existing `--in` data; `--rebuild all` forces every area (rejects combination with specific ids); unknown ids or unlisted no-data areas are hard errors (`TaskError`, exit 1); `--edit` + `--rebuild` rejected; omitting the flag preserves today's implicit behavior exactly. 400 tests pass, ruff clean, `docs/CLI.md`/`docs/PROTOCOL.md`/`docs/ARCHITECTURE.md` updated. Committed locally (96852f2, not pushed) on `working`; GH issue #32 commented with resolution summary, left open per request.
+- **GitHub Issue**: [geo-builder#42](https://github.com/croicu/geo-builder/issues/42)
+- **Key Context**: `pull.py` always HTTP-fetches `catalog.head.json` against the production data host (geo-places) before falling back to a local default — but geo-places never serves that file (its real location is geo-browser, not the data host), and geo-builder's own default/fallback always wins anyway, so the round-trip is dead weight that also spams a 404 warning on every pull. Confirmed fix direction with user: skip the fetch entirely, always write the local default, go straight to `catalog.json`. Flagged for a pre-implementation check: the existing absolute-`catalogUrl` normalization branch in `_pull_head` (from [geo-builder#46](https://github.com/croicu/geo-builder/issues/46), Pull Origin Fix) becomes unreachable and should be deleted, but verify no real deployment depends on it first. Not yet implemented.
 
 - **File**: [Default Layers](tasks/default_layers.md)
 - **Status**: Brainstorm
-- **GitHub Issue**: N/A
+- **GitHub Issue**: [geo-builder#43](https://github.com/croicu/geo-builder/issues/43)
 - **Key Context**: Rationalize the default layers created when a new area is being created (template.json). Features reference is located at: https://wiki.openstreetmap.org/wiki/Category:Features
-
-- **File**: [Search Layer Stub](tasks/search_layer_stub.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: `__search__` template.json entry was completely inert (nothing in `src/` read it). New `SearchTask`/`SearchWorker` copies it into the manifest as a static stub (no computation), mirroring the pre-rework `VoidWorker` pattern. Wired into `Builder._tasks_from_catalog()` and `on_add_area`, matching Poi/Void. 371 tests pass, ruff clean, docs updated. Incidentally fixed a missed `defaultRadiusM` gap in `on_add_area`'s void-style parsing.
-
-- **File**: [Void Radius: Per-Area Geometry Override](tasks/void_radius_geometry_override.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: `defaultRadiusM` renamed to `radius` everywhere (template.json style + new manifest field); new `Layer.geometry` (sibling to `style`, not in it) carries a per-area `{"radius": ...}` override that `VoidWorker` resolves and persists across reruns (even when the resolved radius blanks out every variant — always keeps a stub bare `__void__` so the override survives). `GeoArea.apply_manifest` now returns a 3-state `ManifestChange` (NONE/REPROCESS/REACQUIRE); geometry-only edits trigger a new `_reprocess_area` path in `host.py` (Agg→Dedup→Poi→Void→Search, no provider fetch) instead of a full rebuild or a no-op. 385 tests pass, ruff clean, docs updated.
-
-- **File**: [Rate-Limit Defer](tasks/rate_limit_defer.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: `AcquisitionWorker` was splitting the bbox on *any* `ProviderError`, including 429/504-after-retries — wrong, since rate limiting isn't fixed by smaller queries and splitting only multiplies load against the same limit. `ProviderError` now carries a `reason` (`TOO_LARGE`/`RATE_LIMITED`/`FATAL`); rate-limited tasks defer (capped at 3 requeues) instead of splitting. Follow-up fix from a real geo-places build: `defer_task` was landing deferred tasks *after* the fixed tail (Agg/Dedup/Poi/Void/Search), causing them to silently run without the deferred layer's data — now inserts just ahead of the fixed tail instead of at the absolute bottom. 379 tests pass, ruff clean.
-
-- **File**: [Void Layer Precompute](tasks/void_layer_precompute.md)
-- **Status**: Ready to Submit
-- **GitHub Issue**: N/A
-- **Key Context**: `VoidWorker` now precomputes real `__void__`/`__void__<id>__` GeoJSON `Polygon`/`MultiPolygon` polygons (grid + hand-rolled marching squares, no shapely; padded grid ring for guaranteed contour closure + Sutherland-Hodgman clip back to bbox). Also fixed a latent `DedupingWorker` crash risk on non-Point geometry. 364 tests pass, ruff clean, docs updated. `geo-browser`-side runtime changes from `docs/LAYERS.md` are still outstanding (separate repo).
 
 ## Completed Tasks
 
-- **File**: [Void Grid Field Construction Perf](tasks/void_grid_perf.md)
-- **Status**: Done
-- **GitHub Issue**: N/A
-- **Key Context**: `compute_void_feature`'s `grid` stage (distance-field construction) was 90-99% of total runtime — Berlin's bare `__void__` took 145-277s just for `grid`, ~9-13 min total across a 6-area catalog. Root cause: per-corner bucket queries scanned every point in a 3x3 neighborhood, blowing up for dense urban data. Rewrote as point-splatting (`_Grid._splat_point`): each point updates only the grid corners within its own `radius_m + padding` instead of every corner querying nearby points. 387 tests pass unchanged (exact hole-shape assertions confirm equivalence, not just "doesn't crash"). Real re-measurement against the same baseline (`radius_200_baseline.txt` vs `radius_200_improvements.txt`): Berlin bare `__void__` grid 145.4s → 3.9s (37x); whole-catalog VoidWorker pass ~565s → ~48s (~12x end-to-end). Follow-up: `VoidTask.default_radius_m` changed 200→100 (`contracts.py`) — re-measured and confirmed this is *not* a perf lever (grid time is set by the `_MAX_GRID_CELLS_PER_AXIS` cell-size cap, not `radius_m`); kept at 100 anyway as the intended void-circle sizing value. Committed as 37d923a.
+All entries below are closed GitHub issues — the full history (problem statement, design decisions, test results) lives there, not in this file. `tasks/*.md` files are deleted once their issue is created, per the task workflow above.
 
-- **File**: [Pull Origin Fix](tasks/pull_origin_fix.md)
+- **Task**: Area-Scoped Rebuild — [geo-builder#51](https://github.com/croicu/geo-builder/issues/51) (closed)
 - **Status**: Done
-- **GitHub Issue**: N/A
-- **Key Context**: Two related fixes. (1) `pull.py` normalized an absolute `catalogUrl` for the *saved* head file but kept fetching from the original absolute URL anyway, silently redirecting the pull to production even when `designUrl` pointed elsewhere; reversed a previously-deliberate test expectation after confirming the "intentionally different data host" scenario isn't real here. (2) Follow-up: fixing (1) exposed that `assetsUrl` had been wrongly removed as a pull-origin candidate earlier in this same session — in local dev, `designUrl` (Vite) can't serve `catalog.json` at all (SPA fallback returns `text/html`), only a separate `assetsUrl` static server can. Restored `assetsUrl` as the preferred pull origin when set. 386 tests pass.
+- **Key Context**: Designer-triggered single-area changes (`SetAreaBbox`, `AddArea`, void-geometry-only reprocess) were reprocessing and re-persisting *every* area, not just the changed one, violating the "areas are isolated" invariant. Fix: `area_ids: list[str] | None` on the five fixed-tail tasks, filtered per-worker; designer persistence swapped from full `save_catalog` to a `_save_area_only` helper so only the changed area's files touch disk. Verified merged to `main` via commit `66a7790`.
 
-- **File**: [User Layer](tasks/user_layer.md)
+- **Task**: Area Grouping — [geo-builder#50](https://github.com/croicu/geo-builder/issues/50) (closed)
 - **Status**: Done
-- **GitHub Issue**: N/A
-- **Key Context**: `__user__` layer stub injected at area creation and on startup for pulled areas; `GetUserPoints`/`AddUserPoint` APIs; `AddUserPointInput.__post_init__` coerces nested dict from gateway dispatch; 325 tests pass.
+- **Key Context**: Replaced the separate debug catalog with a single catalog plus an optional per-area `group: list[str]` field; `settings.json`'s `"group"` array stamps new areas at creation only, never re-stamped. `?group=<comma-joined>` appended to `designUrl` independent of `?debug=1`. Verified merged to `main` via commits `f9ff202`/`ec9da8b`/`b145831`.
 
-- **File**: [Catalog Head Defaults & Path Mirroring](tasks/catalog_head_defaults.md)
+- **Task**: `--rebuild` flag for selective acquisition — [geo-builder#32](https://github.com/croicu/geo-builder/issues/32) (closed)
 - **Status**: Done
-- **GitHub Issue**: N/A
-- **Key Context**: `pull.py` writes default head files on 404; `load_catalog` falls back to defaults if head file absent; `save_catalog` mirrors `in_dir` path structure instead of hard-coding `./release/` or `./debug/` subdirs; defaults are flat (`./catalog.json`, `./catalog.debug.json`).
+- **Key Context**: New build-mode-only `--rebuild <id>` flag (repeatable) forces re-acquisition of listed areas regardless of existing `--in` data; `--rebuild all` forces every area; unknown ids or unlisted no-data areas are hard errors. Verified merged to `main` via commit `96852f2`.
+
+- **Task**: Search Layer Stub — [geo-builder#53](https://github.com/croicu/geo-builder/issues/53) (closed)
+- **Status**: Done
+- **Key Context**: `__search__` template.json entry was completely inert. New `SearchTask`/`SearchWorker` copies it into the manifest as a static stub, mirroring the pre-rework `VoidWorker` pattern. Verified merged to `main` via commit `80d3bb5`.
+
+- **Task**: Void Radius: Per-Area Geometry Override — [geo-builder#55](https://github.com/croicu/geo-builder/issues/55) (closed)
+- **Status**: Done
+- **Key Context**: `defaultRadiusM` renamed to `radius`; new `Layer.geometry` carries a per-area `{"radius": ...}` override that `VoidWorker` resolves and persists across reruns. `GeoArea.apply_manifest` returns a 3-state `ManifestChange` (NONE/REPROCESS/REACQUIRE). Verified merged to `main` via commit `80d3bb5`.
+
+- **Task**: Rate-Limit Defer — [geo-builder#52](https://github.com/croicu/geo-builder/issues/52) (closed)
+- **Status**: Done
+- **Key Context**: `AcquisitionWorker` was splitting the bbox on *any* `ProviderError`, including 429/504-after-retries. `ProviderError` now carries a `reason`; rate-limited tasks defer (capped at 3 requeues) instead of splitting, inserted just ahead of the fixed tail. Verified merged to `main` via commit `80d3bb5`.
+
+- **Task**: Void Layer Precompute — [geo-builder#54](https://github.com/croicu/geo-builder/issues/54) (closed)
+- **Status**: Done
+- **Key Context**: `VoidWorker` now precomputes real `__void__`/`__void__<id>__` GeoJSON `Polygon`/`MultiPolygon` polygons (grid + hand-rolled marching squares, no shapely; padded grid ring for guaranteed contour closure + Sutherland-Hodgman clip back to bbox). Verified merged to `main` via commit `80d3bb5`.
+
+- **Task**: Logging: excludedCategories — [geo-builder#56](https://github.com/croicu/geo-builder/issues/56) (closed)
+- **Status**: Done
+- **Key Context**: `settings.json` `excludedCategories` deny-list, complementing `logCategories`; only has effect when resolved `log_categories` is empty (the true unfiltered `debug: true` state). Forwarded to geo-browser as `?logCategoryExclude=` whenever non-empty. 477 tests pass, live-tested and confirmed working. Merged to `main` via PR (merge commit 92ed532).
+
+- **Task**: Logging Categories — [geo-builder#6](https://github.com/croicu/geo-builder/issues/6) (closed; #45 was a duplicate, consolidated there)
+- **Status**: Done
+- **Key Context**: Added `category: str = "general"` as a first-class field on `Logger`/`DiagnosticsLogSink`/`TelemetryRecord`, plus a `logCategories` `settings.json` filter on `ConsoleLogSink`. Triggered by WriteTelemetryRecord's forwarded browser records already carrying `category`. Merged to `main` via PR (merge commit 92ed532).
+
+- **Task**: WriteTelemetryRecord — [geo-builder#49](https://github.com/croicu/geo-builder/issues/49) (closed)
+- **Status**: Done
+- **Key Context**: New `__geo_write_telemetry_record__` handler forwards geo-browser's own `Logger` output to geo-builder in design mode. `category` passes through to `Logger` unmodified (final design after two iterations post-test-drive). Merged to `main` via PR (merge commit 92ed532).
+
+- **Task**: Void Grid Field Construction Perf — [geo-builder#48](https://github.com/croicu/geo-builder/issues/48) (closed)
+- **Status**: Done
+- **Key Context**: `compute_void_feature`'s `grid` stage was 90-99% of total runtime. Rewrote as point-splatting: each point updates only the grid corners within its own `radius_m + padding`, instead of every corner querying nearby points. Berlin bare `__void__` grid 145.4s → 3.9s (37x). Committed as 37d923a.
+
+- **Task**: Pull Origin Fix — [geo-builder#46](https://github.com/croicu/geo-builder/issues/46) (closed)
+- **Status**: Done
+- **Key Context**: `pull.py` normalized an absolute `catalogUrl` for the saved head file but kept fetching from the original absolute URL anyway, silently redirecting the pull to production. Also restored `assetsUrl` as the preferred pull origin (Vite can't serve arbitrary JSON in local dev).
+
+- **Task**: User Layer — [geo-builder#47](https://github.com/croicu/geo-builder/issues/47) (closed)
+- **Status**: Done
+- **Key Context**: `__user__` layer stub injected at area creation and on startup for pulled areas; `GetUserPoints`/`AddUserPoint` APIs.
+
+- **Task**: Catalog Head Defaults & Path Mirroring — [geo-builder#44](https://github.com/croicu/geo-builder/issues/44) (closed)
+- **Status**: Done
+- **Key Context**: `pull.py` writes default head files on 404; `load_catalog` falls back to defaults if head file absent; `save_catalog` mirrors `in_dir` path structure instead of hard-coding subdirs.
 
 ## Processing Pipeline
 
@@ -217,7 +207,7 @@ Task[]
 - DedupingWorker: remove near-duplicates within each layer (10 m Haversine threshold); skips `__void__` layers (non-`Point` geometry)
 - AggregationWorker: merge compatible layers within an area (grouped by `mergeKey`)
 - PoiWorker: derive `__poi__` stub visibility from sibling layers' `hasDetails` features
-- VoidWorker: precompute the `__void__*` fog-of-war polygons (see `docs/LAYERS.md`, `tasks/void_layer_precompute.md`)
+- VoidWorker: precompute the `__void__*` fog-of-war polygons (see `docs/LAYERS.md`, [geo-builder#54](https://github.com/croicu/geo-builder/issues/54))
 - SearchWorker: copy the `__search__` stub from `template.json` into the manifest if missing; never recomputed
 
 ## Provider Strategy

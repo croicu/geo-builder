@@ -7,7 +7,7 @@ no meaningful void region.
 Algorithm: a signed distance-field grid (distance to the nearest excluded circle, positive =
 void) is sampled over the area's bbox padded by one extra ring of forced-excluded cells (so
 marching squares always closes contours using only the interior case table, never needing
-boundary-walking — see tasks/void_layer_precompute.md for the full design rationale). The field
+boundary-walking — see geo-builder#54 for the full design rationale). The field
 is smoothed with a morphological closing pass (grayscale dilate then erode) to merge nearby void
 lobes and kill small slivers before contouring — real point data otherwise produces a boundary
 that overfits to individual points rather than reading as a single coherent "far from anything"
@@ -24,7 +24,7 @@ dense real-world data (a spatial bucket index still means every corner scans eve
 neighborhood — for a dense urban core this can be thousands of points per corner, over tens of
 thousands of corners). Splatting instead does one bounded pass per point over just the corners it
 can actually influence, which is the correct complexity for "many points, most of them irrelevant
-to any given far-away corner." See tasks/void_grid_perf.md for the measurements that motivated
+to any given far-away corner." See geo-builder#48 for the measurements that motivated
 this and the reasoning for why it's still exact where it matters (see _splat_point's docstring).
 """
 
