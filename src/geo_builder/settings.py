@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
-from .diagnostics import TelemetryLevel
+from .diagnostics import CATEGORY_GENERAL, TelemetryLevel
 from .errors import TaskError
 
 _SETTINGS_PATH = Path("./settings.json")
@@ -23,6 +23,8 @@ class Settings:
     design_url: str | None = None
     assets_url: str | None = None
     logging: TelemetryLevel = TelemetryLevel.ERROR
+    log_categories: list[str] = field(default_factory=list)
+    excluded_categories: list[str] = field(default_factory=list)
     window_left: int | None = None
     window_top: int | None = None
     window_width: int | None = None
@@ -40,6 +42,8 @@ class Settings:
         group: list[str] = []
         providers: dict[str, dict[str, object]] = {}
         log_level = TelemetryLevel.ERROR
+        log_categories: list[str] = []
+        excluded_categories: list[str] = []
         window_left: int | None = None
         window_top: int | None = None
         window_width: int | None = None
@@ -85,9 +89,43 @@ class Settings:
                     valid_levels.append(level.value)
                 raise TaskError(f"'settings.logLevel' in settings.json must be one of: {', '.join(valid_levels)}")
 
+            log_categories_payload = settings_payload.get("logCategories", [])
+            if not isinstance(log_categories_payload, list):
+                raise TaskError("'settings.logCategories' in settings.json must be an array of strings.")
+            log_categories = []
+            for category_name in log_categories_payload:
+                log_categories.append(str(category_name))
+
+            if log_categories:
+                # debug=true always keeps CATEGORY_GENERAL alongside an explicit narrower list —
+                # debug mode's baseline info should stay visible even while zoomed into one
+                # category, not be silently dropped by naming a single other category.
+                if debug and CATEGORY_GENERAL not in log_categories:
+                    log_categories = [CATEGORY_GENERAL] + log_categories
+
+                # Only an explicit, non-empty logCategories is forwarded to geo-browser — the
+                # debug-gated default applied below is a geo-builder-console-only concern.
+                # geo-browser already defaults to "general"-only without any query param, and
+                # debug=1 (appended just below) already makes it show everything on its own, so
+                # there is nothing to add for the common (non-explicit) case.
+                if design_url is not None:
+                    sep = "&" if "?" in design_url else "?"
+                    design_url = f"{design_url}{sep}logCategory={','.join(log_categories)}"
+
             if debug and design_url is not None:
                 sep = "&" if "?" in design_url else "?"
                 design_url = f"{design_url}{sep}debug=1"
+
+            excluded_categories_payload = settings_payload.get("excludedCategories", [])
+            if not isinstance(excluded_categories_payload, list):
+                raise TaskError("'settings.excludedCategories' in settings.json must be an array of strings.")
+            excluded_categories = []
+            for category_name in excluded_categories_payload:
+                excluded_categories.append(str(category_name))
+
+            if excluded_categories and design_url is not None:
+                sep = "&" if "?" in design_url else "?"
+                design_url = f"{design_url}{sep}logCategoryExclude={','.join(excluded_categories)}"
 
             group_payload = settings_payload.get("group", [])
             if not isinstance(group_payload, list):
@@ -127,6 +165,12 @@ class Settings:
                 window_width = int(raw_width) if raw_width is not None else None
                 window_height = int(raw_height) if raw_height is not None else None
 
+        if not log_categories:
+            # No explicit override: debug=false restricts console noise to CATEGORY_GENERAL
+            # (matching geo-browser's own default-to-general behavior); debug=true shows
+            # everything, same as an empty filter always has.
+            log_categories = [] if debug else [CATEGORY_GENERAL]
+
         template: dict | None = None
         if tasks_path is not None:
             with Path(tasks_path).open("r", encoding="utf-8") as f:
@@ -145,6 +189,8 @@ class Settings:
             template=template,
             providers=providers,
             logging=log_level,
+            log_categories=log_categories,
+            excluded_categories=excluded_categories,
             window_left=window_left,
             window_top=window_top,
             window_width=window_width,

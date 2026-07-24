@@ -99,6 +99,8 @@ def _launch_designer(
     break_on_load: bool = False,
     dev_tools: bool = False,
     log_level=None,
+    log_categories: list[str] | None = None,
+    excluded_categories: list[str] | None = None,
     noninvasive: bool = False,
     assets_url: str | None = None,
 ) -> None:
@@ -113,6 +115,8 @@ def _launch_designer(
         break_on_load=break_on_load,
         dev_tools=dev_tools,
         log_level=log_level,
+        log_categories=log_categories,
+        excluded_categories=excluded_categories,
         noninvasive=noninvasive,
         assets_url=assets_url,
     )
@@ -152,6 +156,8 @@ def main() -> int:
             break_on_load=settings.break_on_load,
             dev_tools=settings.dev_tools,
             log_level=settings.logging,
+            log_categories=settings.log_categories,
+            excluded_categories=settings.excluded_categories,
             noninvasive=arguments.noninvasive,
             assets_url=settings.assets_url,
         )
@@ -161,7 +167,13 @@ def main() -> int:
         print("geo-builder: error: --in is required in build mode", file=sys.stderr)
         return 1
 
-    Logger.set_logger(ConsoleLogSink(min_level=settings.logging))
+    Logger.set_logger(
+        ConsoleLogSink(
+            min_level=settings.logging,
+            categories=settings.log_categories,
+            excluded_categories=settings.excluded_categories,
+        )
+    )
     try:
         try:
             catalog = load_catalog(arguments.in_directory)

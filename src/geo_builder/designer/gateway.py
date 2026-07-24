@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from ..api import READY_ID as _READY_ID
 from ..api import ReadyData
-from ..diagnostics import Logger
+from ..diagnostics import CATEGORY_API, Logger
 
 
 @dataclasses.dataclass
@@ -82,7 +82,7 @@ class Gateway:
     def ready(self) -> None:
         self.is_open = True
         self.call(_READY_ID, ReadyData())
-        Logger.info("API gateway ready.")
+        Logger.info("API gateway ready.", category=CATEGORY_API)
 
     # --- Dispatcher loop ---
 
@@ -113,7 +113,7 @@ class Gateway:
     def _process_call(self, id: str, callback: Callable | None, data: Any) -> None:
         event = self._events.get(id)
         if event is None:
-            Logger.warning(f"call: unknown event '{id}'")
+            Logger.warning(f"call: unknown event '{id}'", category=CATEGORY_API)
             return
         request_id = secrets.token_hex(8) if callback is not None else None
         if request_id is not None:
@@ -144,7 +144,7 @@ class Gateway:
                 # Method call from JS
                 method = self._methods.get(method_id)
                 if method is None:
-                    Logger.warning(f"dispatch: unknown method '{method_id}'")
+                    Logger.warning(f"dispatch: unknown method '{method_id}'", category=CATEGORY_API)
                     return
                 input_data = method.input_type(**data) if isinstance(data, dict) else data
                 output = None
@@ -153,7 +153,7 @@ class Gateway:
                     if result is not None:
                         output = result
                 if request_id and method.output_type and output is not None:
-                    Logger.info(f"response: {method_id}")
+                    Logger.info(f"response: {method_id}", category=CATEGORY_API)
                     response: dict[str, Any] = {
                         "requestId": request_id,
                         "data": dataclasses.asdict(output),
@@ -161,4 +161,4 @@ class Gateway:
                     self._send(f"window.__geo_dispatch({_json.dumps(response)})")
 
         except Exception as exc:
-            Logger.warning(f"dispatch error: {exc}")
+            Logger.warning(f"dispatch error: {exc}", category=CATEGORY_API)

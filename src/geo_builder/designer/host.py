@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import webview
 
-from ..diagnostics import ConsoleLogSink, Logger, TelemetryLevel
+from ..diagnostics import CATEGORY_API, CATEGORY_DATA_PIPELINE, ConsoleLogSink, Logger, TelemetryLevel
 from ..entities import GeoCatalog
 from .data_pipeline import DataPipeline
 from .gateway import Gateway
@@ -253,7 +253,7 @@ def _on_navigation_completed(sender, args) -> None:  # noqa: ANN001
 
 def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
     url = str(args.Request.Uri)
-    Logger.diagnostic(f"WebResourceRequested: {url}")
+    Logger.diagnostic(f"WebResourceRequested: {url}", category=CATEGORY_DATA_PIPELINE)
     if data_pipeline is not None:
         deferral = args.GetDeferral()
 
@@ -269,7 +269,7 @@ def _on_web_resource_requested(_, args) -> None:  # noqa: ANN001
                             headers += f"\r\nCache-Control: {result.cache_control}"
                         args.Response = _core.Environment.CreateWebResourceResponse(stream, 200, "OK", headers)
                 except Exception as exc:
-                    Logger.warning(f"data pipeline: response error: {exc}")
+                    Logger.warning(f"data pipeline: response error: {exc}", category=CATEGORY_DATA_PIPELINE)
                 finally:
                     deferral.Complete()
 
@@ -286,7 +286,7 @@ def _on_window_close_requested(*_) -> None:
 
 def _on_web_message_received(_, args) -> None:  # noqa: ANN001
     raw = args.TryGetWebMessageAsString()
-    Logger.info(f"WebMessageReceived: {raw}")
+    Logger.info(f"WebMessageReceived: {raw}", category=CATEGORY_API)
     if api is not None:
         api._on_message(raw)
 
@@ -317,6 +317,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         PUT_AREA_JSON_ID,
         REMOVE_USER_POINT_ID,
         SET_AREA_BBOX_ID,
+        WRITE_TELEMETRY_RECORD_ID,
         AddAreaInput,
         AddAreaOutput,
         AddUserPointInput,
@@ -333,6 +334,8 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         RemoveUserPointOutput,
         SetAreaBboxInput,
         SetAreaBboxOutput,
+        WriteTelemetryRecordInput,
+        WriteTelemetryRecordOutput,
     )
     from ..builder import Builder
     from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
@@ -802,6 +805,31 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
 
     api.register(REMOVE_USER_POINT_ID, on_remove_user_point)
 
+    api.define_method(WRITE_TELEMETRY_RECORD_ID, WriteTelemetryRecordInput, WriteTelemetryRecordOutput)
+
+    _telemetry_log_methods = {
+        "diagnostic": Logger.diagnostic,
+        "info": Logger.info,
+        "warning": Logger.warning,
+        "error": Logger.error,
+        "fatal": Logger.fatal,
+    }
+
+    def _format_browser_telemetry_message(data: WriteTelemetryRecordInput) -> str:
+        message = data.message
+        if data.props:
+            message = f"{message} props={data.props}"
+        if data.errorDetail:
+            message = f"{message} errorDetail={data.errorDetail}"
+        return message
+
+    def on_write_telemetry_record(data: WriteTelemetryRecordInput) -> WriteTelemetryRecordOutput:
+        log_method = _telemetry_log_methods[data.level]
+        log_method(_format_browser_telemetry_message(data), category=data.category)
+        return MethodResult(WriteTelemetryRecordOutput(error=OK))
+
+    api.register(WRITE_TELEMETRY_RECORD_ID, on_write_telemetry_record)
+
 
 def _setup(window: webview.Window, catalog: GeoCatalog, out_dir: Path, in_dir: Path | None, debug: bool) -> None:
     try:
@@ -891,6 +919,8 @@ def launch(
     break_on_load: bool = False,
     dev_tools: bool = False,
     log_level: TelemetryLevel = TelemetryLevel.ERROR,
+    log_categories: list[str] | None = None,
+    excluded_categories: list[str] | None = None,
     noninvasive: bool = False,
     assets_url: str | None = None,
 ) -> None:
@@ -938,7 +968,7 @@ def launch(
         _api_ready.wait()
         api.run()  # type: ignore[union-attr]
 
-    Logger.set_logger(ConsoleLogSink(min_level=log_level))
+    Logger.set_logger(ConsoleLogSink(min_level=log_level, categories=log_categories, excluded_categories=excluded_categories))
     try:
         if in_dir is not None and not noninvasive:
             head_file = in_dir / _HEAD_FILE
