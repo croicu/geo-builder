@@ -5,6 +5,14 @@ import threading
 from datetime import datetime, timezone
 from enum import Enum
 
+# Known categories in use across geo-builder's own call sites. This is deliberately not a closed
+# enum: geo-browser forwards its own open-ended category values via WriteTelemetryRecord, and
+# those must remain filterable through the same `category` field without geo-builder having to
+# track geo-browser's category set in sync.
+CATEGORY_GENERAL = "general"
+CATEGORY_DATA_PIPELINE = "data_pipeline"
+CATEGORY_API = "api"
+
 
 class TelemetryLevel(Enum):
     VERBOSE = "verbose"
@@ -15,20 +23,28 @@ class TelemetryLevel(Enum):
 
 
 class TelemetryRecord:
-    def __init__(self, timestamp: datetime, level: TelemetryLevel, message: str) -> None:
+    def __init__(
+        self,
+        timestamp: datetime,
+        level: TelemetryLevel,
+        message: str,
+        category: str = CATEGORY_GENERAL,
+    ) -> None:
         self.timestamp = timestamp
         self.level = level
         self.message = message
+        self.category = category
 
 
 class DiagnosticsLogSink:
     _pending: list[TelemetryRecord] = []
 
-    def log(self, level: TelemetryLevel, message: str) -> TelemetryRecord:
+    def log(self, level: TelemetryLevel, message: str, category: str = CATEGORY_GENERAL) -> TelemetryRecord:
         record = TelemetryRecord(
             timestamp=datetime.now(timezone.utc),
             level=level,
             message=message,
+            category=category,
         )
         DiagnosticsLogSink._pending.append(record)
         return record
@@ -49,20 +65,20 @@ class DiagnosticsLogSink:
     def print(self, message: str) -> None:
         print(message)
 
-    def diagnostic(self, message: str) -> None:
-        self.log(TelemetryLevel.VERBOSE, message)
+    def diagnostic(self, message: str, category: str = CATEGORY_GENERAL) -> None:
+        self.log(TelemetryLevel.VERBOSE, message, category)
 
-    def info(self, message: str) -> None:
-        self.log(TelemetryLevel.INFO, message)
+    def info(self, message: str, category: str = CATEGORY_GENERAL) -> None:
+        self.log(TelemetryLevel.INFO, message, category)
 
-    def warning(self, message: str) -> None:
-        self.log(TelemetryLevel.WARNING, message)
+    def warning(self, message: str, category: str = CATEGORY_GENERAL) -> None:
+        self.log(TelemetryLevel.WARNING, message, category)
 
-    def error(self, message: str) -> None:
-        self.log(TelemetryLevel.ERROR, message)
+    def error(self, message: str, category: str = CATEGORY_GENERAL) -> None:
+        self.log(TelemetryLevel.ERROR, message, category)
 
-    def fatal(self, message: str) -> None:
-        self.log(TelemetryLevel.CRITICAL, message)
+    def fatal(self, message: str, category: str = CATEGORY_GENERAL) -> None:
+        self.log(TelemetryLevel.CRITICAL, message, category)
 
 
 _LEVEL_RANK: dict[TelemetryLevel, int] = {
@@ -78,14 +94,31 @@ _console_lock = threading.Lock()
 
 
 class ConsoleLogSink(DiagnosticsLogSink):
-    def __init__(self, min_level: TelemetryLevel = TelemetryLevel.ERROR) -> None:
+    def __init__(
+        self,
+        min_level: TelemetryLevel = TelemetryLevel.ERROR,
+        categories: list[str] | None = None,
+        excluded_categories: list[str] | None = None,
+    ) -> None:
         self._min_level = min_level
+        self._categories = categories
+        self._excluded_categories = excluded_categories
 
-    def log(self, level: TelemetryLevel, message: str) -> TelemetryRecord:
-        record = super().log(level, message)
-        if _LEVEL_RANK[level] >= _LEVEL_RANK[self._min_level]:
+    def log(self, level: TelemetryLevel, message: str, category: str = CATEGORY_GENERAL) -> TelemetryRecord:
+        record = super().log(level, message, category)
+        level_passes = _LEVEL_RANK[level] >= _LEVEL_RANK[self._min_level]
+        if self._categories:
+            # Explicit (or debug-widened) allow-list: excluded_categories is inert here — a
+            # category named in both would just be a no-op omission the user could've made
+            # directly in the allow-list instead.
+            category_passes = record.category in self._categories
+        else:
+            # Unfiltered ("show everything") state: excluded_categories becomes a deny-list
+            # over the otherwise-open set.
+            category_passes = not self._excluded_categories or record.category not in self._excluded_categories
+        if level_passes and category_passes:
             with _console_lock:
-                print(f"[{level.value.upper()}] {record.message}", flush=True)
+                print(f"[{level.value.upper()}][{record.category}] {record.message}", flush=True)
         return record
 
 
@@ -101,8 +134,8 @@ class Logger:
             Logger._sinks.append(value)
 
     @staticmethod
-    def log(level: TelemetryLevel, message: str) -> TelemetryRecord:
-        return Logger._sink().log(level, message)
+    def log(level: TelemetryLevel, message: str, category: str = CATEGORY_GENERAL) -> TelemetryRecord:
+        return Logger._sink().log(level, message, category)
 
     @staticmethod
     def flush() -> None:
@@ -121,24 +154,24 @@ class Logger:
         Logger._sink().print(message)
 
     @staticmethod
-    def diagnostic(message: str) -> None:
-        Logger._sink().diagnostic(message)
+    def diagnostic(message: str, category: str = CATEGORY_GENERAL) -> None:
+        Logger._sink().diagnostic(message, category)
 
     @staticmethod
-    def info(message: str) -> None:
-        Logger._sink().info(message)
+    def info(message: str, category: str = CATEGORY_GENERAL) -> None:
+        Logger._sink().info(message, category)
 
     @staticmethod
-    def warning(message: str) -> None:
-        Logger._sink().warning(message)
+    def warning(message: str, category: str = CATEGORY_GENERAL) -> None:
+        Logger._sink().warning(message, category)
 
     @staticmethod
-    def error(message: str) -> None:
-        Logger._sink().error(message)
+    def error(message: str, category: str = CATEGORY_GENERAL) -> None:
+        Logger._sink().error(message, category)
 
     @staticmethod
-    def fatal(message: str) -> None:
-        Logger._sink().fatal(message)
+    def fatal(message: str, category: str = CATEGORY_GENERAL) -> None:
+        Logger._sink().fatal(message, category)
 
     @staticmethod
     def _reset() -> None:

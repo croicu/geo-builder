@@ -164,9 +164,9 @@ interface AreaSummary {
   id: string;
   name: string;
   bbox: [number, number, number, number];  // [west, south, east, north]
-  minRadiusPx: number;
-  maxRadiusPx: number;
-  liveMapRadiusPx: number;
+  minRadiusPx: number;      // still part of the wire format; unused by geo-browser's
+  maxRadiusPx: number;      // current circle-marker rendering, which uses a fixed
+  liveMapRadiusPx: number;  // 48px diameter instead — see geo-browser's AreaMarkerView
   manifestUrl: string;
   group: string[];  // omitted or empty = ungrouped; "debug" is a convention, not a special type
 }
@@ -251,6 +251,20 @@ interface RemoveUserPointOutput {
 // __geo_area_changed__ (event: Python → JS)
 interface AreaChangedData {
   area: AreaSummary;
+}
+
+// __geo_write_telemetry_record__ (method: JS → Python, design mode only)
+interface WriteTelemetryRecordInput {
+  timestamp: string;            // ISO 8601
+  level: "diagnostic" | "info" | "warning" | "error" | "fatal";
+  category: string;              // open string set; "general" is the default/untagged category
+  message: string;
+  props?: Record<string, unknown>;
+  errorDetail: string | null;    // serialized Error (message + stack); null when no error was passed
+}
+interface WriteTelemetryRecordOutput {
+  error: number;
+  errorDescription: string | null;
 }
 ```
 
@@ -927,3 +941,107 @@ class RemoveUserPointOutput:
 **Notes:**
 - Deletion is matched by exact `(lon, lat)` float equality — the same values that were stored by `AddUserPoint`.
 - The builder writes the updated file to disk but does **not** fire `AreaChanged` — the browser removes the marker immediately on the client side and needs no refresh.
+
+---
+
+## WriteTelemetryRecord (`__geo_write_telemetry_record__`)
+
+Proposed to the geo-builder team ahead of implementation (see git history of this section); no pushback received. Implemented on the geo-browser side — `src/api.ts`, `src/runtime/gatewayTelemetrySink.ts`, wired in `src/runtime/context.ts`. Full design background: geo-browser's `tasks/logging_api.md`.
+
+### Motivation
+
+Forwards geo-browser's own `Logger` output to geo-builder, so a geo-builder end user can inspect the browser's log stream from the Python side while running design mode, without opening browser devtools. Two sources feed it:
+- Every existing `Logger.info/warning/error/fatal/diagnostic(...)` call already made throughout geo-browser's codebase — gated by the same category filter that already governs devtools console output (see Categories below).
+- A pair of global handlers (`window.addEventListener("error"/"unhandledrejection", ...)`) added alongside this feature. Previously, only exceptions caught by an explicit `try/catch` (or raised via geo-browser's internal `fail()` helper) ever reached `Logger` — a genuinely uncaught exception or unhandled promise rejection was invisible to it entirely. These handlers log those too, as `fatal`, category `general`, so they reach geo-builder as well instead of only ever appearing in browser devtools. Installed unconditionally in both browse and design mode; only the forwarding-to-geo-builder part below is design-mode gated.
+
+### Direction and mode
+
+Browser → builder, **design mode only** (`?design=1`). In browse mode there is no gateway to send to — nothing is forwarded there.
+
+### Categories
+
+geo-browser has an existing, unrelated concept of log categories (`LogCategory` in `src/logging.ts`) with query-string gating (`?debug` shows every category; `?logCategory=a,b` allow-lists specific ones; absent either, only the default `"general"` category is active). That gating decides what reaches the browser's own devtools console, and the *exact same* gating applies to the builder-bound copy — there is no separate/independent filter for this API. Whatever categories are visible in the browser console under the current query string are exactly what geo-builder receives; nothing more, nothing less.
+
+**geo-builder's `?logCategory=` emission.** `settings.json`'s `logCategories` field (see `docs/CLI.md`) is forwarded to geo-browser as `?logCategory=<comma-joined>`, appended to `designUrl` — but **only when explicitly set and non-empty**. geo-builder's own debug-gated console default (empty/absent `logCategories` resolves to `["general"]` when `debug: false`, or `[]`/unfiltered when `debug: true` — a geo-builder-console-only concern) is never sent to geo-browser: without an explicit `logCategories`, geo-browser's own pre-existing defaults already line up on their own — `general`-only with no query param present, everything once `?debug=1` is present (which geo-builder already appends whenever `settings.debug` is true, independently of this feature).
+
+**`debug: true` keeps `general` alongside an explicit category.** When `logCategories` is explicitly set *and* `settings.debug` is `true`, geo-builder unions `"general"` into the list before both filtering its own console *and* building `?logCategory=` — debug mode's baseline info shouldn't disappear just because the user narrowed to one other category to investigate. (`debug: false` does **not** do this — an explicit `logCategories` there means exactly what it says, no auto-added `general`.) So `settings.json`'s `{"debug": true, "logCategories": ["overpass"]}` sends `?logCategory=general,overpass&debug=1`, not `?logCategory=overpass&debug=1`.
+
+**Precedence when both `?logCategory=` and `?debug=1` are present:** matching the existing `group`/`debug` precedent above, an explicit `?logCategory=` wins **outright** over `?debug`'s "show every category" shorthand — its presence disables that shorthand entirely rather than merging with it. `Context.debug`'s own unrelated diagnostics (synthetic heading, debug-only toolbar buttons) stay unaffected either way, exactly as with `groupFilter`. This precedence rule is unconditional — geo-browser does not need to special-case the `general`-union above, since that union already happened on the geo-builder side before the query string was built; geo-browser just sees whatever value `?logCategory=` carries.
+
+| Query string | Categories shown | `Context.debug` |
+|---|---|---|
+| *(none)* | `["general"]` (geo-browser's own default) | `false` |
+| `?debug=1` | every category | `true` |
+| `?logCategory=overpass` | `["overpass"]` | `false` |
+| `?logCategory=general,overpass&debug=1` | `["general", "overpass"]` — **not** every category | `true` |
+
+**Unrecognized categories are not an error.** Some category values geo-builder can emit are Python-only (e.g. `data_pipeline`, `api` — see `CLAUDE.md`'s Logging section) with no corresponding `LogCategory` value in geo-browser's `src/logging.ts`. geo-browser should treat any `?logCategory=` value it doesn't recognize as simply matching nothing — never raise, warn, or fall back to a different gating mode because of an unrecognized entry.
+
+**`?logCategoryExclude=` (new, not yet implemented on the geo-browser side).** `settings.json`'s new `excludedCategories` field (see `docs/CLI.md`) is forwarded as `?logCategoryExclude=<comma-joined>` whenever non-empty — independent of whether `?logCategory=` itself is present, since exclusion is geo-builder's own separate signal (unlike `?logCategory=`, it is sent even without an explicit `logCategories`). geo-builder only emits this param; it does not prescribe how geo-browser should combine it with `?logCategory=`/`?debug=1` gating (e.g. whether it also applies against the plain `general`-only default) — that interpretation belongs to and evolves in geo-browser, same as the existing `group` query param's AND/OR semantics are left to geo-browser to decide.
+
+### TypeScript
+
+```typescript
+interface WriteTelemetryRecordInput {
+  timestamp: string;           // ISO 8601
+  level: "diagnostic" | "info" | "warning" | "error" | "fatal";
+  category: string;             // open string set; "general" is the default/untagged category
+  message: string;
+  props?: Record<string, unknown>;
+  errorDetail: string | null;   // serialized Error (message + stack); null when no error was passed to the log call
+}
+
+interface WriteTelemetryRecordOutput {
+  error: number;
+  errorDescription: string | null;
+}
+
+const WriteTelemetryRecord: MethodDef<WriteTelemetryRecordInput, WriteTelemetryRecordOutput> = { id: "__geo_write_telemetry_record__" };
+
+gateway.invoke(WriteTelemetryRecord, {
+  timestamp: new Date().toISOString(),
+  level: "error",
+  category: "general",
+  message: "image_overlay.paste.error",
+  props: { areaId: "redmond" },
+  errorDetail: "DOMException: Clipboard read failed\n  at ...",
+});
+```
+
+Fire-and-forget from the browser's side — no callback registered for the common case. This is deliberate, not an oversight: if the `invoke` itself fails, or `WriteTelemetryRecordOutput.error !== OK`, the browser's fallback is a raw `console.error(...)`, never a call back into its own `Logger` — a log delivery failure that itself gets logged would recurse.
+
+### Python
+
+```python
+@dataclass
+class WriteTelemetryRecordInput:
+    timestamp: str
+    level: str            # "diagnostic" | "info" | "warning" | "error" | "fatal"
+    category: str
+    message: str
+    props: dict | None
+    errorDetail: str | None
+
+@dataclass
+class WriteTelemetryRecordOutput:
+    error: int
+    errorDescription: str | None
+
+def on_write_telemetry_record(data: WriteTelemetryRecordInput) -> WriteTelemetryRecordOutput:
+    ...  # write/display data wherever the end user can inspect it
+    return WriteTelemetryRecordOutput(error=0, errorDescription=None)
+
+gateway.register("__geo_write_telemetry_record__", on_write_telemetry_record)
+```
+
+### Error codes
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Record accepted |
+
+No failure mode beyond `OK` is defined — the browser doesn't act on a non-`OK` response beyond a `console.error` fallback (see TypeScript section above), so there was no need for geo-builder-specific error codes here.
+
+### Volume
+
+Every `Logger` call that passes the active category filter triggers one `invoke` — no batching, throttling, or debouncing on the browser side. Under `?debug` (every category active, not just `general`), this includes verbose per-frame diagnostic logging such as `LogCategory.AreaLifecycle`'s viewport-transition trace. Confirmed acceptable with the geo-builder team as part of the proposal review; revisit (batching into a `records: WriteTelemetryRecordInput[]` array) if it turns out not to be.

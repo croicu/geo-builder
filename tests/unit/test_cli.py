@@ -18,6 +18,8 @@ class StubSettings:
         dev_tools: bool = False,
         logging=None,
         assets_url: str | None = None,
+        log_categories: list[str] | None = None,
+        excluded_categories: list[str] | None = None,
     ) -> None:
         from geo_builder.diagnostics import TelemetryLevel
 
@@ -27,6 +29,8 @@ class StubSettings:
         self.dev_tools = dev_tools
         self.logging = logging or TelemetryLevel.ERROR
         self.assets_url = assets_url
+        self.log_categories = log_categories or []
+        self.excluded_categories = excluded_categories or []
 
 
 class StubBuilder:
@@ -263,6 +267,8 @@ class TestDesignMode:
                 break_on_load=False,
                 dev_tools=False,
                 log_level=TelemetryLevel.ERROR,
+                log_categories=[],
+                excluded_categories=[],
                 noninvasive=False,
                 assets_url=None,
             )

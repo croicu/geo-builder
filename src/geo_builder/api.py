@@ -207,3 +207,25 @@ class RemoveUserPointOutput:
 
 
 REMOVE_USER_POINT_ID = "__geo_remove_user_point__"
+
+
+# --- WriteTelemetryRecord ---
+
+
+@dataclass
+class WriteTelemetryRecordInput:
+    timestamp: str
+    level: str  # "diagnostic" | "info" | "warning" | "error" | "fatal"
+    category: str
+    message: str
+    errorDetail: str | None
+    props: dict | None = None  # omitted by the browser when there is nothing to attach
+
+
+@dataclass
+class WriteTelemetryRecordOutput:
+    error: int
+    errorDescription: str | None = None
+
+
+WRITE_TELEMETRY_RECORD_ID = "__geo_write_telemetry_record__"
