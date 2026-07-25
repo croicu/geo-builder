@@ -111,6 +111,13 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
+
+## Pending Tasks
+- **File**: [Python Repo Template](tasks/python_repo_template.md)
+- **Status**: Implementation
+- **GitHub Issue**: [geo-builder#60](https://github.com/croicu/geo-builder/issues/60)
+- **Key Context**: Abstract python repo template for new repos, built out under `./tpl-py` (its own git repo). Design converged: fork-and-rename (no cookiecutter), dunder-wrapped placeholder tokens (`__package_name__`, `__project_name__`, `__description__`, `__mission__`) with replacement instructions in `tpl-py/tasks/repo_setup.md`, generic skeletons for `cli`/`errors`/`settings`/`diagnostics` ported from geo-builder with domain-specific fields stripped, `contracts.py`/`protocols.py` as convention-only stubs (geo-builder's real content is 100% pipeline-specific, nothing generic to port), CI/CD copied near-verbatim, `.vscode/` genericized. See issue for full design + file inventory.
+
 - **File**: [Pull: Skip catalog.head.json Fetch](tasks/pull_skip_head.md)
 - **Status**: Brainstorm
 - **GitHub Issue**: [geo-builder#42](https://github.com/croicu/geo-builder/issues/42)
