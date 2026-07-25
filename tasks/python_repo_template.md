@@ -2,7 +2,10 @@
 
 ## Status: Implementation
 
-## GitHub Issue: [geo-builder#60](https://github.com/croicu/geo-builder/issues/60)
+## GitHub Issue: [tpl-py#1](https://github.com/croicu/tpl-py/issues/1)
+
+<!-- Originally opened as geo-builder#60; transferred to tpl-py since that's where the actual
+     work product lives. GitHub redirects the old URL automatically. -->
 
 ## Problem statement
 
