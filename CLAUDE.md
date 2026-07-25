@@ -113,16 +113,6 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 ## New Task
 
 ## Pending Tasks
-- **File**: [Live Template Sync](tasks/live_template_sync.md)
-- **Status**: Implementation
-- **GitHub Issue**: [tpl-py#2](https://github.com/croicu/tpl-py/issues/2)
-- **Key Context**: Mechanism for `tpl-py` to keep evolving after instantiation — a curated `ADDENDUM.md` (root-level index, doubling as the pointer back to the source, no separate `gh`/git-remote dependency) plus per-entry files in `addendum/`, a read protocol (fetch ADDENDUM.md over plain HTTPS → apply entries newer than `Synced to` → bump the timestamp) and a write protocol (add an addendum entry when making a template-worthy change), both documented directly in `tpl-py/CLAUDE.md` since every instance already carries that file.
-
-- **File**: [Python Repo Template](tasks/python_repo_template.md)
-- **Status**: Implementation
-- **GitHub Issue**: [tpl-py#1](https://github.com/croicu/tpl-py/issues/1) (transferred from geo-builder#60 — that's where the work product lives)
-- **Key Context**: Abstract python repo template for new repos, built out under `./tpl-py` (its own git repo). Design converged: fork-and-rename (no cookiecutter), dunder-wrapped placeholder tokens (`__package_name__`, `__project_name__`, `__description__`, `__mission__`) with replacement instructions in `tpl-py/tasks/repo_setup.md`, generic skeletons for `cli`/`errors`/`settings`/`diagnostics` ported from geo-builder with domain-specific fields stripped, `contracts.py`/`protocols.py` as convention-only stubs (geo-builder's real content is 100% pipeline-specific, nothing generic to port), CI/CD copied near-verbatim, `.vscode/` genericized. See issue for full design + file inventory.
-
 - **File**: [Pull: Skip catalog.head.json Fetch](tasks/pull_skip_head.md)
 - **Status**: Brainstorm
 - **GitHub Issue**: [geo-builder#42](https://github.com/croicu/geo-builder/issues/42)
@@ -136,6 +126,14 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 ## Completed Tasks
 
 All entries below are closed GitHub issues — the full history (problem statement, design decisions, test results) lives there, not in this file. `tasks/*.md` files are deleted once their issue is created, per the task workflow above.
+
+- **Task**: Live Template Sync — [tpl-py#2](https://github.com/croicu/tpl-py/issues/2) (closed)
+- **Status**: Done
+- **Key Context**: Mechanism for `tpl-py` to keep evolving after instantiation — a curated `ADDENDUM.md` (root-level index, doubling as the pointer back to the source, no `gh`/git-remote dependency) plus per-entry files in `addendum/`, a read protocol (fetch ADDENDUM.md over plain HTTPS → apply entries newer than `Synced to` → bump the timestamp) and a write protocol (add an addendum entry when making a template-worthy change), both documented in `tpl-py/CLAUDE.md`.
+
+- **Task**: Python Repo Template — [tpl-py#1](https://github.com/croicu/tpl-py/issues/1) (closed; originally geo-builder#60, transferred since the work product lives in tpl-py)
+- **Status**: Done
+- **Key Context**: Abstract python repo template for new repos, built out under `./tpl-py` (its own git repo). Fork-and-rename mechanism (no cookiecutter), dunder-wrapped placeholder tokens (`__package_name__`, `__project_name__`, `__description__`, `__mission__`) with replacement instructions in `tpl-py/tasks/repo_setup.md`, generic skeletons for `cli`/`errors`/`settings`/`diagnostics` ported from geo-builder with domain-specific fields stripped, `contracts.py`/`protocols.py` as convention-only stubs, CI/CD copied near-verbatim, `.vscode/` genericized. Validated by a dry-run drill and then real usage (a stock-quote CLI tool instantiated from it).
 
 - **Task**: Area-Scoped Rebuild — [geo-builder#51](https://github.com/croicu/geo-builder/issues/51) (closed)
 - **Status**: Done
