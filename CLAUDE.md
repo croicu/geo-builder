@@ -15,13 +15,15 @@ Build a simple, deterministic Python application that creates static geographic 
 
 Tasks are tracked as GitHub issues in this repo (`croicu/geo-builder`), status via labels: `status:brainstorm`, `status:implementation`, `status:testing`, `status:ready-to-submit`. There is no `status:done` label — reaching Done means closing the issue.
 
+Once a task has a GitHub issue, the issue (body + comments) is the sole source of truth — never maintain a persistent `tasks/<task-name>.md` alongside it, at any stage, including Brainstorm. A local `tasks/<task-name>.md` is allowed only as a *temporary* copy while actively working the task in a live session (scratch space for back-and-forth, or a shareable copy for people without `gh` access) — fold conclusions back into the issue (edit the body, or comment) and delete the file again once that active work concludes. Don't recreate it proactively; wait to be asked.
+
 For any non-trivial feature or change, follow these stages:
 
-1. **Brainstorm** — copy `tasks/new_task.md` to `tasks/<task-name>.md` with the problem statement; update it with conclusions as the design discussion progresses. This is scratch space for live back-and-forth — an issue isn't required at this stage, but a lightweight tracking issue labeled `status:brainstorm` can be opened for backlog visibility if wanted; either way, `tasks/<task-name>.md` (not the issue) stays the working document until the design converges.
-2. **Implementation** — open a GitHub issue (`gh issue create`) with the converged problem statement + conclusions as the body, labeled `status:implementation`. Write the code. `tasks/<task-name>.md` is no longer the source of truth once the issue exists — trim it to a one-line pointer at the issue (or delete it) rather than maintaining both.
+1. **Brainstorm** — before an issue exists, `tasks/<task-name>.md` (copied from `tasks/new_task.md`) is fine as scratch space. Open a lightweight tracking issue labeled `status:brainstorm` as soon as there's a problem statement worth capturing, even partial — once the issue exists, delete the local file and treat the issue body as the working document, editing it directly as the design progresses.
+2. **Implementation** — open a GitHub issue if one doesn't exist yet (`gh issue create`, converged problem statement + conclusions as the body), or relabel the existing one; either way, label `status:implementation`. Write the code.
 3. **Testing** — relabel the issue `status:testing`. Verify correctness; post test results and any open issues as an issue comment.
 4. **Ready to Submit** — relabel `status:ready-to-submit`. Run lint + tests; confirm docs are up to date; post a closing summary comment.
-5. **Done** — close the issue after merge. Delete `tasks/<task-name>.md` once the issue is closed — the issue (body + comments) is the sole source of truth from that point on, so there's no reason to keep a stale duplicate on disk. (Only applies when a real issue holds the full history; a Done task with no issue keeps its local file.)
+5. **Done** — close the issue after merge.
 
 ## Before committing
 
@@ -111,12 +113,17 @@ Logging is essential for diagnosing build failures, provider errors, and unexpec
 - **Import count as SRP signal** — more than 5–10 imports in a file is a hint that the file may be doing too much. Not a hard rule, but worth pausing to consider whether responsibilities should be split.
 
 ## New Task
-- **File**: [Pull: Skip catalog.head.json Fetch](tasks/pull_skip_head.md)
+- **Task**: Designer: out_dir Silently Shadows Production Data
+- **Status**: Brainstorm
+- **GitHub Issue**: [geo-builder#61](https://github.com/croicu/geo-builder/issues/61)
+- **Key Context**: `DataPipeline._resolve` matches every WebView2 request by path only (host/query stripped) against `out_dir` then `in_dir` before ever hitting the network, so a stale/empty `catalog.json` left in `out_dir` from an earlier plain build silently and permanently shadows real production data in `--edit` mode — no error, no warning, page loads fine, just zero places. Found live-debugging a "no places show up in the designer" report by enabling the `data_pipeline` log category. `out_dir` can't simply be dropped from the lookup order, since mid-session live-edit preview (`_save_area_only` after `AddArea`/`PutAreaJson`/`SetAreaBbox`) depends on it being checked, and checked first. Candidate directions and open questions are in the issue body; no local task file — see below.
+
+- **Task**: Pull: Skip catalog.head.json Fetch
 - **Status**: Brainstorm
 - **GitHub Issue**: [geo-builder#42](https://github.com/croicu/geo-builder/issues/42)
 - **Key Context**: `pull.py` always HTTP-fetches `catalog.head.json` against the production data host (geo-places) before falling back to a local default — but geo-places never serves that file (its real location is geo-browser, not the data host), and geo-builder's own default/fallback always wins anyway, so the round-trip is dead weight that also spams a 404 warning on every pull. Confirmed fix direction with user: skip the fetch entirely, always write the local default, go straight to `catalog.json`. Flagged for a pre-implementation check: the existing absolute-`catalogUrl` normalization branch in `_pull_head` (from [geo-builder#46](https://github.com/croicu/geo-builder/issues/46), Pull Origin Fix) becomes unreachable and should be deleted, but verify no real deployment depends on it first. Not yet implemented.
 
-- **File**: [Default Layers](tasks/default_layers.md)
+- **Task**: Default Layers
 - **Status**: Brainstorm
 - **GitHub Issue**: [geo-builder#43](https://github.com/croicu/geo-builder/issues/43)
 - **Key Context**: Rationalize the default layers created when a new area is being created (template.json). Features reference is located at: https://wiki.openstreetmap.org/wiki/Category:Features
