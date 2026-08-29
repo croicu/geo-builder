@@ -18,8 +18,9 @@ __pycache__/
 # local folder
 .user_data/
 
-# Claude Code
-.claude/
+# Claude Code — local settings/permissions stay ignored, shared skills are tracked
+.claude/*
+!.claude/skills/
 
 # pytest temp
 .pytest_tmp/
