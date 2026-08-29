@@ -10,6 +10,7 @@ Build a simple, deterministic Python application that creates static geographic 
 
 - Before implementing any feature or non-trivial change, ask clarifying questions until the intent is unambiguous.
 - If anything is unclear or could be interpreted multiple ways, ask — do not assume and implement.
+- Make edits and `git add` them (staged, not committed), then wait for explicit go-ahead before `git commit` — the user prefers reviewing the diff in VS Code first. Once they give the go-ahead, commit and push/open the PR together in that same step rather than pausing again in between.
 
 ### Task workflow
 
