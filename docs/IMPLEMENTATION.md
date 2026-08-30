@@ -77,6 +77,8 @@ All reads and writes to the model (catalog, areas, layers) must happen on the `r
 
 Any model access that bypasses this queue (e.g. reading catalog state from the WinForms UI thread or from a one-off `threading.Thread`) is subject to race conditions and must be avoided.
 
+**`Gateway.call_now`** is a narrow, deliberate exception to "outbound goes through the queue" — not to the model-access rule above. A handler like `on_add_area` runs synchronously on the dispatcher thread for the duration of a `Builder.run()`, so a normal `api.call()` fired mid-build would sit in `_queue` until that handler returns (the same thread that would drain it is busy running the handler). `call_now` sends immediately by calling `_send` directly, which is safe from any thread since it hands off to WebView2's UI thread via .NET `BeginInvoke`. Use it only for fire-and-forget, no-response progress events (e.g. `TaskProgress`, see `docs/MESSAGING.md`) — never for anything that reads or writes catalog state, and never where a response/callback is needed. This is a stopgap; see [geo-builder#67](https://github.com/croicu/geo-builder/issues/67) for the planned fix (a dedicated build-worker thread that keeps the dispatcher thread free to drain `_queue` normally).
+
 ## Feature Enrichment (Overpass)
 
 During acquisition, `OverpassProvider._to_geojson` extracts additional OSM tags for each element:
