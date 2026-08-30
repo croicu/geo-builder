@@ -104,6 +104,18 @@ class AreaChangedData:
 AREA_CHANGED_ID = "__geo_area_changed__"
 
 
+# --- TaskProgress ---
+
+
+@dataclass
+class TaskProgressData:
+    areaId: str
+    message: str
+
+
+TASK_PROGRESS_ID = "__geo_task_progress__"
+
+
 # --- GetAreaJson ---
 
 

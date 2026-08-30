@@ -317,6 +317,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         PUT_AREA_JSON_ID,
         REMOVE_USER_POINT_ID,
         SET_AREA_BBOX_ID,
+        TASK_PROGRESS_ID,
         WRITE_TELEMETRY_RECORD_ID,
         AddAreaInput,
         AddAreaOutput,
@@ -334,11 +335,12 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         RemoveUserPointOutput,
         SetAreaBboxInput,
         SetAreaBboxOutput,
+        TaskProgressData,
         WriteTelemetryRecordInput,
         WriteTelemetryRecordOutput,
     )
     from ..builder import Builder
-    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask
+    from ..contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, SearchTask, Task, VoidTask
     from ..entities import GeoArea, ManifestChange
     from ..errors import GeoError
     from ..persistence import load_catalog, save_catalog_meta
@@ -346,6 +348,40 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
     from ..settings import Settings
 
     api.define_event(AREA_CHANGED_ID, AreaChangedData)
+    api.define_event(TASK_PROGRESS_ID, TaskProgressData)
+
+    def _describe_task(task: Task) -> str:
+        if isinstance(task, AcquisitionTask):
+            labels = []
+            for filter_key, style in task.filters.items():
+                if style.name is not None:
+                    labels.append(style.name)
+                else:
+                    labels.append(filter_key)
+            if labels:
+                what = ", ".join(labels)
+            else:
+                what = "data"
+            return f"Fetching {what} from {task.provider} for '{task.areaName}'…"
+        if isinstance(task, AggregationTask):
+            return "Merging layers…"
+        if isinstance(task, DedupingTask):
+            return "Removing duplicate points…"
+        if isinstance(task, PoiTask):
+            return "Deriving points of interest…"
+        if isinstance(task, VoidTask):
+            return "Computing coverage map…"
+        if isinstance(task, SearchTask):
+            return "Building search index…"
+        return f"Processing ({task.type})…"
+
+    def _make_progress_callback(area_id: str):
+        def on_task(task: Task) -> None:
+            message = _describe_task(task)
+            Logger.diagnostic(f"TaskProgress: area='{area_id}' message='{message}'", category=CATEGORY_API)
+            api.call_now(TASK_PROGRESS_ID, TaskProgressData(areaId=area_id, message=message))
+
+        return on_task
 
     def _fire_area_changed(area_id: str, result: GeoCatalog) -> None:
         updated_area = None
@@ -378,7 +414,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
                 break
 
         try:
-            result = Builder(fresh_catalog).run()
+            result = Builder(fresh_catalog).run(on_task=_make_progress_callback(area_id))
             _save_area_only(result, area_id, out_dir, mirror_from=in_dir)
         except Exception as exc:
             Logger.error(f"pipeline failed for area '{area_id}': {exc}")
@@ -408,7 +444,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         ]
 
         try:
-            result = Builder(fresh_catalog).run(tasks=tasks)
+            result = Builder(fresh_catalog).run(tasks=tasks, on_task=_make_progress_callback(area_id))
             _save_area_only(result, area_id, out_dir, mirror_from=in_dir)
         except Exception as exc:
             Logger.error(f"reprocess failed for area '{area_id}': {exc}")
@@ -535,7 +571,7 @@ def _register_designer_handlers(api: Gateway, catalog: GeoCatalog, out_dir: Path
         else:
             fresh_catalog = catalog
 
-        result = Builder(fresh_catalog).run(tasks=tasks)
+        result = Builder(fresh_catalog).run(tasks=tasks, on_task=_make_progress_callback(area_id))
 
         template_layers = template.get("layers", [])
         for a in result.areas:

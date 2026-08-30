@@ -75,6 +75,21 @@ class Gateway:
     def call(self, id: str, data: Any, callback: Callable | None = None) -> None:
         self._queue.put(("call", id, callback, data))
 
+    def call_now(self, id: str, data: Any) -> None:
+        """Fire-and-forget event send that bypasses `_queue`.
+
+        Stopgap for progress-style events fired from inside a handler that is itself running
+        synchronously on the dispatcher thread (see geo-builder#67): a normal `call()` would sit
+        in `_queue` until that handler returns, since the same thread drains the queue. `_send` is
+        safe to invoke from any thread (it hands off to WebView2's UI thread), so this skips the
+        queue entirely. No callback/response support — use `call()` when one is needed.
+        """
+        event = self._events.get(id)
+        if event is None:
+            Logger.warning(f"call_now: unknown event '{id}'", category=CATEGORY_API)
+            return
+        self._send_event(id, data, request_id=None)
+
     def post(self, fn: Callable[[], None]) -> None:
         """Enqueue a callable to run on the dispatcher thread."""
         self._queue.put(("fn", fn))
@@ -118,6 +133,9 @@ class Gateway:
         request_id = secrets.token_hex(8) if callback is not None else None
         if request_id is not None:
             self._pending[request_id] = (callback, event.output_type)
+        self._send_event(id, data, request_id)
+
+    def _send_event(self, id: str, data: Any, request_id: str | None) -> None:
         payload = dataclasses.asdict(data) if dataclasses.is_dataclass(data) else data
         msg: dict[str, Any] = {"id": id, "data": payload}
         if request_id is not None:

@@ -5,6 +5,7 @@ import json
 import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from .colors import layer_color
 from .contracts import AcquisitionTask, AggregationTask, BoundingBox, DedupingTask, PoiTask, SearchTask, Task, VoidTask
@@ -26,7 +27,12 @@ class Builder:
     _stack: list[JsonObject] = field(default_factory=list)
     _worker_factory: WorkerFactory = field(default_factory=WorkerFactory)
 
-    def run(self, tasks: list[Task] | None = None, rebuild_areas: list[str] | None = None) -> GeoCatalog:
+    def run(
+        self,
+        tasks: list[Task] | None = None,
+        rebuild_areas: list[str] | None = None,
+        on_task: Callable[[Task], None] | None = None,
+    ) -> GeoCatalog:
         from .settings import Settings
 
         settings = Settings.current()
@@ -48,6 +54,9 @@ class Builder:
         while self._stack:
             task = self._stack.pop()
             counter += 1
+
+            if on_task is not None:
+                on_task(task)
 
             if debug:
                 worker = self._worker_factory.create(task)

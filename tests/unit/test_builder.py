@@ -226,6 +226,29 @@ class TestRun:
 
         assert result is builder.catalog
 
+    def test_on_task_called_once_per_task_in_order(self):
+        task_a = AcquisitionTask(
+            areaId="napoli",
+            areaName="Napoli",
+            provider="fake",
+            bbox=BoundingBox(west=14.20, south=40.80, east=14.33, north=40.90),
+            filters={},
+        )
+        task_b = AggregationTask()
+        builder = Builder()
+        builder._worker_factory = StubWorkerFactory([StubWorker(), StubWorker()])
+        seen = []
+
+        builder.run(tasks=[task_a, task_b], on_task=seen.append)
+
+        assert seen == [task_a, task_b]
+
+    def test_on_task_not_required(self):
+        builder = Builder()
+        builder._worker_factory = StubWorkerFactory([StubWorker()])
+
+        builder.run(tasks=[TASK])  # must not raise when on_task is omitted
+
 
 class TestBuilderAddLayer:
     def test_first_layer_is_appended(self):
